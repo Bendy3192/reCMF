@@ -20,6 +20,7 @@ data class WatchSettings(
     val address: String?,
     val name: String?,
     val healthConnectEnabled: Boolean,
+    val notificationsEnabled: Boolean,
     val lastSyncEpochSeconds: Long,
 ) {
     val isPaired: Boolean get() = address != null
@@ -31,6 +32,7 @@ class SettingsStore(private val context: Context) {
             address = prefs[KEY_ADDRESS],
             name = prefs[KEY_NAME],
             healthConnectEnabled = prefs[KEY_HEALTH_CONNECT] ?: false,
+            notificationsEnabled = prefs[KEY_NOTIFICATIONS] ?: false,
             lastSyncEpochSeconds = prefs[KEY_LAST_SYNC] ?: 0L,
         )
     }
@@ -72,6 +74,10 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_HEALTH_CONNECT] = enabled }
     }
 
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_NOTIFICATIONS] = enabled }
+    }
+
     suspend fun setLastSync(epochSeconds: Long) {
         context.dataStore.edit { it[KEY_LAST_SYNC] = epochSeconds }
     }
@@ -81,6 +87,7 @@ class SettingsStore(private val context: Context) {
         val KEY_NAME = stringPreferencesKey("watch_name")
         val KEY_AUTH_KEY = stringPreferencesKey("watch_auth_key_sealed")
         val KEY_HEALTH_CONNECT = booleanPreferencesKey("health_connect_enabled")
+        val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")
     }
 }

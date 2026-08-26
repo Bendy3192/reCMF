@@ -39,4 +39,8 @@
     <string name="action_show">Показать</string>
     <string name="action_hide">Скрыть</string>
     <string name="action_clear">Очистить</string>
+    <string name="notifications">Уведомления</string>
+    <string name="notifications_explainer">Сообщения и оповещения с телефона отправляются на часы.</string>
+    <string name="notifications_need_access">Доступ к уведомлениям выдаётся в системных настройках, а не здесь.</string>
+    <string name="action_grant_access">Открыть настройки</string>
 </resources>

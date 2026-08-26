@@ -53,7 +53,10 @@ fun HomeScreen(
     scanError: String?,
     healthConnectAvailability: HealthConnectAvailability,
     protocolLog: List<ProtocolLog.Entry>,
+    hasNotificationAccess: Boolean,
     onClearLog: () -> Unit,
+    onNotificationsEnabled: (Boolean) -> Unit,
+    onGrantNotificationAccess: () -> Unit,
     onScan: () -> Unit,
     onPair: (DiscoveredWatch) -> Unit,
     onForget: () -> Unit,
@@ -76,6 +79,14 @@ fun HomeScreen(
             if (state.settings.isPaired) {
                 item { TodayCard(state) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
+                item {
+                    NotificationsCard(
+                        state = state,
+                        hasAccess = hasNotificationAccess,
+                        onEnabled = onNotificationsEnabled,
+                        onGrantAccess = onGrantNotificationAccess,
+                    )
+                }
             } else {
                 item { PairingHeader(scanError, onScan) }
                 items(discovered, key = { it.address }) { watch ->
@@ -284,6 +295,51 @@ private fun ConnectionState.isSettling(): Boolean = when (this) {
     -> true
 
     ConnectionState.IDLE, ConnectionState.WAITING, ConnectionState.READY -> false
+}
+
+@Composable
+private fun NotificationsCard(
+    state: HomeUiState,
+    hasAccess: Boolean,
+    onEnabled: (Boolean) -> Unit,
+    onGrantAccess: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.notifications),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Switch(
+                    checked = state.settings.notificationsEnabled && hasAccess,
+                    onCheckedChange = onEnabled,
+                    enabled = hasAccess,
+                )
+            }
+
+            HorizontalDivider()
+
+            if (hasAccess) {
+                Text(
+                    stringResource(R.string.notifications_explainer),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                Text(
+                    stringResource(R.string.notifications_need_access),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Button(onClick = onGrantAccess) {
+                    Text(stringResource(R.string.action_grant_access))
+                }
+            }
+        }
+    }
 }
 
 /**

@@ -4,8 +4,10 @@
 package dev.recmf.ui
 
 import android.Manifest
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -54,13 +56,22 @@ class MainActivity : ComponentActivity() {
                 val scanError by model.scanError.collectAsStateWithLifecycle()
                 val protocolLog by model.protocolLog.collectAsStateWithLifecycle()
 
+                // Re-read on every composition rather than caching: the user grants this
+                // in system settings and comes straight back to this screen.
+                val hasNotificationAccess = model.hasNotificationAccess()
+
                 HomeScreen(
                     state = state,
                     discovered = discovered,
                     scanError = scanError,
                     healthConnectAvailability = model.healthConnectAvailability,
                     protocolLog = protocolLog,
+                    hasNotificationAccess = hasNotificationAccess,
                     onClearLog = model::clearLog,
+                    onNotificationsEnabled = model::setNotificationsEnabled,
+                    onGrantNotificationAccess = {
+                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    },
                     onScan = model::startScan,
                     onPair = model::pair,
                     onForget = model::forget,

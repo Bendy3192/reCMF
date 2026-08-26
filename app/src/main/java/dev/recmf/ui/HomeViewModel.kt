@@ -15,6 +15,7 @@ import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
 import dev.recmf.data.WatchSettings
 import dev.recmf.health.HealthConnectAvailability
+import androidx.core.app.NotificationManagerCompat
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
 import dev.recmf.service.WatchService
@@ -92,6 +93,20 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun clearLog() = ProtocolLog.clear()
 
     val healthConnectAvailability: HealthConnectAvailability get() = healthConnect.availability()
+
+    /**
+     * Whether the user has granted notification access. It is granted in system settings
+     * rather than by a permission dialog, so there is nothing to request — only to check
+     * and to link to.
+     */
+    fun hasNotificationAccess(): Boolean {
+        val context = getApplication<Application>()
+        return context.packageName in NotificationManagerCompat.getEnabledListenerPackages(context)
+    }
+
+    fun setNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setNotificationsEnabled(enabled) }
+    }
 
     /** Restarts the scan. Cancelling the previous one stops the radio between presses. */
     fun startScan() {

@@ -26,6 +26,7 @@ import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.ReconnectBackoff
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
+import dev.recmf.notifications.OutgoingNotifications
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
@@ -178,6 +179,17 @@ class WatchService : LifecycleService() {
 
         lifecycleScope.launch {
             connection.messages.collect { message -> onMessage(message) }
+        }
+
+        lifecycleScope.launch {
+            OutgoingNotifications.pending.collect { notification ->
+                // Dropped rather than queued when the watch is away: a notification the
+                // user has already dealt with is not worth buzzing their wrist for later.
+                if (_status.value != ConnectionState.READY) return@collect
+                if (!settings.current().notificationsEnabled) return@collect
+
+                connection.send(CmfCommand.APP_NOTIFICATION, notification.toPayload())
+            }
         }
 
         lifecycleScope.launch {

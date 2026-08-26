@@ -42,4 +42,8 @@
     <string name="action_show">Show</string>
     <string name="action_hide">Hide</string>
     <string name="action_clear">Clear</string>
+    <string name="notifications">Notifications</string>
+    <string name="notifications_explainer">Messages and alerts from your phone are forwarded to the watch.</string>
+    <string name="notifications_need_access">Android grants notification access in system settings, not here.</string>
+    <string name="action_grant_access">Open settings</string>
 </resources>
