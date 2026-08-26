@@ -68,18 +68,9 @@ jobs:
             echo "$artifact -> stable: ${stable:-none} | newest: $(echo "$versions" | tail -2 | tr "\n" " ")"
           done
 
-      - name: Health Connect Metadata factories
-        # The 1.1.0 release replaced Metadata's constructor with factory methods and the
-        # documentation for them is not reachable from here, so read them off the jar.
-        run: |
-          cd "$(mktemp -d)"
-          curl -sO https://dl.google.com/dl/android/maven2/androidx/health/connect/connect-client/1.1.0/connect-client-1.1.0.aar
-          unzip -q -o connect-client-1.1.0.aar classes.jar
-          unzip -q -o classes.jar "androidx/health/connect/client/records/metadata/Metadata*"
-          javap -classpath . androidx.health.connect.client.records.metadata.Metadata\$Companion \
-            | grep -iE "autoRecorded|activelyRecorded|unknownRecording|manualEntry"
-
-      - name: Can the Android 17 platform be installed
+      # Compose 1.12, material3 1.5 and Material 3 Expressive all need compileSdk 37.
+      # This says when that becomes possible.
+      - name: Can the Android 17 platform be installed yet
         run: |
           sdk="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$sdk" --licenses > /dev/null 2>&1 || true
@@ -121,6 +112,11 @@ jobs:
           set -o pipefail
           ./gradlew :app:assembleDebug --no-daemon 2>&1 | tee /tmp/assemble.log
 
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          ./gradlew :app:testDebugUnitTest --no-daemon 2>&1 | tee /tmp/test.log
+
       - name: Lint
         run: |
           set -o pipefail
@@ -132,7 +128,7 @@ jobs:
       - name: Why it failed
         if: failure()
         run: |
-          for log in /tmp/assemble.log /tmp/lint.log; do
+          for log in /tmp/assemble.log /tmp/test.log /tmp/lint.log; do
             [ -f "$log" ] || continue
             echo "===== $log"
             sed -n "/^\* What went wrong:/,/^\* Try:/p" "$log" | head -70
