@@ -40,6 +40,35 @@ jobs:
           name: protocol-test-report
           path: protocol/build/reports/tests/test
 
+      # Google's Maven repository is not reachable from every development environment,
+      # so this prints what is actually published for each dependency pinned in the
+      # version catalog. Cheap, and it turns "the build cannot resolve this" into a
+      # list of versions that exist.
+      - name: Published versions on Google Maven
+        if: always()
+        run: |
+          for artifact in \
+            androidx/health/connect/connect-client \
+            androidx/compose/compose-bom \
+            androidx/compose/material3/material3 \
+            androidx/activity/activity-compose \
+            androidx/lifecycle/lifecycle-service \
+            androidx/core/core-ktx \
+            androidx/room/room-runtime \
+            androidx/work/work-runtime-ktx \
+            androidx/datastore/datastore-preferences \
+            com/android/tools/build/gradle
+          do
+            echo "== $artifact"
+            curl -s "https://dl.google.com/dl/android/maven2/$artifact/maven-metadata.xml" \
+              | grep -o "<version>[^<]*</version>" \
+              | sed "s/<[^>]*>//g" \
+              | grep -v -- "-alpha\|-beta\|-rc\|-dev" \
+              | tail -4 \
+              | tr "\n" " "
+            echo
+          done
+
   app:
     runs-on: ubuntu-latest
     steps:
@@ -54,9 +83,6 @@ jobs:
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
-
-      - name: Available Health Connect versions
-        run: curl -s https://dl.google.com/dl/android/maven2/androidx/health/connect/connect-client/maven-metadata.xml
 
       - uses: gradle/actions/setup-gradle@v4
 

@@ -1,13 +1,13 @@
-// The Kotlin plugins are declared here so both modules share one instance of them:
-// :protocol applies the JVM plugin and :app the Android one, and loading the Kotlin
-// plugin separately per subproject is unsupported and warns loudly.
+// Deliberately empty. Plugin versions live in settings.gradle.kts and each module
+// applies only what it needs.
 //
-// The Android and KSP plugins deliberately stay out of this block. A plugin named here
-// is resolved on every build even with `apply false`, and resolving the Android plugin
-// means reaching Google's repository — which a JVM-only `:protocol:test` should not have
-// to do. Versions for all of them live in settings.gradle.kts.
-plugins {
-    id("org.jetbrains.kotlin.jvm") apply false
-    id("org.jetbrains.kotlin.android") apply false
-    id("org.jetbrains.kotlin.plugin.compose") apply false
-}
+// The usual advice is to declare every plugin here with `apply false`. That is not
+// workable in this build: a plugin named here is resolved on every invocation, so
+// `:protocol:test` — which exists precisely so the protocol can be built and tested on
+// a bare JDK — would have to reach Google's repository for the Android plugin. Naming
+// only the Kotlin plugins does not work either: the Kotlin Android plugin needs the
+// Android plugin on the same classloader, and it is not on this one.
+//
+// The cost is Gradle's "Kotlin Gradle plugin was loaded multiple times" warning, since
+// :protocol and :app each load it. Both load the same version, and the modules share no
+// Kotlin state, so the warning is noise here.
