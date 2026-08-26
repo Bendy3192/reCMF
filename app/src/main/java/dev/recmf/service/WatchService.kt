@@ -354,15 +354,26 @@ class WatchService : LifecycleService() {
             ),
         )
 
-        // Quiet hours are not exposed yet, so both reminders are sent without a window.
         connection.send(
             CmfCommand.STANDING_REMINDER_SET,
-            CmfSettings.reminder(preferences.standReminder, preferences.standIntervalMinutes),
+            CmfSettings.reminder(
+                enabled = preferences.standReminder,
+                intervalMinutes = preferences.standIntervalMinutes,
+                quietStartSeconds = preferences.standQuietStartMinutes * 60,
+                quietEndSeconds = preferences.standQuietEndMinutes * 60,
+            ),
         )
         connection.send(
             CmfCommand.WATER_REMINDER_SET,
-            CmfSettings.reminder(preferences.drinkReminder, preferences.drinkIntervalMinutes),
+            CmfSettings.reminder(
+                enabled = preferences.drinkReminder,
+                intervalMinutes = preferences.drinkIntervalMinutes,
+                quietStartSeconds = preferences.drinkQuietStartMinutes * 60,
+                quietEndSeconds = preferences.drinkQuietEndMinutes * 60,
+            ),
         )
+
+        connection.send(CmfCommand.SPORTS_SET, CmfSettings.sportTypes(preferences.sportTypes))
     }
 
     /**

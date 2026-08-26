@@ -3,6 +3,7 @@ package dev.recmf.protocol
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNotEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -251,5 +252,39 @@ class CmfCodecTest {
             CmfDropReason.CHUNK_OUT_OF_ORDER,
             (rx.decode(frames[1]) as CmfDecoded.Dropped).reason,
         )
+    }
+}
+
+class CmfUnknownCommandTest {
+    private val key = "000102030405060708090a0b0c0d0e0f".hexToBytes()
+
+    @Test
+    fun `an unknown command keeps its bytes when they can be recovered`() {
+        // The watch volunteers commands reCMF has no name for. Without the payload there
+        // is nothing to identify them by later.
+        val tx = CmfCodec().apply { sessionKey = key }
+        val rx = CmfCodec().apply { sessionKey = key }
+
+        val payload = byteArrayOf(0x72, 0x75, 0x00, 0x01)
+        val frame = tx.encode(CmfCommand.BATTERY, payload).single()
+        frame[3] = 0x7e // clobber cmd1 into something not in the table
+
+        val decoded = rx.decode(frame) as CmfDecoded.Dropped
+
+        assertEquals(CmfDropReason.UNKNOWN_COMMAND, decoded.reason)
+        assertEquals(0x7e5c, decoded.cmd1)
+        assertArrayEquals(payload, decoded.payload)
+    }
+
+    @Test
+    fun `nothing is claimed when the bytes cannot be recovered`() {
+        val rx = CmfCodec().apply { sessionKey = key }
+
+        val header = CmfFrame.header(CmfCommand.BATTERY, 16, 1, 1)
+        header[3] = 0x7e
+        val decoded = rx.decode(header + ByteArray(16) { 0x5a }) as CmfDecoded.Dropped
+
+        assertEquals(CmfDropReason.UNKNOWN_COMMAND, decoded.reason)
+        assertNull(decoded.payload)
     }
 }

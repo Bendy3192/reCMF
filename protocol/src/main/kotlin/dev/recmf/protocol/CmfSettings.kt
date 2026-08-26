@@ -116,6 +116,26 @@ object CmfSettings {
     /** The watch refuses a longer gap between nudges. */
     const val MAX_REMINDER_INTERVAL_MINUTES: Int = 180
 
+    /**
+     * `SPORTS_SET`: which exercises appear in the watch's own sport menu, in order.
+     *
+     * Sent as a count followed by the codes. An empty list would leave the watch with no
+     * sports at all, so it falls back to the pair the official app also refuses to
+     * remove.
+     */
+    fun sportTypes(types: List<CmfActivityType>): ByteArray {
+        val chosen = types.distinct().takeIf { it.isNotEmpty() } ?: CmfActivityType.DEFAULT
+        val capped = chosen.take(MAX_SPORT_TYPES)
+
+        return ByteBuffer.allocate(capped.size + 1)
+            .put(capped.size.toByte())
+            .apply { capped.forEach { put(it.code) } }
+            .array()
+    }
+
+    /** The watch's own menu holds no more than this. */
+    const val MAX_SPORT_TYPES: Int = 36
+
     /** The goal fields are unsigned 16-bit; a larger target would wrap into a tiny one. */
     private fun Int.toUShortClamped(): Short = coerceIn(0, 0xFFFF).toShort()
 }

@@ -75,4 +75,6 @@
     <string name="alert_hr_resting_high">Resting heart rate above</string>
     <string name="alert_hr_active_high">Active heart rate above</string>
     <string name="alert_spo2_low">SpO2 below</string>
+    <string name="quiet_hours">Quiet from</string>
+    <string name="sport_types">Exercises (%1$d of %2$d)</string>
 </resources>

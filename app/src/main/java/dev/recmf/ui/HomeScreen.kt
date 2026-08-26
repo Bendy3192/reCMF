@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
@@ -31,6 +32,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.TimeInput
+import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -50,6 +53,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.WatchPreferences
+import dev.recmf.protocol.CmfActivityType
+import dev.recmf.protocol.CmfSettings
 import dev.recmf.health.HealthConnectAvailability
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -413,6 +418,14 @@ private fun WatchSettingsCard(
                 GoalField(stringResource(R.string.reminder_interval), preferences.standIntervalMinutes) {
                     onChange { current -> current.copy(standIntervalMinutes = it) }
                 }
+                QuietHoursRow(
+                    startMinutes = preferences.standQuietStartMinutes,
+                    endMinutes = preferences.standQuietEndMinutes,
+                ) { start, end ->
+                    onChange { current ->
+                        current.copy(standQuietStartMinutes = start, standQuietEndMinutes = end)
+                    }
+                }
             }
 
             SettingSwitch(stringResource(R.string.reminder_drink), preferences.drinkReminder) {
@@ -421,6 +434,14 @@ private fun WatchSettingsCard(
             if (preferences.drinkReminder) {
                 GoalField(stringResource(R.string.reminder_interval), preferences.drinkIntervalMinutes) {
                     onChange { current -> current.copy(drinkIntervalMinutes = it) }
+                }
+                QuietHoursRow(
+                    startMinutes = preferences.drinkQuietStartMinutes,
+                    endMinutes = preferences.drinkQuietEndMinutes,
+                ) { start, end ->
+                    onChange { current ->
+                        current.copy(drinkQuietStartMinutes = start, drinkQuietEndMinutes = end)
+                    }
                 }
             }
 
@@ -444,9 +465,119 @@ private fun WatchSettingsCard(
             GoalField(stringResource(R.string.alert_spo2_low), preferences.spo2AlertLow) {
                 onChange { current -> current.copy(spo2AlertLow = it) }
             }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SportTypesSection(preferences.sportTypes) { types ->
+                onChange { current -> current.copy(sportTypes = types) }
+            }
         }
     }
 }
+
+/** A quiet window during which the watch stays silent. Equal times mean no window. */
+@Composable
+private fun QuietHoursRow(startMinutes: Int, endMinutes: Int, onChange: (Int, Int) -> Unit) {
+    var editing by remember { mutableStateOf<Boolean?>(null) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(R.string.quiet_hours), style = MaterialTheme.typography.bodyMedium)
+        TextButton(onClick = { editing = true }) { Text(startMinutes.asClockTime()) }
+        Text("–")
+        TextButton(onClick = { editing = false }) { Text(endMinutes.asClockTime()) }
+    }
+
+    val isStart = editing ?: return
+    val initial = if (isStart) startMinutes else endMinutes
+
+    TimePickerDialog(
+        initialMinutes = initial,
+        onDismiss = { editing = null },
+        onConfirm = { picked ->
+            if (isStart) onChange(picked, endMinutes) else onChange(startMinutes, picked)
+            editing = null
+        },
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TimePickerDialog(initialMinutes: Int, onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
+    val state = rememberTimePickerState(
+        initialHour = initialMinutes / 60,
+        initialMinute = initialMinutes % 60,
+        is24Hour = true,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour * 60 + state.minute) }) {
+                Text(stringResource(android.R.string.ok))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(android.R.string.cancel)) }
+        },
+        text = { TimeInput(state = state) },
+    )
+}
+
+private fun Int.asClockTime(): String = "%02d:%02d".format(this / 60, this % 60)
+
+/**
+ * Which exercises the watch offers in its own sport menu.
+ *
+ * Collapsed by default: there are over a hundred and almost nobody changes them, but the
+ * ones that are on should be visible without unfolding anything.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SportTypesSection(selected: List<CmfActivityType>, onChange: (List<CmfActivityType>) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            stringResource(R.string.sport_types, selected.size, CmfSettings.MAX_SPORT_TYPES),
+            style = MaterialTheme.typography.titleSmall,
+        )
+        TextButton(onClick = { expanded = !expanded }) {
+            Text(stringResource(if (expanded) R.string.action_hide else R.string.action_show))
+        }
+    }
+
+    val shown = if (expanded) CmfActivityType.entries else selected
+
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        shown.forEach { type ->
+            val isSelected = type in selected
+            FilterChip(
+                selected = isSelected,
+                // The watch will not accept more than it has room for, so refuse the tap
+                // rather than silently dropping the choice when the list is sent.
+                enabled = isSelected || selected.size < CmfSettings.MAX_SPORT_TYPES,
+                onClick = {
+                    onChange(if (isSelected) selected - type else selected + type)
+                },
+                label = { Text(type.readableName()) },
+            )
+        }
+    }
+}
+
+private fun CmfActivityType.readableName(): String =
+    name.split("_").joinToString(" ") { word -> word.lowercase().replaceFirstChar { it.uppercase() } }
 
 @Composable
 private fun SettingSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {

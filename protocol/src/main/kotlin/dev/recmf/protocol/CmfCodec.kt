@@ -35,15 +35,19 @@ sealed interface CmfDecoded {
     data object Pending : CmfDecoded
 
     /**
-     * [cmd1] and [cmd2] are carried even when the pair is unknown — an opcode the watch
-     * uses and this app does not is exactly the thing worth writing down, and without the
-     * numbers there is nothing to identify it by.
+     * [cmd1], [cmd2] and, where it could be recovered, [payload] are carried even when the
+     * command is unknown. An opcode the watch uses and this app does not is exactly the
+     * thing worth writing down, and the numbers alone rarely say what it means — the bytes
+     * do.
+     *
+     * Not a data class: [payload] is a [ByteArray], which would compare by identity.
      */
-    data class Dropped(
+    class Dropped(
         val reason: CmfDropReason,
         val cmd: CmfCommand?,
         val cmd1: Int? = null,
         val cmd2: Int? = null,
+        val payload: ByteArray? = null,
     ) : CmfDecoded
 }
 
@@ -145,6 +149,7 @@ class CmfCodec(
                     cmd = null,
                     cmd1 = frame.cmd1,
                     cmd2 = frame.cmd2,
+                    payload = decryptUnknownBody(frame),
                 )
 
         val chunk = when (val body = extractBody(cmd, frame)) {
@@ -189,6 +194,34 @@ class CmfCodec(
         if (expected != actual) return BodyResult.Fail(CmfDropReason.CRC_MISMATCH)
 
         return BodyResult.Ok(payload)
+    }
+
+    /**
+     * Recovers the body of a command reCMF does not know.
+     *
+     * Unknown commands are assumed encrypted, which is what the watch does for everything
+     * except the four that cannot be. The CRC is the check that the guess was right: if it
+     * matches, these really are the plaintext bytes and they are worth showing; if not,
+     * nothing is claimed.
+     */
+    private fun decryptUnknownBody(frame: CmfFrame.Parsed): ByteArray? {
+        if (frame.bodyLength == 0) return null
+        val key = sessionKey ?: return null
+
+        val ciphertext = frame.body.copyOfRange(0, minOf(frame.bodyLength, frame.body.size))
+        val plaintext = try {
+            CmfCrypto.decrypt(ciphertext, key)
+        } catch (_: GeneralSecurityException) {
+            return null
+        }
+
+        if (plaintext.size < CRC_SIZE) return null
+
+        val payload = plaintext.copyOfRange(0, plaintext.size - CRC_SIZE)
+        val expected = CmfFrame.readUint32le(plaintext, plaintext.size - CRC_SIZE)
+        val actual = CmfFrame.readUint32le(CmfFrame.crc32le(payload), 0)
+
+        return payload.takeIf { expected == actual }
     }
 
     /**

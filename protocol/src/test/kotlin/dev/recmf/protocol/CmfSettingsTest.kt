@@ -166,3 +166,49 @@ class CmfReminderTest {
         )
     }
 }
+
+class CmfSportTypesTest {
+    @Test
+    fun `the list is a count followed by the codes`() {
+        val payload = CmfSettings.sportTypes(
+            listOf(CmfActivityType.OUTDOOR_RUNNING, CmfActivityType.YOGA, CmfActivityType.BOXING),
+        )
+
+        assertArrayEquals(
+            byteArrayOf(3, 0x02, 0x0F, 0x21),
+            payload,
+        )
+    }
+
+    @Test
+    fun `an empty choice falls back rather than leaving the watch with no sports`() {
+        val payload = CmfSettings.sportTypes(emptyList())
+
+        assertArrayEquals(
+            byteArrayOf(2, CmfActivityType.OUTDOOR_RUNNING.code, CmfActivityType.INDOOR_RUNNING.code),
+            payload,
+        )
+    }
+
+    @Test
+    fun `duplicates are dropped and the list is capped`() {
+        val duplicated = List(4) { CmfActivityType.YOGA }
+        assertEquals(2, CmfSettings.sportTypes(duplicated).size)
+
+        val everything = CmfActivityType.entries.toList()
+        assertEquals(CmfSettings.MAX_SPORT_TYPES + 1, CmfSettings.sportTypes(everything).size)
+    }
+
+    @Test
+    fun `codes above 0x7f survive as the watch wrote them`() {
+        // A byte is signed in Kotlin; 0x92 must not become 0x7f or wrap to something else.
+        assertEquals(0x92.toByte(), CmfActivityType.COOLDOWN.code)
+        assertEquals(CmfActivityType.COOLDOWN, CmfActivityType.fromCode(0x92.toByte()))
+    }
+
+    @Test
+    fun `every code is distinct`() {
+        val codes = CmfActivityType.entries.map { it.code }
+        assertEquals(codes.size, codes.distinct().size)
+    }
+}

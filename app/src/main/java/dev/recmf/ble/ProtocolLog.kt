@@ -55,7 +55,13 @@ object ProtocolLog {
         record(Direction.ACK, cmd.name, "applied")
     }
 
-    fun dropped(cmd: CmfCommand?, reason: String, cmd1: Int? = null, cmd2: Int? = null) {
+    fun dropped(
+        cmd: CmfCommand?,
+        reason: String,
+        cmd1: Int? = null,
+        cmd2: Int? = null,
+        payload: ByteArray? = null,
+    ) {
         val label = cmd?.name
             ?: if (cmd1 != null && cmd2 != null) {
                 // The numbers are the only handle on a command reCMF does not know yet.
@@ -64,7 +70,13 @@ object ProtocolLog {
                 "unknown frame"
             }
 
-        record(Direction.DROP, label, reason)
+        val detail = if (payload != null && payload.isNotEmpty()) {
+            "$reason · ${payload.preview()}"
+        } else {
+            reason
+        }
+
+        record(Direction.DROP, label, detail)
     }
 
     fun note(text: String) {

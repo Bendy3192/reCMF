@@ -9,7 +9,9 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.recmf.protocol.CmfActivityType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -58,6 +60,18 @@ data class WatchPreferences(
     val standIntervalMinutes: Int = 60,
     val drinkReminder: Boolean = false,
     val drinkIntervalMinutes: Int = 60,
+
+    /**
+     * Quiet windows as minutes since midnight. Start equal to end means no quiet hours,
+     * which is how the watch reads a window of zero length.
+     */
+    val standQuietStartMinutes: Int = 0,
+    val standQuietEndMinutes: Int = 0,
+    val drinkQuietStartMinutes: Int = 0,
+    val drinkQuietEndMinutes: Int = 0,
+
+    /** Which exercises the watch shows in its own sport menu. */
+    val sportTypes: List<CmfActivityType> = CmfActivityType.DEFAULT,
 )
 
 class SettingsStore(private val context: Context) {
@@ -94,6 +108,16 @@ class SettingsStore(private val context: Context) {
             standIntervalMinutes = prefs[KEY_STAND_INTERVAL] ?: 60,
             drinkReminder = prefs[KEY_DRINK_REMINDER] ?: false,
             drinkIntervalMinutes = prefs[KEY_DRINK_INTERVAL] ?: 60,
+            standQuietStartMinutes = prefs[KEY_STAND_QUIET_START] ?: 0,
+            standQuietEndMinutes = prefs[KEY_STAND_QUIET_END] ?: 0,
+            drinkQuietStartMinutes = prefs[KEY_DRINK_QUIET_START] ?: 0,
+            drinkQuietEndMinutes = prefs[KEY_DRINK_QUIET_END] ?: 0,
+            sportTypes = prefs[KEY_SPORT_TYPES]
+                // An unrecognised name means a downgrade or a renamed type; skipping it
+                // is better than failing to read the whole preference.
+                ?.mapNotNull { name -> CmfActivityType.entries.firstOrNull { it.name == name } }
+                ?.takeIf { it.isNotEmpty() }
+                ?: CmfActivityType.DEFAULT,
         )
     }
 
@@ -118,6 +142,12 @@ class SettingsStore(private val context: Context) {
             prefs[KEY_STAND_INTERVAL] = updated.standIntervalMinutes
             prefs[KEY_DRINK_REMINDER] = updated.drinkReminder
             prefs[KEY_DRINK_INTERVAL] = updated.drinkIntervalMinutes
+            prefs[KEY_STAND_QUIET_START] = updated.standQuietStartMinutes
+            prefs[KEY_STAND_QUIET_END] = updated.standQuietEndMinutes
+            prefs[KEY_DRINK_QUIET_START] = updated.drinkQuietStartMinutes
+            prefs[KEY_DRINK_QUIET_END] = updated.drinkQuietEndMinutes
+            // Stored by name, not by code: a name survives the codes being corrected.
+            prefs[KEY_SPORT_TYPES] = updated.sportTypes.map { it.name }.toSet()
         }
     }
 
@@ -199,5 +229,10 @@ class SettingsStore(private val context: Context) {
         val KEY_STAND_INTERVAL = intPreferencesKey("watch_stand_interval")
         val KEY_DRINK_REMINDER = booleanPreferencesKey("watch_drink_reminder")
         val KEY_DRINK_INTERVAL = intPreferencesKey("watch_drink_interval")
+        val KEY_STAND_QUIET_START = intPreferencesKey("watch_stand_quiet_start")
+        val KEY_STAND_QUIET_END = intPreferencesKey("watch_stand_quiet_end")
+        val KEY_DRINK_QUIET_START = intPreferencesKey("watch_drink_quiet_start")
+        val KEY_DRINK_QUIET_END = intPreferencesKey("watch_drink_quiet_end")
+        val KEY_SPORT_TYPES = stringSetPreferencesKey("watch_sport_types")
     }
 }
