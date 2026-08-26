@@ -1,10 +1,7 @@
 [versions]
-kotlin = "2.2.21"
 coroutines = "1.10.2"
 junit = "5.14.0"
 
-# Android side (resolved only when an Android SDK is present — see settings.gradle.kts)
-agp = "8.13.0"
 composeBom = "2025.09.00"
 material3 = "1.4.0"
 activityCompose = "1.11.0"
@@ -14,9 +11,6 @@ room = "2.8.1"
 healthConnect = "1.0.0"
 work = "2.10.5"
 datastore = "1.1.7"
-navigation3 = "1.0.0-alpha11"
-hilt = "2.57.1"
-ksp = "2.2.21-2.0.5"
 
 [libraries]
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -42,10 +36,3 @@ androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref =
 androidx-health-connect = { module = "androidx.health.connect:connect-client", version.ref = "healthConnect" }
 androidx-work-runtime = { module = "androidx.work:work-runtime-ktx", version.ref = "work" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
-
-[plugins]
-kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
-kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-android-application = { id = "com.android.application", version.ref = "agp" }
-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

@@ -27,6 +27,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Test protocol
+        # Blanked so :app is left out of the build even though the runner image ships
+        # an Android SDK — this job is meant to prove the JVM module stands alone.
+        env:
+          ANDROID_HOME: ""
+          ANDROID_SDK_ROOT: ""
         run: ./gradlew :protocol:test --no-daemon
 
       - if: failure()

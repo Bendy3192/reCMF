@@ -1,4 +1,16 @@
 pluginManagement {
+    // Plugin versions live here rather than in the version catalog, and the modules
+    // apply them without a version. Declaring them in the root build script instead —
+    // even with `apply false` — resolves every one of them on every build, so a JVM-only
+    // build would still have to reach Google's repository for the Android plugin.
+    plugins {
+        id("org.jetbrains.kotlin.jvm") version "2.2.21"
+        id("org.jetbrains.kotlin.android") version "2.2.21"
+        id("org.jetbrains.kotlin.plugin.compose") version "2.2.21"
+        id("com.android.application") version "8.13.0"
+        id("com.google.devtools.ksp") version "2.2.21-2.0.5"
+    }
+
     repositories {
         google {
             content {
@@ -27,9 +39,11 @@ rootProject.name = "reCMF"
 // so `./gradlew :protocol:test` stays runnable on a bare JDK.
 include(":protocol")
 
+// Blank counts as absent: CI blanks these to build the JVM module in isolation on a
+// runner image that sets them regardless.
 val androidSdkAvailable =
-    System.getenv("ANDROID_HOME") != null ||
-        System.getenv("ANDROID_SDK_ROOT") != null ||
+    !System.getenv("ANDROID_HOME").isNullOrBlank() ||
+        !System.getenv("ANDROID_SDK_ROOT").isNullOrBlank() ||
         file("local.properties").let { it.exists() && it.readText().contains("sdk.dir") }
 
 if (androidSdkAvailable) {

@@ -167,7 +167,7 @@ class WatchService : LifecycleService() {
         }
 
         lifecycleScope.launch {
-            connection.messages.collect(::onMessage)
+            connection.messages.collect { message -> onMessage(message) }
         }
 
         lifecycleScope.launch {

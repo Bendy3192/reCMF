@@ -1,7 +1,7 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    alias(libs.plugins.kotlin.jvm)
+    id("org.jetbrains.kotlin.jvm")
 }
 
 // Targets 17 without pinning a toolchain, so this module builds on any JDK 17+ —
