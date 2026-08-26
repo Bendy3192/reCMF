@@ -69,12 +69,11 @@ jobs:
 
       - name: Available SDK platforms
         run: |
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null \
-            | grep -oE "(platforms;android-[0-9A-Za-z-]+|build-tools;[0-9.]+)" \
-            | sort -uV \
-            | tail -18 \
-            | tr "\n" " "
-          echo
+          listing=$("$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null)
+          for prefix in "platforms;android-" "build-tools;"; do
+            echo "$listing" | grep -oE "$prefix[0-9A-Za-z.-]+" | sort -uV | tail -8 | tr "\n" " "
+            echo
+          done
 
   app:
     runs-on: ubuntu-latest
@@ -87,9 +86,12 @@ jobs:
           java-version: "17"
 
       - name: Install the compile SDK
+        # Only the platform. The build tools are deliberately not pinned here — there is
+        # no build-tools release numbered to match every platform, and AGP fetches the
+        # revision it wants once the licences are accepted.
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36" "build-tools;36.0.0"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37"
 
       - uses: gradle/actions/setup-gradle@v4
 
