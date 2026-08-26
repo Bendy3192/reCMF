@@ -155,8 +155,15 @@ class CmfConnection(
 
     /** Queues [cmd] on the command characteristic. Returns false if it could not be written. */
     suspend fun send(cmd: CmfCommand, payload: ByteArray = ByteArray(0)): Boolean {
-        val characteristic = commandWrite ?: return false
-        return writeFrames(characteristic, commandCodec.encode(cmd, payload))
+        val characteristic = commandWrite
+        if (characteristic == null) {
+            ProtocolLog.sent(cmd, payload, ok = false)
+            return false
+        }
+
+        val ok = writeFrames(characteristic, commandCodec.encode(cmd, payload))
+        ProtocolLog.sent(cmd, payload, ok)
+        return ok
     }
 
     /** Queues [cmd] on the bulk-data characteristic. */
@@ -276,6 +283,8 @@ class CmfConnection(
     // endregion
 
     private suspend fun onServicesReady(gatt: BluetoothGatt) {
+        ProtocolLog.note("Services discovered")
+
         val commandService = gatt.getService(CmfUuids.SERVICE_COMMAND)
         val dataService = gatt.getService(CmfUuids.SERVICE_DATA)
         val shellService = gatt.getService(CmfUuids.SERVICE_SHELL)
@@ -319,9 +328,14 @@ class CmfConnection(
         when (val decoded = codec.decode(value)) {
             is CmfDecoded.Pending -> Unit
 
-            is CmfDecoded.Dropped -> Log.w(TAG, "Dropped ${decoded.cmd ?: "frame"}: ${decoded.reason}")
+            is CmfDecoded.Dropped -> {
+                Log.w(TAG, "Dropped ${decoded.cmd ?: "frame"}: ${decoded.reason}")
+                ProtocolLog.dropped(decoded.cmd, decoded.reason.name)
+            }
 
             is CmfDecoded.Command -> {
+                ProtocolLog.received(decoded.cmd, decoded.payload)
+
                 authenticator?.onCommand(decoded.cmd, decoded.payload)
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { runAuthActions(it) }
@@ -357,6 +371,7 @@ class CmfConnection(
 
                 is CmfAuthAction.Failed -> {
                     Log.w(TAG, "Handshake failed: ${action.reason}")
+                    ProtocolLog.note("Handshake failed: ${action.reason}")
                     _failures.emit(ConnectionFailure.AuthRejected)
                     _state.value = ConnectionState.WAITING
                 }

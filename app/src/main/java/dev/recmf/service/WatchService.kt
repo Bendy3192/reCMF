@@ -22,6 +22,7 @@ import dev.recmf.ble.CmfConnection
 import dev.recmf.ble.CmfMessage
 import dev.recmf.ble.ConnectionFailure
 import dev.recmf.ble.ConnectionState
+import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.ReconnectBackoff
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
@@ -35,6 +36,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.TimeZone
 import java.util.concurrent.Executors
 
 /**
@@ -164,11 +166,12 @@ class WatchService : LifecycleService() {
         lifecycleScope.launch {
             connection.state.collect { state ->
                 _status.value = state
+                ProtocolLog.note("State: $state")
                 updateNotification(state)
 
                 if (state == ConnectionState.READY) {
                     backoff.reset()
-                    requestSync()
+                    initializeWatch()
                 }
             }
         }
@@ -180,6 +183,7 @@ class WatchService : LifecycleService() {
         lifecycleScope.launch {
             connection.failures.collect { failure ->
                 Log.w(TAG, "Connection failure: $failure")
+                ProtocolLog.note("Failure: $failure")
 
                 if (failure is ConnectionFailure.AuthRejected) {
                     // Retrying with a key the watch refuses only burns battery. Wait for
@@ -195,6 +199,27 @@ class WatchService : LifecycleService() {
                 if (_status.value != ConnectionState.READY) connectToPairedWatch()
             }
         }
+    }
+
+    /**
+     * What the watch expects once the handshake is done, before it will serve anything:
+     * the current time, then the identity queries. Gadgetbridge does the same, and
+     * skipping it leaves a connection that is authenticated but answers nothing.
+     */
+    private suspend fun initializeWatch() {
+        val nowMillis = System.currentTimeMillis()
+
+        connection.send(
+            CmfCommand.TIME,
+            CmfParsers.buildTimePayload(
+                epochSeconds = nowMillis / 1000,
+                utcOffsetMillis = TimeZone.getDefault().getOffset(nowMillis),
+            ),
+        )
+        connection.send(CmfCommand.FIRMWARE_VERSION_GET)
+        connection.send(CmfCommand.SERIAL_NUMBER_GET)
+
+        requestSync()
     }
 
     /**
@@ -224,6 +249,12 @@ class WatchService : LifecycleService() {
 
             CmfCommand.BATTERY ->
                 CmfParsers.parseBattery(message.payload)?.let { WatchStatus.battery.value = it }
+
+            CmfCommand.FIRMWARE_VERSION_RET ->
+                WatchStatus.firmware.value = CmfParsers.parseFirmwareVersion(message.payload)
+
+            CmfCommand.SERIAL_NUMBER_RET ->
+                WatchStatus.serialNumber.value = CmfParsers.parseSerialNumber(message.payload)
 
             else -> Unit
         }

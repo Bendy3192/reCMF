@@ -33,4 +33,10 @@
     <string name="action_pair">Подключить</string>
     <string name="action_sync_now">Синхронизировать</string>
     <string name="action_forget">Забыть</string>
+    <string name="firmware_version">Прошивка %1$s</string>
+    <string name="protocol_log">Журнал протокола (%1$d)</string>
+    <string name="protocol_log_empty">Обмена ещё не было.</string>
+    <string name="action_show">Показать</string>
+    <string name="action_hide">Скрыть</string>
+    <string name="action_clear">Очистить</string>
 </resources>

@@ -8,6 +8,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
+import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.WatchScanner
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
@@ -33,9 +34,16 @@ import java.time.ZoneId
 data class HomeUiState(
     val connection: ConnectionState = ConnectionState.IDLE,
     val settings: WatchSettings = WatchSettings(null, null, false, 0),
-    val battery: BatteryStatus? = null,
+    val watch: WatchInfo = WatchInfo(),
     val stepsToday: Int = 0,
     val latestHeartRate: HeartRateSampleEntity? = null,
+)
+
+/** What the watch itself has told us this session. */
+data class WatchInfo(
+    val battery: BatteryStatus? = null,
+    val firmware: String? = null,
+    val serialNumber: String? = null,
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,17 +68,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _discovered.value = scanner.bonded()
     }
 
+    private val watchInfo = combine(
+        WatchStatus.battery,
+        WatchStatus.firmware,
+        WatchStatus.serialNumber,
+    ) { battery, firmware, serial -> WatchInfo(battery, firmware, serial) }
+
     val uiState: StateFlow<HomeUiState> = combine(
         WatchStatus.state,
         settingsStore.settings,
-        WatchStatus.battery,
+        watchInfo,
         // Bound at construction, so a screen left open across midnight keeps counting
         // into yesterday until it is recreated.
         dao.stepsSince(startOfToday()),
         dao.latestHeartRate(),
-    ) { connection, settings, battery, steps, heartRate ->
-        HomeUiState(connection, settings, battery, steps, heartRate)
+    ) { connection, settings, watch, steps, heartRate ->
+        HomeUiState(connection, settings, watch, steps, heartRate)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
+
+    /** The recent protocol exchange, for the in-app log. */
+    val protocolLog: StateFlow<List<ProtocolLog.Entry>> = ProtocolLog.entries
+
+    fun clearLog() = ProtocolLog.clear()
 
     val healthConnectAvailability: HealthConnectAvailability get() = healthConnect.availability()
 

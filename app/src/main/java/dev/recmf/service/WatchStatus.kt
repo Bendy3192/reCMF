@@ -21,5 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 object WatchStatus {
     val state = MutableStateFlow(ConnectionState.IDLE)
     val battery = MutableStateFlow<BatteryStatus?>(null)
+    val firmware = MutableStateFlow<String?>(null)
+    val serialNumber = MutableStateFlow<String?>(null)
     val lastSyncEpochSeconds = MutableStateFlow<Long?>(null)
 }

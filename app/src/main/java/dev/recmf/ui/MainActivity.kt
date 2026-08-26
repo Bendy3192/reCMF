@@ -52,12 +52,15 @@ class MainActivity : ComponentActivity() {
                 val state by model.uiState.collectAsStateWithLifecycle()
                 val discovered by model.discovered.collectAsStateWithLifecycle()
                 val scanError by model.scanError.collectAsStateWithLifecycle()
+                val protocolLog by model.protocolLog.collectAsStateWithLifecycle()
 
                 HomeScreen(
                     state = state,
                     discovered = discovered,
                     scanError = scanError,
                     healthConnectAvailability = model.healthConnectAvailability,
+                    protocolLog = protocolLog,
+                    onClearLog = model::clearLog,
                     onScan = model::startScan,
                     onPair = model::pair,
                     onForget = model::forget,

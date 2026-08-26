@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -29,13 +30,19 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import dev.recmf.R
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
+import dev.recmf.ble.ProtocolLog
 import dev.recmf.health.HealthConnectAvailability
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +52,8 @@ fun HomeScreen(
     discovered: List<DiscoveredWatch>,
     scanError: String?,
     healthConnectAvailability: HealthConnectAvailability,
+    protocolLog: List<ProtocolLog.Entry>,
+    onClearLog: () -> Unit,
     onScan: () -> Unit,
     onPair: (DiscoveredWatch) -> Unit,
     onForget: () -> Unit,
@@ -91,6 +100,8 @@ fun HomeScreen(
                 }
             }
 
+            item { ProtocolLogCard(protocolLog, onClearLog) }
+
             item { Spacer(Modifier.padding(8.dp)) }
         }
     }
@@ -116,7 +127,7 @@ private fun ConnectionCard(
                 style = MaterialTheme.typography.bodyMedium,
             )
 
-            state.battery?.let { battery ->
+            state.watch.battery?.let { battery ->
                 Text(
                     text = if (battery.isCharging) {
                         stringResource(R.string.battery_charging, battery.levelPercent)
@@ -124,6 +135,13 @@ private fun ConnectionCard(
                         stringResource(R.string.battery_level, battery.levelPercent)
                     },
                     style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+
+            state.watch.firmware?.let { firmware ->
+                Text(
+                    text = stringResource(R.string.firmware_version, firmware),
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
 
@@ -267,3 +285,77 @@ private fun ConnectionState.isSettling(): Boolean = when (this) {
 
     ConnectionState.IDLE, ConnectionState.WAITING, ConnectionState.READY -> false
 }
+
+/**
+ * The recent protocol exchange.
+ *
+ * "Connected, but nothing arrives" is the failure this app is most likely to hit against
+ * an incompletely understood protocol, and it looks identical to working from the outside.
+ * Showing the traffic is what makes it reportable without a cable and logcat.
+ */
+@Composable
+private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(R.string.protocol_log, entries.size),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(stringResource(if (expanded) R.string.action_hide else R.string.action_show))
+                }
+            }
+
+            if (!expanded) return@Column
+
+            HorizontalDivider()
+
+            if (entries.isEmpty()) {
+                Text(stringResource(R.string.protocol_log_empty), style = MaterialTheme.typography.bodyMedium)
+                return@Column
+            }
+
+            // Newest first: the interesting event is always the most recent one.
+            entries.asReversed().take(LOG_LINES).forEach { entry ->
+                Text(
+                    text = buildString {
+                        append(TIME_FORMAT.format(java.util.Date(entry.atMillis)))
+                        append("  ")
+                        append(
+                            when (entry.direction) {
+                                ProtocolLog.Direction.OUT -> "→"
+                                ProtocolLog.Direction.IN -> "←"
+                                ProtocolLog.Direction.DROP -> "✕"
+                                ProtocolLog.Direction.NOTE -> "·"
+                            },
+                        )
+                        append(" ")
+                        append(entry.label)
+                        entry.detail?.let { append("\n        ").append(it) }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = if (entry.direction == ProtocolLog.Direction.DROP) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+
+            TextButton(onClick = onClear) { Text(stringResource(R.string.action_clear)) }
+        }
+    }
+}
+
+/** Enough to see a whole handshake, few enough to scroll past. */
+private const val LOG_LINES = 60
+
+private val TIME_FORMAT = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT)
