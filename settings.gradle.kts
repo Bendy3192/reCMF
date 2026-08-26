@@ -4,11 +4,11 @@ pluginManagement {
     // even with `apply false` — resolves every one of them on every build, so a JVM-only
     // build would still have to reach Google's repository for the Android plugin.
     plugins {
-        id("org.jetbrains.kotlin.jvm") version "2.2.21"
-        id("org.jetbrains.kotlin.android") version "2.2.21"
-        id("org.jetbrains.kotlin.plugin.compose") version "2.2.21"
-        id("com.android.application") version "8.13.0"
-        id("com.google.devtools.ksp") version "2.2.21-2.0.5"
+        id("org.jetbrains.kotlin.jvm") version "2.3.21"
+        id("org.jetbrains.kotlin.android") version "2.3.21"
+        id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
+        id("com.android.application") version "9.3.2"
+        id("com.google.devtools.ksp") version "2.3.11"
     }
 
     repositories {

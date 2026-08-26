@@ -32,6 +32,9 @@ enum class HealthConnectAvailability {
  * Writes samples into Health Connect so anything else on the phone — PoisonFit included —
  * reads the watch's data through the platform rather than through reCMF.
  *
+ * Records are marked auto-recorded rather than manually entered, which is what tells
+ * Health Connect this came off a device and not out of a text field.
+ *
  * Every record carries a `clientRecordId` derived from its timestamp. That is what makes
  * re-uploading a backlog idempotent: the watch resends the same minutes freely, and
  * without a stable id each resend would add a duplicate day of steps.
@@ -121,10 +124,9 @@ class HealthConnectSync(private val context: Context) {
             endTime = end,
             endZoneOffset = zoneOffsetAt(end),
             count = sample.steps.toLong(),
-            metadata = Metadata(
+            metadata = Metadata.autoRecordedWithId(
                 clientRecordId = "recmf-steps-${sample.timestamp}",
                 device = device,
-                recordingMethod = Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED,
             ),
         )
     }
@@ -165,10 +167,9 @@ class HealthConnectSync(private val context: Context) {
                         beatsPerMinute = it.bpm.toLong(),
                     )
                 },
-                metadata = Metadata(
+                metadata = Metadata.autoRecordedWithId(
                     clientRecordId = "recmf-hr-${run.first().timestamp}",
                     device = device,
-                    recordingMethod = Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED,
                 ),
             )
         }

@@ -7,12 +7,12 @@ plugins {
 
 android {
     namespace = "dev.recmf"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "dev.recmf"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "0.1.0"
 
