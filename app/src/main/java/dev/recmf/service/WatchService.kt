@@ -138,6 +138,13 @@ class WatchService : LifecycleService() {
         connection.disconnect()
         bleScope.cancel()
         bleDispatcher.close()
+
+        // Whatever the reason — stopSelf, or the system reclaiming the service — the
+        // link is gone. Leaving a stale READY here would convince [WatchdogWorker] that
+        // everything is fine and stop it from restarting us.
+        WatchStatus.state.value = ConnectionState.IDLE
+        WatchStatus.battery.value = null
+
         super.onDestroy()
     }
 

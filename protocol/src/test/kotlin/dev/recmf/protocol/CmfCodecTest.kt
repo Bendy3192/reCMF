@@ -174,6 +174,32 @@ class CmfCodecTest {
     }
 
     @Test
+    fun `abandoned transfers cannot each claim a buffer`() {
+        val (tx, rx) = codecPair()
+
+        // Start a multi-chunk transfer for more commands than the codec will track,
+        // never finishing any of them.
+        val commands = listOf(
+            CmfCommand.ACTIVITY_DATA,
+            CmfCommand.SLEEP_DATA,
+            CmfCommand.SPO2,
+            CmfCommand.STRESS,
+            CmfCommand.WORKOUT_SUMMARY,
+        )
+        check(commands.size > CmfCodec.MAX_CONCURRENT_REASSEMBLIES)
+
+        val outcomes = commands.map { cmd ->
+            rx.decode(tx.encode(cmd, Random(12).nextBytes(4000)).first())
+        }
+
+        assertTrue(
+            outcomes.takeLast(commands.size - CmfCodec.MAX_CONCURRENT_REASSEMBLIES)
+                .all { it is CmfDecoded.Dropped },
+            "expected the extra transfers to be refused, got $outcomes",
+        )
+    }
+
+    @Test
     fun `a smaller MTU still round-trips, in more chunks`() {
         val payload = Random(10).nextBytes(600)
         val (wideTx, wideRx) = codecPair(mtu = 247)

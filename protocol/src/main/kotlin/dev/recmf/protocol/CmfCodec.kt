@@ -188,6 +188,13 @@ class CmfCodec(
     }
 
     private fun reassemble(cmd: CmfCommand, frame: CmfFrame.Parsed, chunk: ByteArray): CmfDecoded {
+        if (cmd !in chunkBuffers && chunkBuffers.size >= MAX_CONCURRENT_REASSEMBLIES) {
+            // The watch interleaves at most a couple of transfers. More than that means
+            // buffers are being abandoned rather than completed, and each one is allowed
+            // to reach maxReassemblySize — so refuse instead of keeping one per command.
+            return CmfDecoded.Dropped(CmfDropReason.REASSEMBLY_TOO_LARGE, cmd)
+        }
+
         val buffer = chunkBuffers.getOrPut(cmd) { ChunkBuffer() }
 
         if (frame.chunkIndex != buffer.expectedChunk) {
@@ -239,5 +246,11 @@ class CmfCodec(
          * any real payload and far below what would threaten the process.
          */
         const val DEFAULT_MAX_REASSEMBLY_SIZE: Int = 1 shl 20
+
+        /**
+         * Bounds the total as well as each buffer: without it every command could hold
+         * a buffer of its own, and the ceiling above would apply to each of them.
+         */
+        const val MAX_CONCURRENT_REASSEMBLIES: Int = 4
     }
 }
