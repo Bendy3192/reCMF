@@ -1,0 +1,109 @@
+/*
+ * reCMF — a third-party companion app for the CMF Watch Pro 2.
+ * Copyright (C) 2026 reCMF contributors
+ *
+ * Ported from Gadgetbridge (Copyright (C) 2024 José Rebelo), AGPL-3.0-or-later.
+ * See LICENSE and NOTICE at the repository root.
+ */
+package dev.recmf.protocol
+
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.nio.charset.StandardCharsets
+
+/**
+ * Decoders for the payloads reCMF acts on. Payload bodies are little-endian, unlike the
+ * big-endian frame header.
+ *
+ * Every parser returns an empty list or null on a malformed payload rather than
+ * throwing: these bytes come off a radio link, and one bad notification must not take
+ * down the sync.
+ */
+object CmfParsers {
+    const val ACTIVITY_RECORD_SIZE: Int = 32
+    const val HEART_RATE_RECORD_SIZE: Int = 8
+
+    /**
+     * `ACTIVITY_DATA`: a run of 32-byte records — timestamp, steps, distance, calories,
+     * then 16 bytes we have not identified.
+     */
+    fun parseActivity(payload: ByteArray): List<ActivitySample> {
+        if (payload.isEmpty() || payload.size % ACTIVITY_RECORD_SIZE != 0) return emptyList()
+
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val out = ArrayList<ActivitySample>(payload.size / ACTIVITY_RECORD_SIZE)
+
+        while (buf.remaining() >= ACTIVITY_RECORD_SIZE) {
+            val sample = ActivitySample(
+                timestamp = buf.int.toUnsignedLong(),
+                steps = buf.int,
+                distanceMeters = buf.int,
+                calories = buf.int,
+            )
+            buf.position(buf.position() + 16) // unidentified tail
+            out.add(sample)
+        }
+
+        return out
+    }
+
+    /** `HEART_RATE_MANUAL_AUTO` / `HEART_RATE_WORKOUT`: 8-byte timestamp+bpm pairs. */
+    fun parseHeartRate(payload: ByteArray): List<HeartRateSample> {
+        if (payload.isEmpty() || payload.size % HEART_RATE_RECORD_SIZE != 0) return emptyList()
+
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val out = ArrayList<HeartRateSample>(payload.size / HEART_RATE_RECORD_SIZE)
+
+        while (buf.remaining() >= HEART_RATE_RECORD_SIZE) {
+            out.add(HeartRateSample(timestamp = buf.int.toUnsignedLong(), bpm = buf.int))
+        }
+
+        return out
+    }
+
+    /** `BATTERY`: level percentage then a charging flag. */
+    fun parseBattery(payload: ByteArray): BatteryStatus? {
+        if (payload.size < 2) return null
+        return BatteryStatus(
+            levelPercent = (payload[0].toInt() and 0xff).coerceIn(0, 100),
+            isCharging = payload[1] == 0x01.toByte(),
+        )
+    }
+
+    /** `ACTIVITY_FETCH_ACK_1`: 0x01 to proceed to step 2, 0x02 once the backlog is drained. */
+    fun parseFetchState(payload: ByteArray): ActivityFetchState? = when (payload.firstOrNull()) {
+        0x01.toByte() -> ActivityFetchState.READY
+        0x02.toByte() -> ActivityFetchState.FINISHED
+        else -> null
+    }
+
+    /** `FIRMWARE_VERSION_RET`: one byte per version component, e.g. `1.0.0.51`. */
+    fun parseFirmwareVersion(payload: ByteArray): String? {
+        if (payload.isEmpty()) return null
+        return payload.joinToString(".") { (it.toInt() and 0xff).toString() }
+    }
+
+    /** `SERIAL_NUMBER_RET`: a length byte followed by that many ASCII characters. */
+    fun parseSerialNumber(payload: ByteArray): String? {
+        if (payload.isEmpty()) return null
+        val length = payload[0].toInt() and 0xff
+        if (payload.size != length + 1) return null
+        return String(payload, 1, length, StandardCharsets.UTF_8)
+    }
+
+    /**
+     * `TIME` payload: epoch seconds and the UTC offset in milliseconds, big-endian —
+     * this one command does not follow the little-endian body convention.
+     */
+    fun buildTimePayload(epochSeconds: Long, utcOffsetMillis: Int): ByteArray =
+        ByteBuffer.allocate(8).order(ByteOrder.BIG_ENDIAN)
+            .putInt(epochSeconds.toInt())
+            .putInt(utcOffsetMillis)
+            .array()
+
+    /**
+     * Wire timestamps are unsigned 32-bit, so they stay positive past 2038 — where a
+     * signed read would wrap into a negative epoch and land the sample in 1901.
+     */
+    private fun Int.toUnsignedLong(): Long = toLong() and 0xffffffffL
+}

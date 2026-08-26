@@ -1,0 +1,24 @@
+reCMF
+Copyright (C) 2026 reCMF contributors
+
+This product includes software derived from Gadgetbridge
+(https://codeberg.org/Freeyourgadget/Gadgetbridge),
+Copyright (C) 2015-2024 the Gadgetbridge contributors,
+in particular the CMF Watch Pro protocol work by José Rebelo (2024).
+
+Gadgetbridge is licensed under the GNU Affero General Public License,
+version 3 or later. reCMF is therefore distributed under the same license.
+
+Files in `protocol/` are a Kotlin port of, and in places a direct
+translation of, the following Gadgetbridge sources:
+
+  app/src/main/java/nodomain/freeyourgadget/gadgetbridge/
+    service/devices/cmfwatchpro/CmfCharacteristic.java
+    service/devices/cmfwatchpro/CmfCommand.java
+    service/devices/cmfwatchpro/CmfWatchProSupport.java
+    service/devices/cmfwatchpro/CmfActivitySync.java
+    util/CryptoUtils.java
+    service/btle/BLETypeConversions.java
+
+The protocol itself was reverse engineered by the Gadgetbridge project.
+reCMF claims no ownership over that work and exists only because of it.
