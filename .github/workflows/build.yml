@@ -88,10 +88,26 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Assemble debug
-        run: ./gradlew :app:assembleDebug --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew :app:assembleDebug --no-daemon 2>&1 | tee /tmp/assemble.log
 
       - name: Lint
-        run: ./gradlew :app:lintDebug --no-daemon
+        run: |
+          set -o pipefail
+          ./gradlew :app:lintDebug --no-daemon 2>&1 | tee /tmp/lint.log
+
+      # Gradle's own output is followed by a few hundred lines of cache and cleanup
+      # chatter, which buries the actual error. This re-prints just the compiler errors
+      # and the failure block, last, where they are easy to find.
+      - name: Why it failed
+        if: failure()
+        run: |
+          for log in /tmp/assemble.log /tmp/lint.log; do
+            [ -f "$log" ] || continue
+            echo "===== $log"
+            grep -E "^e: |^\s+> |What went wrong|^FAILURE|Error:" "$log" | head -60 || true
+          done
 
       - uses: actions/upload-artifact@v4
         with:
