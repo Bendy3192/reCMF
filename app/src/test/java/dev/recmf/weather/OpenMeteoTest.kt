@@ -53,20 +53,32 @@ class OpenMeteoTest {
 
     @Test
     fun `the hourly run starts at the current hour, not at midnight`() {
-        // The response covers whole days; the watch should show what is coming.
+        // The response covers whole days; the watch should show what is coming. The
+        // fixture's first two hours are already past, so the run starts at the third.
         val snapshot = requireNotNull(OpenMeteo.parseForecast(forecastJson, now))
 
-        assertEquals(21, snapshot.hourly.first().temperatureC)
-        assertEquals(CmfWeatherCondition.THUNDER_SHOWERS, snapshot.hourly.first().condition)
-        assertEquals(2, snapshot.hourly.size)
+        assertEquals(4, snapshot.hourly.size)
+        assertEquals(19, snapshot.hourly.first().temperatureC) // 18.9
+        assertEquals(CmfWeatherCondition.OVERCAST, snapshot.hourly.first().condition)
+        assertEquals(22, snapshot.hourly.last().temperatureC)
     }
 
     @Test
     fun `an hour that is already running still counts as upcoming`() {
-        // Half past the hour is still that hour's weather.
+        // Half past the hour is still that hour's weather, so the run must not advance.
         val snapshot = requireNotNull(OpenMeteo.parseForecast(forecastJson, now + 1800))
 
-        assertEquals(21, snapshot.hourly.first().temperatureC)
+        assertEquals(4, snapshot.hourly.size)
+        assertEquals(19, snapshot.hourly.first().temperatureC)
+    }
+
+    @Test
+    fun `hours that have passed are left out`() {
+        // An hour into the future, the 18.9 reading is behind us.
+        val snapshot = requireNotNull(OpenMeteo.parseForecast(forecastJson, now + 3600))
+
+        assertEquals(3, snapshot.hourly.size)
+        assertEquals(20, snapshot.hourly.first().temperatureC) // 20.1
     }
 
     @Test
