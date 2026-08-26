@@ -168,9 +168,9 @@ class HealthConnectSync(private val context: Context) {
                     )
                 },
                 metadata = Metadata.autoRecorded(
-                device = device,
-                clientRecordId = "recmf-steps-${sample.timestamp}",
-            ),
+                    device = device,
+                    clientRecordId = "recmf-hr-${run.first().timestamp}",
+                ),
             )
         }
     }
