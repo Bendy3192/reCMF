@@ -113,9 +113,15 @@ jobs:
           ./gradlew :app:assembleDebug --no-daemon 2>&1 | tee /tmp/assemble.log
 
       - name: Unit tests
+        # A JUnit 5 platform that is not wired up runs zero tests and reports success,
+        # which would make this whole job meaningless. Count what actually ran.
         run: |
           set -o pipefail
           ./gradlew :app:testDebugUnitTest --no-daemon 2>&1 | tee /tmp/test.log
+          ran=$(grep -ho 'tests="[0-9]*"' app/build/test-results/testDebugUnitTest/*.xml \
+            | grep -o "[0-9]*" | paste -sd+ | bc)
+          echo "app unit tests executed: ${ran:-0}"
+          test "${ran:-0}" -gt 0
 
       - name: Lint
         run: |
