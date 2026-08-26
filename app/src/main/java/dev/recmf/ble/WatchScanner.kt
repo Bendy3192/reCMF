@@ -24,7 +24,19 @@ data class DiscoveredWatch(
     val isBonded: Boolean,
 ) {
     /** Whether the name matches what a CMF Watch Pro calls itself. */
-    val looksLikeWatch: Boolean get() = name != null && WatchScanner.WATCH_NAME.containsMatchIn(name)
+    val looksLikeWatch: Boolean get() = name != null && WATCH_NAME.containsMatchIn(name)
+
+    companion object {
+        /**
+         * What a CMF Watch Pro advertises as, e.g. `CMF Watch Pro 2-7219`. Used only to
+         * sort the list — never to hide anything, since a device can turn up unnamed.
+         *
+         * Deliberately here rather than on [WatchScanner]: that companion builds
+         * Bluetooth objects, and touching it from a plain JVM test hits the android.jar
+         * stubs. Which name looks like a watch is not a fact about the radio.
+         */
+        val WATCH_NAME = Regex("CMF Watch Pro|Watch Pro", RegexOption.IGNORE_CASE)
+    }
 }
 
 /**
@@ -103,15 +115,11 @@ class WatchScanner(private val context: Context) {
     }
 
     companion object {
-        /**
-         * What a CMF Watch Pro advertises as, e.g. `CMF Watch Pro 2-7219`. Used only to
-         * sort the list — never to hide anything, since a device can turn up unnamed.
-         */
-        val WATCH_NAME = Regex("CMF Watch Pro|Watch Pro", RegexOption.IGNORE_CASE)
-
-        private val SCAN_SETTINGS = ScanSettings.Builder()
-            .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-            .build()
+        private val SCAN_SETTINGS by lazy {
+            ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
+        }
 
         /** Likely watches first, then already-paired devices, then the strongest signal. */
         private val ORDER = compareByDescending<DiscoveredWatch> { it.looksLikeWatch }

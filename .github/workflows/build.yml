@@ -140,6 +140,9 @@ jobs:
             sed -n "/^\* What went wrong:/,/^\* Try:/p" "$log" | head -70
             grep -E "^e: " "$log" | head -30 || true
           done
+          # Both test tasks point at an HTML report rather than naming what failed.
+          find . -path "*/test-results/*" -name "*.xml" \
+            -exec grep -hB1 "<failure" {} \; 2>/dev/null | head -40 || true
           # Lint points at a report file rather than listing what it found.
           find app/build -name "lint-results-*.txt" \
             -exec grep -hE "^/.*(Error|Warning):" {} \; 2>/dev/null | head -40 || true
