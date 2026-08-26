@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,7 +43,10 @@ import androidx.compose.ui.unit.dp
 import dev.recmf.R
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
+import dev.recmf.data.WatchPreferences
 import dev.recmf.health.HealthConnectAvailability
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,6 +57,8 @@ fun HomeScreen(
     scanError: String?,
     healthConnectAvailability: HealthConnectAvailability,
     protocolLog: List<ProtocolLog.Entry>,
+    watchPreferences: WatchPreferences,
+    onWatchPreferences: ((WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
     onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
@@ -79,6 +85,7 @@ fun HomeScreen(
 
             if (state.settings.isPaired) {
                 item { TodayCard(state) }
+                item { WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
                 item {
                     NotificationsCard(
@@ -297,6 +304,102 @@ private fun ConnectionState.isSettling(): Boolean = when (this) {
     -> true
 
     ConnectionState.IDLE, ConnectionState.WAITING, ConnectionState.READY -> false
+}
+
+/**
+ * The watch's own configuration.
+ *
+ * Every change is written to the watch immediately, and the whole set is written again on
+ * each connection — so a setting made while the watch was away is not lost, it is applied
+ * when it comes back.
+ */
+@Composable
+private fun WatchSettingsCard(
+    preferences: WatchPreferences,
+    connected: Boolean,
+    onChange: ((WatchPreferences) -> WatchPreferences) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.watch_settings), style = MaterialTheme.typography.titleMedium)
+
+            if (!connected) {
+                Text(
+                    stringResource(R.string.watch_settings_offline),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+
+            Spacer(Modifier.padding(4.dp))
+
+            SettingSwitch(stringResource(R.string.setting_hr_monitoring), preferences.heartRateMonitoring) {
+                onChange { current -> current.copy(heartRateMonitoring = it) }
+            }
+            SettingSwitch(stringResource(R.string.setting_spo2_monitoring), preferences.spo2Monitoring) {
+                onChange { current -> current.copy(spo2Monitoring = it) }
+            }
+            SettingSwitch(stringResource(R.string.setting_stress_monitoring), preferences.stressMonitoring) {
+                onChange { current -> current.copy(stressMonitoring = it) }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            SettingSwitch(stringResource(R.string.setting_raise_to_wake), preferences.raiseToWake) {
+                onChange { current -> current.copy(raiseToWake = it) }
+            }
+            SettingSwitch(stringResource(R.string.setting_24_hour), preferences.use24Hour) {
+                onChange { current -> current.copy(use24Hour = it) }
+            }
+            SettingSwitch(stringResource(R.string.setting_metric), preferences.metric) {
+                onChange { current -> current.copy(metric = it) }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Text(stringResource(R.string.daily_goals), style = MaterialTheme.typography.titleSmall)
+
+            GoalField(stringResource(R.string.goal_steps), preferences.stepsGoal) {
+                onChange { current -> current.copy(stepsGoal = it) }
+            }
+            GoalField(stringResource(R.string.goal_distance), preferences.distanceGoalMeters) {
+                onChange { current -> current.copy(distanceGoalMeters = it) }
+            }
+            GoalField(stringResource(R.string.goal_calories), preferences.caloriesGoal) {
+                onChange { current -> current.copy(caloriesGoal = it) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun GoalField(label: String, value: Int, onValue: (Int) -> Unit) {
+    // Edited as text so a half-typed number does not momentarily become a goal of 8 —
+    // only a parsable value is committed.
+    var text by remember(value) { mutableStateOf(value.toString()) }
+
+    OutlinedTextField(
+        value = text,
+        onValueChange = { typed ->
+            text = typed.filter(Char::isDigit).take(5)
+            text.toIntOrNull()?.let(onValue)
+        },
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

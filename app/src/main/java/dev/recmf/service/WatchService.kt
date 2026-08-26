@@ -27,16 +27,21 @@ import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.ReconnectBackoff
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
+import dev.recmf.data.WatchPreferences
 import dev.recmf.notifications.OutgoingNotifications
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
+import dev.recmf.protocol.CmfSettings
+import dev.recmf.protocol.MonitoringChannel
 import dev.recmf.protocol.ActivityFetchState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.TimeZone
 import java.util.concurrent.Executors
@@ -186,6 +191,15 @@ class WatchService : LifecycleService() {
         }
 
         lifecycleScope.launch {
+            // Re-applied whenever they change, and again on every connection: the watch
+            // has no read-back for most of these, so the phone is the source of truth and
+            // a watch that was reset elsewhere converges back.
+            settings.watchPreferences.distinctUntilChanged().collect { preferences ->
+                if (_status.value == ConnectionState.READY) applyWatchPreferences(preferences)
+            }
+        }
+
+        lifecycleScope.launch {
             OutgoingNotifications.pending.collect { notification ->
                 // Dropped rather than queued when the watch is away: a notification the
                 // user has already dealt with is not worth buzzing their wrist for later.
@@ -241,7 +255,49 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.FIRMWARE_VERSION_GET)
         connection.send(CmfCommand.SERIAL_NUMBER_GET)
 
+        applyWatchPreferences(settings.watchPreferences.first())
+
         requestSync()
+    }
+
+    /**
+     * Pushes the whole configuration rather than the one field that changed. It is a
+     * dozen small writes, it is idempotent, and it means there is no way for the watch and
+     * the phone to disagree about a setting that failed to apply once.
+     */
+    private suspend fun applyWatchPreferences(preferences: WatchPreferences) {
+        connection.send(
+            CmfCommand.HEART_MONITORING_ENABLED_SET,
+            CmfSettings.monitoring(MonitoringChannel.HEART_RATE, preferences.heartRateMonitoring),
+        )
+        connection.send(
+            CmfCommand.HEART_MONITORING_ENABLED_SET,
+            CmfSettings.monitoring(MonitoringChannel.SPO2, preferences.spo2Monitoring),
+        )
+        connection.send(
+            CmfCommand.HEART_MONITORING_ENABLED_SET,
+            CmfSettings.monitoring(MonitoringChannel.STRESS, preferences.stressMonitoring),
+        )
+
+        connection.send(
+            CmfCommand.WAKE_ON_WRIST_RAISE,
+            CmfSettings.wakeOnWristRaise(preferences.raiseToWake),
+        )
+        connection.send(CmfCommand.TIME_FORMAT, CmfSettings.timeFormat(preferences.use24Hour))
+
+        // The watch expects length and temperature to be set together.
+        val units = CmfSettings.measurementSystem(preferences.metric)
+        connection.send(CmfCommand.UNIT_LENGTH, units)
+        connection.send(CmfCommand.UNIT_TEMPERATURE, units)
+
+        connection.send(
+            CmfCommand.GOALS_SET,
+            CmfSettings.goals(
+                steps = preferences.stepsGoal,
+                distanceMeters = preferences.distanceGoalMeters,
+                calories = preferences.caloriesGoal,
+            ),
+        )
     }
 
     /**

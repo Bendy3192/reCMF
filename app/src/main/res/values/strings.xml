@@ -47,4 +47,16 @@
     <string name="notifications_need_access">Android grants notification access in system settings, not here.</string>
     <string name="action_grant_access">Open settings</string>
     <string name="notifications_screen_off_only">Only while the screen is off</string>
+    <string name="watch_settings">Watch settings</string>
+    <string name="watch_settings_offline">Saved now, applied when the watch reconnects.</string>
+    <string name="setting_hr_monitoring">Continuous heart rate</string>
+    <string name="setting_spo2_monitoring">All-day SpO2</string>
+    <string name="setting_stress_monitoring">Stress monitoring</string>
+    <string name="setting_raise_to_wake">Raise to wake</string>
+    <string name="setting_24_hour">24-hour clock</string>
+    <string name="setting_metric">Metric units</string>
+    <string name="daily_goals">Daily goals</string>
+    <string name="goal_steps">Steps</string>
+    <string name="goal_distance">Distance, m</string>
+    <string name="goal_calories">Calories</string>
 </resources>

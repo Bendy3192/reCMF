@@ -6,6 +6,7 @@ package dev.recmf.data
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -27,6 +28,25 @@ data class WatchSettings(
     val isPaired: Boolean get() = address != null
 }
 
+/**
+ * The watch's own configuration, as reCMF believes it to be.
+ *
+ * Held here rather than read from the watch because most of these have no read-back
+ * command; the app is the source of truth and re-applies them on every connection, so a
+ * watch that was reset or configured elsewhere converges back.
+ */
+data class WatchPreferences(
+    val heartRateMonitoring: Boolean = true,
+    val spo2Monitoring: Boolean = false,
+    val stressMonitoring: Boolean = false,
+    val raiseToWake: Boolean = true,
+    val use24Hour: Boolean = true,
+    val metric: Boolean = true,
+    val stepsGoal: Int = 8_000,
+    val distanceGoalMeters: Int = 5_000,
+    val caloriesGoal: Int = 300,
+)
+
 class SettingsStore(private val context: Context) {
     val settings: Flow<WatchSettings> = context.dataStore.data.map { prefs ->
         WatchSettings(
@@ -40,6 +60,36 @@ class SettingsStore(private val context: Context) {
     }
 
     suspend fun current(): WatchSettings = settings.first()
+
+    val watchPreferences: Flow<WatchPreferences> = context.dataStore.data.map { prefs ->
+        WatchPreferences(
+            heartRateMonitoring = prefs[KEY_HR_MONITORING] ?: true,
+            spo2Monitoring = prefs[KEY_SPO2_MONITORING] ?: false,
+            stressMonitoring = prefs[KEY_STRESS_MONITORING] ?: false,
+            raiseToWake = prefs[KEY_RAISE_TO_WAKE] ?: true,
+            use24Hour = prefs[KEY_24_HOUR] ?: true,
+            metric = prefs[KEY_METRIC] ?: true,
+            stepsGoal = prefs[KEY_STEPS_GOAL] ?: 8_000,
+            distanceGoalMeters = prefs[KEY_DISTANCE_GOAL] ?: 5_000,
+            caloriesGoal = prefs[KEY_CALORIES_GOAL] ?: 300,
+        )
+    }
+
+    suspend fun updateWatchPreferences(transform: (WatchPreferences) -> WatchPreferences) {
+        val updated = transform(watchPreferences.first())
+
+        context.dataStore.edit { prefs ->
+            prefs[KEY_HR_MONITORING] = updated.heartRateMonitoring
+            prefs[KEY_SPO2_MONITORING] = updated.spo2Monitoring
+            prefs[KEY_STRESS_MONITORING] = updated.stressMonitoring
+            prefs[KEY_RAISE_TO_WAKE] = updated.raiseToWake
+            prefs[KEY_24_HOUR] = updated.use24Hour
+            prefs[KEY_METRIC] = updated.metric
+            prefs[KEY_STEPS_GOAL] = updated.stepsGoal
+            prefs[KEY_DISTANCE_GOAL] = updated.distanceGoalMeters
+            prefs[KEY_CALORIES_GOAL] = updated.caloriesGoal
+        }
+    }
 
     suspend fun setWatch(address: String, name: String?) {
         context.dataStore.edit { prefs ->
@@ -96,5 +146,15 @@ class SettingsStore(private val context: Context) {
         val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")
+
+        val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")
+        val KEY_SPO2_MONITORING = booleanPreferencesKey("watch_spo2_monitoring")
+        val KEY_STRESS_MONITORING = booleanPreferencesKey("watch_stress_monitoring")
+        val KEY_RAISE_TO_WAKE = booleanPreferencesKey("watch_raise_to_wake")
+        val KEY_24_HOUR = booleanPreferencesKey("watch_24_hour")
+        val KEY_METRIC = booleanPreferencesKey("watch_metric")
+        val KEY_STEPS_GOAL = intPreferencesKey("watch_steps_goal")
+        val KEY_DISTANCE_GOAL = intPreferencesKey("watch_distance_goal")
+        val KEY_CALORIES_GOAL = intPreferencesKey("watch_calories_goal")
     }
 }

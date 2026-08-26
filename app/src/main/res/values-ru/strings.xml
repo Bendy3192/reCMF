@@ -44,4 +44,16 @@
     <string name="notifications_need_access">Доступ к уведомлениям выдаётся в системных настройках, а не здесь.</string>
     <string name="action_grant_access">Открыть настройки</string>
     <string name="notifications_screen_off_only">Только при выключенном экране</string>
+    <string name="watch_settings">Настройки часов</string>
+    <string name="watch_settings_offline">Сохранится сейчас, применится при подключении часов.</string>
+    <string name="setting_hr_monitoring">Круглосуточный пульс</string>
+    <string name="setting_spo2_monitoring">SpO2 весь день</string>
+    <string name="setting_stress_monitoring">Мониторинг стресса</string>
+    <string name="setting_raise_to_wake">Включать экран поднятием руки</string>
+    <string name="setting_24_hour">24-часовой формат</string>
+    <string name="setting_metric">Метрические единицы</string>
+    <string name="daily_goals">Дневные цели</string>
+    <string name="goal_steps">Шаги</string>
+    <string name="goal_distance">Дистанция, м</string>
+    <string name="goal_calories">Калории</string>
 </resources>

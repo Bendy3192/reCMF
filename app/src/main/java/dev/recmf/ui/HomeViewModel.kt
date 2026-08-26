@@ -13,6 +13,7 @@ import dev.recmf.ble.WatchScanner
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
+import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSettings
 import dev.recmf.health.HealthConnectAvailability
 import androidx.core.app.NotificationManagerCompat
@@ -86,6 +87,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     ) { connection, settings, watch, steps, heartRate ->
         HomeUiState(connection, settings, watch, steps, heartRate)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
+
+    val watchPreferences: StateFlow<WatchPreferences> = settingsStore.watchPreferences
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), WatchPreferences())
+
+    /** Applied to the watch by the service, which is watching the same flow. */
+    fun updateWatchPreferences(transform: (WatchPreferences) -> WatchPreferences) {
+        viewModelScope.launch { settingsStore.updateWatchPreferences(transform) }
+    }
 
     /** The recent protocol exchange, for the in-app log. */
     val protocolLog: StateFlow<List<ProtocolLog.Entry>> = ProtocolLog.entries

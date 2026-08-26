@@ -55,6 +55,7 @@ class MainActivity : ComponentActivity() {
                 val discovered by model.discovered.collectAsStateWithLifecycle()
                 val scanError by model.scanError.collectAsStateWithLifecycle()
                 val protocolLog by model.protocolLog.collectAsStateWithLifecycle()
+                val watchPreferences by model.watchPreferences.collectAsStateWithLifecycle()
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -66,6 +67,8 @@ class MainActivity : ComponentActivity() {
                     scanError = scanError,
                     healthConnectAvailability = model.healthConnectAvailability,
                     protocolLog = protocolLog,
+                    watchPreferences = watchPreferences,
+                    onWatchPreferences = model::updateWatchPreferences,
                     hasNotificationAccess = hasNotificationAccess,
                     onClearLog = model::clearLog,
                     onNotificationsEnabled = model::setNotificationsEnabled,
