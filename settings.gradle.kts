@@ -7,9 +7,10 @@ pluginManagement {
         id("org.jetbrains.kotlin.jvm") version "2.3.21"
         id("org.jetbrains.kotlin.android") version "2.3.21"
         id("org.jetbrains.kotlin.plugin.compose") version "2.3.21"
-        // Not 9.x: AGP 9 brings its own Kotlin support and refuses to have the
-        // Kotlin Android plugin applied alongside it, which this build needs for the
-        // Compose plugin.
+        // Not 9.x: AGP 9 brings its own Kotlin support and refuses to have the Kotlin
+        // Android plugin applied alongside it, which this build needs for the Compose
+        // plugin. This is also why the wrapper is pinned to Gradle 9.5.1 — AGP 8.x uses
+        // a Gradle internal API that 9.6 removed.
         id("com.android.application") version "8.13.0"
         id("com.google.devtools.ksp") version "2.3.11"
     }
