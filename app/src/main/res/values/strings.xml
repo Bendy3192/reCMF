@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">reCMF</string>
+
+    <string name="notification_channel_connection">Watch connection</string>
+    <string name="notification_channel_connection_description">Shows while reCMF is keeping your watch connected.</string>
+
+    <string name="status_idle">Not running</string>
+    <string name="status_waiting">Waiting for the watch</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_initializing">Setting up the link…</string>
+    <string name="status_authenticating">Pairing…</string>
+    <string name="status_ready">Connected</string>
+
+    <string name="no_watch_paired">No watch paired</string>
+    <string name="unnamed_watch">Unnamed device</string>
+
+    <string name="battery_level">Battery %1$d%%</string>
+    <string name="battery_charging">Battery %1$d%% · charging</string>
+
+    <string name="today">Today</string>
+    <string name="metric_steps">steps</string>
+    <string name="metric_heart_rate">bpm</string>
+
+    <string name="health_connect">Health Connect</string>
+    <string name="health_connect_available">Steps and heart rate are written to Health Connect, so other apps can read them.</string>
+    <string name="health_connect_update_required">Health Connect needs an update before reCMF can write to it.</string>
+    <string name="health_connect_not_installed">Health Connect is not available on this device.</string>
+    <string name="last_sync">Last written %1$s</string>
+
+    <string name="pair_title">Pair your watch</string>
+    <string name="pair_explainer">Make sure the watch is not connected to the CMF app, then scan. reCMF negotiates its own key — you do not need to find one by hand.</string>
+
+    <string name="action_scan">Scan</string>
+    <string name="action_pair">Pair</string>
+    <string name="action_sync_now">Sync now</string>
+    <string name="action_forget">Forget</string>
+</resources>

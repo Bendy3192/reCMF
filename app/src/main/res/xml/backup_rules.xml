@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!--
+        The sealed pairing key is wrapped by a Keystore key that never leaves this
+        device, so a restore elsewhere could not read it anyway. Excluding settings
+        keeps the restored app in a clean "not paired" state rather than a broken one.
+    -->
+    <exclude domain="file" path="datastore/" />
+    <exclude domain="database" path="recmf.db" />
+</full-backup-content>

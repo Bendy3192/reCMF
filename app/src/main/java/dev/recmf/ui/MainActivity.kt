@@ -1,0 +1,67 @@
+/*
+ * reCMF — Copyright (C) 2026 reCMF contributors. AGPL-3.0-or-later.
+ */
+package dev.recmf.ui
+
+import android.Manifest
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.recmf.health.HealthConnectSync
+import dev.recmf.ui.theme.ReCmfTheme
+
+class MainActivity : ComponentActivity() {
+
+    /**
+     * Bluetooth is useless without these, so they are requested up front rather than at
+     * the moment of first use — a scan that silently returns nothing is far more
+     * confusing than a permission dialog.
+     */
+    private val bluetoothPermissions = arrayOf(
+        Manifest.permission.BLUETOOTH_SCAN,
+        Manifest.permission.BLUETOOTH_CONNECT,
+        Manifest.permission.POST_NOTIFICATIONS,
+    )
+
+    private val requestBluetooth =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+
+    private val requestHealthConnect =
+        registerForActivityResult(PermissionControllerContract()) { }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+
+        requestBluetooth.launch(bluetoothPermissions)
+
+        setContent {
+            ReCmfTheme {
+                val model: HomeViewModel = viewModel()
+                val state by model.uiState.collectAsStateWithLifecycle()
+                val discovered by model.discovered.collectAsStateWithLifecycle()
+                val scanError by model.scanError.collectAsStateWithLifecycle()
+
+                HomeScreen(
+                    state = state,
+                    discovered = discovered,
+                    scanError = scanError,
+                    healthConnectAvailability = model.healthConnectAvailability,
+                    onScan = model::startScan,
+                    onPair = model::pair,
+                    onForget = model::forget,
+                    onSyncNow = model::syncNow,
+                    onHealthConnectEnabled = { enabled ->
+                        model.setHealthConnectEnabled(enabled)
+                        if (enabled) requestHealthConnect.launch(HealthConnectSync.REQUIRED_PERMISSIONS)
+                    },
+                )
+            }
+        }
+    }
+}

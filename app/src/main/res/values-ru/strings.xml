@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="notification_channel_connection">Соединение с часами</string>
+    <string name="notification_channel_connection_description">Показывается, пока reCMF держит связь с часами.</string>
+
+    <string name="status_idle">Не запущено</string>
+    <string name="status_waiting">Ожидание часов</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_initializing">Настройка канала…</string>
+    <string name="status_authenticating">Сопряжение…</string>
+    <string name="status_ready">Подключено</string>
+
+    <string name="no_watch_paired">Часы не подключены</string>
+    <string name="unnamed_watch">Без названия</string>
+
+    <string name="battery_level">Заряд %1$d%%</string>
+    <string name="battery_charging">Заряд %1$d%% · зарядка</string>
+
+    <string name="today">Сегодня</string>
+    <string name="metric_steps">шагов</string>
+    <string name="metric_heart_rate">уд/мин</string>
+
+    <string name="health_connect_available">Шаги и пульс пишутся в Health Connect — их видят другие приложения.</string>
+    <string name="health_connect_update_required">Health Connect нужно обновить, прежде чем reCMF сможет писать данные.</string>
+    <string name="health_connect_not_installed">Health Connect недоступен на этом устройстве.</string>
+    <string name="last_sync">Последняя запись %1$s</string>
+
+    <string name="pair_title">Подключите часы</string>
+    <string name="pair_explainer">Отключите часы от приложения CMF и нажмите «Поиск». reCMF сам согласует ключ — искать его вручную не нужно.</string>
+
+    <string name="action_scan">Поиск</string>
+    <string name="action_pair">Подключить</string>
+    <string name="action_sync_now">Синхронизировать</string>
+    <string name="action_forget">Забыть</string>
+</resources>
