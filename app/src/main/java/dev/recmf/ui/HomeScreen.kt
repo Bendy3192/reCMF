@@ -56,6 +56,7 @@ fun HomeScreen(
     hasNotificationAccess: Boolean,
     onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
+    onScreenOffOnlyEnabled: (Boolean) -> Unit,
     onGrantNotificationAccess: () -> Unit,
     onScan: () -> Unit,
     onPair: (DiscoveredWatch) -> Unit,
@@ -84,6 +85,7 @@ fun HomeScreen(
                         state = state,
                         hasAccess = hasNotificationAccess,
                         onEnabled = onNotificationsEnabled,
+                        onScreenOffOnly = onScreenOffOnlyEnabled,
                         onGrantAccess = onGrantNotificationAccess,
                     )
                 }
@@ -302,6 +304,7 @@ private fun NotificationsCard(
     state: HomeUiState,
     hasAccess: Boolean,
     onEnabled: (Boolean) -> Unit,
+    onScreenOffOnly: (Boolean) -> Unit,
     onGrantAccess: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
@@ -329,6 +332,22 @@ private fun NotificationsCard(
                     stringResource(R.string.notifications_explainer),
                     style = MaterialTheme.typography.bodyMedium,
                 )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.notifications_screen_off_only),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Switch(
+                        checked = state.settings.notifyOnlyWhenScreenOff,
+                        onCheckedChange = onScreenOffOnly,
+                        enabled = state.settings.notificationsEnabled,
+                    )
+                }
             } else {
                 Text(
                     stringResource(R.string.notifications_need_access),

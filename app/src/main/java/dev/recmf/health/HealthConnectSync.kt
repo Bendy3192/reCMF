@@ -12,7 +12,6 @@ import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
-import dev.recmf.data.ActivitySampleEntity
 import dev.recmf.data.HeartRateSampleEntity
 import java.time.Instant
 import java.time.ZoneId
@@ -72,27 +71,23 @@ class HealthConnectSync(private val context: Context) {
     }
 
     /**
-     * Writes [activity] and [heartRate] and returns the timestamps that landed, so the
-     * caller can mark exactly those rows synced. A partial failure leaves the rest
-     * pending for the next run rather than losing them.
+     * Writes the movement described by [steps] and the readings in [heartRate].
+     *
+     * [steps] are intervals, not the watch's cumulative totals — see [stepDeltas]. A
+     * partial failure leaves the rest pending for the next run rather than losing it.
      */
     suspend fun write(
-        activity: List<ActivitySampleEntity>,
+        steps: List<IntervalDelta>,
         heartRate: List<HeartRateSampleEntity>,
     ): WriteResult {
         val client = this.client ?: return WriteResult.unavailable()
         if (!hasPermissions()) return WriteResult.unavailable()
 
-        val steps = activity.filter { it.steps > 0 }.map(::toStepsRecord)
-        val beats = toHeartRateRecords(heartRate)
-
-        val stepsWritten = insert(client, steps)
-        val heartRateWritten = insert(client, beats)
+        val stepsWritten = insert(client, steps.map(::toStepsRecord))
+        val heartRateWritten = insert(client, toHeartRateRecords(heartRate))
 
         return WriteResult(
-            // A zero-step minute is real data with nothing for Health Connect to store;
-            // count it as handled so it does not stay pending forever.
-            activityTimestamps = if (stepsWritten) activity.map { it.timestamp } else emptyList(),
+            stepsWritten = stepsWritten,
             heartRateTimestamps = if (heartRateWritten) heartRate.map { it.timestamp } else emptyList(),
         )
     }
@@ -114,19 +109,21 @@ class HealthConnectSync(private val context: Context) {
         }
     }
 
-    private fun toStepsRecord(sample: ActivitySampleEntity): StepsRecord {
-        val start = Instant.ofEpochSecond(sample.timestamp)
-        val end = start.plusSeconds(BUCKET_SECONDS)
+    private fun toStepsRecord(delta: IntervalDelta): StepsRecord {
+        val start = Instant.ofEpochSecond(delta.startSeconds)
+        val end = Instant.ofEpochSecond(delta.endSeconds)
 
         return StepsRecord(
             startTime = start,
             startZoneOffset = zoneOffsetAt(start),
             endTime = end,
             endZoneOffset = zoneOffsetAt(end),
-            count = sample.steps.toLong(),
+            count = delta.steps.toLong(),
+            // Keyed on the interval's end, which is the reading that produced it, so
+            // re-uploading the same stretch replaces rather than adds.
             metadata = Metadata.autoRecorded(
                 device = device,
-                clientRecordId = "recmf-steps-${sample.timestamp}",
+                clientRecordId = "recmf-steps-${delta.endSeconds}",
             ),
         )
     }
@@ -179,21 +176,16 @@ class HealthConnectSync(private val context: Context) {
     private fun zoneOffsetAt(instant: Instant) = ZoneId.systemDefault().rules.getOffset(instant)
 
     data class WriteResult(
-        val activityTimestamps: List<Long>,
+        val stepsWritten: Boolean,
         val heartRateTimestamps: List<Long>,
     ) {
-        val wroteNothing: Boolean get() = activityTimestamps.isEmpty() && heartRateTimestamps.isEmpty()
-
         companion object {
-            fun unavailable() = WriteResult(emptyList(), emptyList())
+            fun unavailable() = WriteResult(stepsWritten = false, heartRateTimestamps = emptyList())
         }
     }
 
     companion object {
         private const val TAG = "HealthConnectSync"
-
-        /** The watch buckets activity per minute. */
-        private const val BUCKET_SECONDS = 60L
 
         /** A longer gap than this starts a new series rather than stretching one. */
         private const val MAX_SERIES_GAP_SECONDS = 15 * 60L

@@ -8,7 +8,12 @@
 package dev.recmf.protocol
 
 /**
- * One minute of movement, as the watch buckets it.
+ * The watch's running totals at one moment.
+ *
+ * These are **cumulative for the day**, not per-interval: polled repeatedly, the watch
+ * returns the same figures with fresh timestamps, and they agree with each other as daily
+ * totals (7125 steps against 5550 m, observed on firmware 1.0.0.73). Anything that adds
+ * these up multiplies the day by the number of times it synced.
  *
  * All timestamps in this package are epoch **seconds**, matching the wire format; the
  * conversion to `Instant` happens once, at the storage and Health Connect boundaries.

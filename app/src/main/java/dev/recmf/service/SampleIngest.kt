@@ -9,7 +9,9 @@ import dev.recmf.data.ActivitySampleEntity
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.SampleDao
 import dev.recmf.data.SettingsStore
+import dev.recmf.health.CumulativeReading
 import dev.recmf.health.HealthConnectSync
+import dev.recmf.health.stepDeltas
 import dev.recmf.protocol.ActivitySample
 import dev.recmf.protocol.HeartRateSample
 import java.time.Instant
@@ -71,21 +73,31 @@ class SampleIngest(
             val heartRate = dao.pendingHeartRate(BATCH)
             if (activity.isEmpty() && heartRate.isEmpty()) break
 
-            val result = healthConnect.write(activity, heartRate)
-            if (result.wroteNothing) {
+            // The watch reports running totals, so what Health Connect stores is the
+            // movement between readings — which needs the reading before this batch.
+            val baseline = activity.firstOrNull()
+                ?.let { dao.activityBefore(it.timestamp) }
+                ?.toReading()
+
+            val deltas = stepDeltas(activity.map { it.toReading() }, baseline)
+
+            val result = healthConnect.write(deltas, heartRate)
+            if (!result.stepsWritten && result.heartRateTimestamps.isEmpty()) {
                 Log.w(TAG, "Health Connect accepted nothing; will retry on the next sync")
                 return
             }
 
             val now = Instant.now().epochSecond
-            if (result.activityTimestamps.isNotEmpty()) {
-                dao.markActivitySynced(result.activityTimestamps, now)
+            if (result.stepsWritten && activity.isNotEmpty()) {
+                // Every reading in the batch is accounted for, including the one that
+                // only served as a baseline — its own interval was written last time.
+                dao.markActivitySynced(activity.map { it.timestamp }, now)
             }
             if (result.heartRateTimestamps.isNotEmpty()) {
                 dao.markHeartRateSynced(result.heartRateTimestamps, now)
             }
 
-            uploaded += result.activityTimestamps.size + result.heartRateTimestamps.size
+            uploaded += deltas.size + result.heartRateTimestamps.size
         }
 
         if (uploaded > 0) {
@@ -95,6 +107,13 @@ class SampleIngest(
             Log.i(TAG, "Wrote $uploaded samples to Health Connect")
         }
     }
+
+    private fun ActivitySampleEntity.toReading() = CumulativeReading(
+        timestamp = timestamp,
+        steps = steps,
+        distanceMeters = distanceMeters,
+        calories = calories,
+    )
 
     /** Drops samples that have reached Health Connect and are older than the retention window. */
     suspend fun prune() {

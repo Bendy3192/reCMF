@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
@@ -151,6 +152,9 @@ class WatchService : LifecycleService() {
         super.onDestroy()
     }
 
+    private fun isScreenOn(): Boolean =
+        getSystemService<PowerManager>()?.isInteractive ?: false
+
     private suspend fun connectToPairedWatch() {
         val current = settings.current()
         val address = current.address
@@ -186,7 +190,13 @@ class WatchService : LifecycleService() {
                 // Dropped rather than queued when the watch is away: a notification the
                 // user has already dealt with is not worth buzzing their wrist for later.
                 if (_status.value != ConnectionState.READY) return@collect
-                if (!settings.current().notificationsEnabled) return@collect
+
+                val prefs = settings.current()
+                if (!prefs.notificationsEnabled) return@collect
+
+                // With the screen on the user is already looking at the phone, and the
+                // watch buzzing for what they just read is noise.
+                if (prefs.notifyOnlyWhenScreenOff && isScreenOn()) return@collect
 
                 connection.send(CmfCommand.APP_NOTIFICATION, notification.toPayload())
             }

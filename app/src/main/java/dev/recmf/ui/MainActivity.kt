@@ -69,6 +69,7 @@ class MainActivity : ComponentActivity() {
                     hasNotificationAccess = hasNotificationAccess,
                     onClearLog = model::clearLog,
                     onNotificationsEnabled = model::setNotificationsEnabled,
+                    onScreenOffOnlyEnabled = model::setNotifyOnlyWhenScreenOff,
                     onGrantNotificationAccess = {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     },

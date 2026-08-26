@@ -33,14 +33,22 @@ interface SampleDao {
     @Query("UPDATE heart_rate_samples SET syncedAt = :now WHERE timestamp IN (:timestamps)")
     suspend fun markHeartRateSynced(timestamps: List<Long>, now: Long)
 
-    @Query("SELECT COALESCE(SUM(steps), 0) FROM activity_samples WHERE timestamp >= :since")
+    /**
+     * Steps are a cumulative daily counter, so today's figure is the highest reading of
+     * the day — never the sum, which would multiply the day by the number of syncs.
+     */
+    @Query("SELECT COALESCE(MAX(steps), 0) FROM activity_samples WHERE timestamp >= :since")
     fun stepsSince(since: Long): Flow<Int>
 
     @Query("SELECT * FROM heart_rate_samples WHERE bpm BETWEEN 25 AND 250 ORDER BY timestamp DESC LIMIT 1")
     fun latestHeartRate(): Flow<HeartRateSampleEntity?>
 
-    @Query("SELECT MAX(timestamp) FROM activity_samples")
-    suspend fun newestActivityTimestamp(): Long?
+    /**
+     * The reading immediately before [timestamp], synced or not: converting a cumulative
+     * counter into intervals needs the value it started from.
+     */
+    @Query("SELECT * FROM activity_samples WHERE timestamp < :timestamp ORDER BY timestamp DESC LIMIT 1")
+    suspend fun activityBefore(timestamp: Long): ActivitySampleEntity?
 
     /**
      * Drops synced samples older than [before]. Health Connect is the long-term store;

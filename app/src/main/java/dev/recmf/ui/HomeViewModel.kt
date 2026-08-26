@@ -108,6 +108,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsStore.setNotificationsEnabled(enabled) }
     }
 
+    fun setNotifyOnlyWhenScreenOff(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setNotifyOnlyWhenScreenOff(enabled) }
+    }
+
     /** Restarts the scan. Cancelling the previous one stops the radio between presses. */
     fun startScan() {
         scanJob?.cancel()

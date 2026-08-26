@@ -43,4 +43,5 @@
     <string name="notifications_explainer">Сообщения и оповещения с телефона отправляются на часы.</string>
     <string name="notifications_need_access">Доступ к уведомлениям выдаётся в системных настройках, а не здесь.</string>
     <string name="action_grant_access">Открыть настройки</string>
+    <string name="notifications_screen_off_only">Только при выключенном экране</string>
 </resources>
