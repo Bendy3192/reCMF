@@ -17,11 +17,11 @@ private val Context.dataStore by preferencesDataStore(name = "recmf-settings")
 
 /** What the user paired with, and how far the sync has got. */
 data class WatchSettings(
-    val address: String?,
-    val name: String?,
-    val healthConnectEnabled: Boolean,
-    val notificationsEnabled: Boolean,
-    val lastSyncEpochSeconds: Long,
+    val address: String? = null,
+    val name: String? = null,
+    val healthConnectEnabled: Boolean = false,
+    val notificationsEnabled: Boolean = false,
+    val lastSyncEpochSeconds: Long = 0,
 ) {
     val isPaired: Boolean get() = address != null
 }

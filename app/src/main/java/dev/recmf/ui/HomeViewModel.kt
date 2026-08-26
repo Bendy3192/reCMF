@@ -34,7 +34,7 @@ import java.time.ZoneId
 
 data class HomeUiState(
     val connection: ConnectionState = ConnectionState.IDLE,
-    val settings: WatchSettings = WatchSettings(null, null, false, 0),
+    val settings: WatchSettings = WatchSettings(),
     val watch: WatchInfo = WatchInfo(),
     val stepsToday: Int = 0,
     val latestHeartRate: HeartRateSampleEntity? = null,
