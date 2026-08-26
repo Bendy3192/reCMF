@@ -243,6 +243,29 @@ class WatchService : LifecycleService() {
     private fun isScreenOn(): Boolean =
         getSystemService<PowerManager>()?.isInteractive ?: false
 
+    /**
+     * Recovers from a key the watch no longer accepts.
+     *
+     * The watch keeps one pairing key, so pairing it with the stock app or with
+     * Gadgetbridge replaces reCMF's. That is a normal thing for a user to do, not a fault,
+     * so the stale key is dropped and the next attempt pairs from scratch — once. If the
+     * fresh key is refused too, something else is wrong and retrying would only burn
+     * battery against a watch that will not have us.
+     */
+    private suspend fun onKeyRejected() {
+        if (settings.authKey() == null) {
+            ProtocolLog.note("Pairing refused even with a new key")
+            stopEverything()
+            return
+        }
+
+        ProtocolLog.note("Key rejected — pairing again")
+        settings.clearAuthKey()
+
+        delay(RE_PAIR_DELAY_MILLIS)
+        connectToPairedWatch()
+    }
+
     private suspend fun connectToPairedWatch() {
         val current = settings.current()
         val address = current.address
@@ -319,9 +342,7 @@ class WatchService : LifecycleService() {
                 ProtocolLog.note("Failure: $failure")
 
                 if (failure is ConnectionFailure.AuthRejected) {
-                    // Retrying with a key the watch refuses only burns battery. Wait for
-                    // the user to pair again.
-                    stopEverything()
+                    onKeyRejected()
                     return@collect
                 }
 
@@ -551,6 +572,9 @@ class WatchService : LifecycleService() {
 
         /** A forecast does not change faster than this, whatever the refresh interval is. */
         private const val WEATHER_REFRESH_MILLIS = 30 * 60_000L
+
+        /** Long enough for the watch to drop the refused link before we open a new one. */
+        private const val RE_PAIR_DELAY_MILLIS = 2_000L
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_STOP = "dev.recmf.action.STOP"

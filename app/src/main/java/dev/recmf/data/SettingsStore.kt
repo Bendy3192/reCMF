@@ -188,6 +188,17 @@ class SettingsStore(private val context: Context) {
     suspend fun authKey(): ByteArray? =
         context.dataStore.data.first()[KEY_AUTH_KEY]?.let(SecretVault::unseal)
 
+    /**
+     * Forgets the pairing key but keeps the watch.
+     *
+     * The watch stores one key, so pairing it with anything else — the stock app, or
+     * Gadgetbridge — replaces ours. Dropping the stale key lets the next connection
+     * negotiate a fresh one instead of failing forever with a key nothing accepts.
+     */
+    suspend fun clearAuthKey() {
+        context.dataStore.edit { it.remove(KEY_AUTH_KEY) }
+    }
+
     suspend fun setAuthKey(key: ByteArray) {
         val sealed = SecretVault.seal(key) ?: return
         context.dataStore.edit { it[KEY_AUTH_KEY] = sealed }
