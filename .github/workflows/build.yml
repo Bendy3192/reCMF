@@ -40,12 +40,14 @@ jobs:
           name: protocol-test-report
           path: protocol/build/reports/tests/test
 
-      # Google's Maven repository is not reachable from every development environment,
-      # so this prints what is actually published for each dependency pinned in the
-      # version catalog. Cheap, and it turns "the build cannot resolve this" into a
-      # list of versions that exist.
-      - name: Published versions on Google Maven
-        if: always()
+  versions:
+    # Google's Maven repository is not reachable from every development environment, so
+    # this lists what is actually published for each dependency the catalog pins. It is
+    # its own job, with no Gradle setup, so the answer is the whole log rather than a
+    # few lines buried in a build.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Published versions
         run: |
           for artifact in \
             androidx/health/connect/connect-client \
@@ -59,14 +61,10 @@ jobs:
             androidx/datastore/datastore-preferences \
             com/android/tools/build/gradle
           do
-            echo "== $artifact"
-            curl -s "https://dl.google.com/dl/android/maven2/$artifact/maven-metadata.xml" \
-              | grep -o "<version>[^<]*</version>" \
-              | sed "s/<[^>]*>//g" \
-              | grep -v -- "-alpha\|-beta\|-rc\|-dev" \
-              | tail -4 \
-              | tr "\n" " "
-            echo
+            versions=$(curl -s "https://dl.google.com/dl/android/maven2/$artifact/maven-metadata.xml" \
+              | grep -o "<version>[^<]*</version>" | sed "s/<[^>]*>//g")
+            stable=$(echo "$versions" | grep -v -- "-alpha\|-beta\|-rc\|-dev" | tail -3 | tr "\n" " ")
+            echo "$artifact -> stable: ${stable:-none} | newest: $(echo "$versions" | tail -2 | tr "\n" " ")"
           done
 
   app:
