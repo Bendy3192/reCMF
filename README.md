@@ -4,7 +4,7 @@ A third-party companion app for the **CMF Watch Pro 2**, built to do the two thi
 stock app does badly: stay connected without being killed, and put the watch's data into
 **Health Connect** where anything else on the phone can read it.
 
-> **Status: the protocol layer is tested, the app has not been run against a watch yet.**
+> **Status: it builds and its tests pass, but it has never been run against a watch.**
 > See [What is verified](#what-is-verified) before trusting it with anything.
 
 ## Why
@@ -34,10 +34,21 @@ exists because of it.
 | Sync | Steps, distance, calories, heart rate, battery |
 | Health Connect | Writes `StepsRecord` and `HeartRateRecord`, deduplicated |
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
-| UI | Compose, Material 3 Expressive, dynamic colour |
+| UI | Compose, Material 3, dynamic colour |
 
 Sleep, SpO₂, stress, workouts and notifications are parsed by the protocol in
 Gadgetbridge but are not wired up here yet.
+
+### About Material 3 Expressive
+
+It is not used, and not by choice. `MaterialExpressiveTheme`, `MotionScheme.expressive()`
+and the wavy progress indicators are still `internal` in `compose-material3` 1.4.0. They
+become public in the 1.5.x line, which pulls Compose 1.12, which requires `compileSdk 37`
+and AGP 9.1 — and the Android 17 platform is not published to any installable SDK channel
+yet (the `versions` CI job checks all four channels on every run and says so).
+
+Until it is, the theme is plain Material 3 with dynamic colour. Switching over is a change
+to `ui/theme/Theme.kt` and two call sites in `ui/HomeScreen.kt`.
 
 ## Architecture
 
@@ -108,6 +119,18 @@ timestamp, so a resend overwrites; and every Health Connect record carries a
 ./gradlew :app:assembleDebug  # needs an Android SDK
 ```
 
+The toolchain is pinned tightly, and the pins are load-bearing rather than arbitrary:
+
+| | | why |
+|---|---|---|
+| Gradle | 9.5.1 | AGP 8.x uses a Gradle internal API that 9.6 removed |
+| AGP | 8.13.2 | AGP 9 supplies its own Kotlin support and refuses the Kotlin Android plugin |
+| compileSdk | 36 | the Android 17 platform will not install from any SDK channel |
+| Compose | 1.11.4 | 1.12 requires compileSdk 37 and AGP 9.1 |
+
+Raising any one of them alone breaks the build. They move together, once Android 17's SDK
+is published.
+
 `:app` is only included in the build when an Android SDK is present — `ANDROID_HOME`,
 `ANDROID_SDK_ROOT`, or a `local.properties` with `sdk.dir`. Android Studio writes that
 file itself, so opening the project just works; CI and bare JDK images get the protocol
@@ -120,7 +143,9 @@ the loss and restart cases, the reassembly ceiling, CRC and wrong-key rejection,
 sizing, the full pairing handshake and both session-key derivations, every payload parser
 including the post-2038 timestamp case, and the reconnect schedule.
 
-**Compiled, not run:** the whole `app/` module. CI assembles and lints it.
+**Built and linted in CI:** the whole `app/` module — every push assembles a debug APK,
+runs the app module's unit tests and passes lint with warnings as errors. The reconnect
+schedule is unit-tested there.
 
 **Not verified at all:** anything that depends on how a real watch behaves — whether the
 handshake completes end to end, what the unidentified 16 bytes in each activity record
