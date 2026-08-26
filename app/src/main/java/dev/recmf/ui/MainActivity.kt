@@ -80,6 +80,7 @@ class MainActivity : ComponentActivity() {
                     onPair = model::pair,
                     onForget = model::forget,
                     onSyncNow = model::syncNow,
+                    onAutoSyncSeconds = model::setAutoSyncSeconds,
                     onHealthConnectEnabled = { enabled ->
                         model.setHealthConnectEnabled(enabled)
                         if (enabled) requestHealthConnect.launch(HealthConnectSync.REQUIRED_PERMISSIONS)

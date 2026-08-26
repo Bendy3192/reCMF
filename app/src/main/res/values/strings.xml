@@ -59,4 +59,10 @@
     <string name="goal_steps">Steps</string>
     <string name="goal_distance">Distance, m</string>
     <string name="goal_calories">Calories</string>
+    <string name="auto_sync">Refresh automatically</string>
+    <string name="auto_sync_off">Off</string>
+    <string name="auto_sync_30s">30 s</string>
+    <string name="auto_sync_1m">1 min</string>
+    <string name="auto_sync_5m">5 min</string>
+    <string name="auto_sync_15m">15 min</string>
 </resources>

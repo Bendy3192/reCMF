@@ -36,6 +36,7 @@ import dev.recmf.protocol.CmfSettings
 import dev.recmf.protocol.MonitoringChannel
 import dev.recmf.protocol.ActivityFetchState
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
@@ -44,6 +45,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.util.TimeZone
 import java.util.concurrent.Executors
@@ -82,6 +84,8 @@ class WatchService : LifecycleService() {
     private lateinit var ingest: SampleIngest
 
     private val backoff = ReconnectBackoff()
+
+    private var autoSyncJob: Job? = null
 
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
@@ -146,6 +150,7 @@ class WatchService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        autoSyncJob?.cancel()
         connection.disconnect()
         bleScope.cancel()
         bleDispatcher.close()
@@ -157,6 +162,30 @@ class WatchService : LifecycleService() {
         WatchStatus.battery.value = null
 
         super.onDestroy()
+    }
+
+    /**
+     * Polls the watch on a timer so the figures stay current without being asked.
+     *
+     * Each poll is a handful of small writes, but it is still radio time on both sides —
+     * so the interval is the user's to choose and can be turned off entirely. The timer
+     * runs regardless of connection state and skips when the watch is away, rather than
+     * being started and stopped with the link: that keeps one job to reason about instead
+     * of a lifecycle that has to be unwound on every reconnect.
+     */
+    private fun restartAutoSync(intervalSeconds: Int) {
+        autoSyncJob?.cancel()
+        if (intervalSeconds <= 0) {
+            Log.i(TAG, "Automatic sync is off")
+            return
+        }
+
+        autoSyncJob = lifecycleScope.launch {
+            while (true) {
+                delay(intervalSeconds * 1000L)
+                if (_status.value == ConnectionState.READY) requestSync()
+            }
+        }
     }
 
     private fun isScreenOn(): Boolean =
@@ -206,6 +235,13 @@ class WatchService : LifecycleService() {
                 .collect { preferences ->
                     if (_status.value == ConnectionState.READY) applyWatchPreferences(preferences)
                 }
+        }
+
+        lifecycleScope.launch {
+            settings.settings
+                .map { it.autoSyncSeconds }
+                .distinctUntilChanged()
+                .collect(::restartAutoSync)
         }
 
         lifecycleScope.launch {

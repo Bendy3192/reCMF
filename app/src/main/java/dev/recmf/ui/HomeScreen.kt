@@ -20,6 +20,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
@@ -68,6 +69,7 @@ fun HomeScreen(
     onPair: (DiscoveredWatch) -> Unit,
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
+    onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
     Scaffold(
@@ -84,7 +86,7 @@ fun HomeScreen(
             item { ConnectionCard(state, onSyncNow, onForget) }
 
             if (state.settings.isPaired) {
-                item { TodayCard(state) }
+                item { TodayCard(state, onAutoSyncSeconds) }
                 item { WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
                 item {
@@ -131,6 +133,7 @@ fun HomeScreen(
 private fun ConnectionCard(
     state: HomeUiState,
     onSyncNow: () -> Unit,
+    onAutoSyncSeconds: (Int) -> Unit,
     onForget: () -> Unit,
 ) {
     Card(
@@ -189,7 +192,7 @@ private fun ConnectionCard(
 }
 
 @Composable
-private fun TodayCard(state: HomeUiState) {
+private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.today), style = MaterialTheme.typography.titleMedium)
@@ -205,9 +208,33 @@ private fun TodayCard(state: HomeUiState) {
                     label = stringResource(R.string.metric_heart_rate),
                 )
             }
+
+            HorizontalDivider()
+
+            Text(stringResource(R.string.auto_sync), style = MaterialTheme.typography.labelLarge)
+
+            // Each poll is radio time on both sides, so how often is the user's call —
+            // including not at all.
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AUTO_SYNC_CHOICES.forEach { (seconds, labelRes) ->
+                    FilterChip(
+                        selected = state.settings.autoSyncSeconds == seconds,
+                        onClick = { onAutoSyncSeconds(seconds) },
+                        label = { Text(stringResource(labelRes)) },
+                    )
+                }
+            }
         }
     }
 }
+
+private val AUTO_SYNC_CHOICES = listOf(
+    0 to R.string.auto_sync_off,
+    30 to R.string.auto_sync_30s,
+    60 to R.string.auto_sync_1m,
+    300 to R.string.auto_sync_5m,
+    900 to R.string.auto_sync_15m,
+)
 
 @Composable
 private fun Metric(value: String, label: String) {

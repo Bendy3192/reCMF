@@ -56,4 +56,10 @@
     <string name="goal_steps">Шаги</string>
     <string name="goal_distance">Дистанция, м</string>
     <string name="goal_calories">Калории</string>
+    <string name="auto_sync">Обновлять автоматически</string>
+    <string name="auto_sync_off">Выкл</string>
+    <string name="auto_sync_30s">30 с</string>
+    <string name="auto_sync_1m">1 мин</string>
+    <string name="auto_sync_5m">5 мин</string>
+    <string name="auto_sync_15m">15 мин</string>
 </resources>
