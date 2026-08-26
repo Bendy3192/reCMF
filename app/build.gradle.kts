@@ -48,9 +48,17 @@ android {
 
     lint {
         warningsAsErrors = true
-        // The Health Connect client's own manifest merges in permissions we declare
-        // deliberately; nothing here should silence a real finding.
-        disable += setOf("GradleDependency", "NewerVersionAvailable", "ObsoleteLintCustomCheck")
+        disable += setOf(
+            // targetSdk cannot be raised: the Android 17 platform is not published to
+            // any installable SDK channel. See the compileSdk comment above.
+            "OldTargetApi",
+            // enableOnBackInvokedCallback is declared on purpose. It takes effect from
+            // API 33 and is ignored on 31 and 32, which is the intended behaviour.
+            "UnusedAttribute",
+            // Dependency versions are pinned deliberately, not left to drift.
+            "GradleDependency",
+            "NewerVersionAvailable",
+        )
     }
 }
 

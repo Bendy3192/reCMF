@@ -4,6 +4,7 @@
 package dev.recmf.ui
 
 import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,11 +23,16 @@ class MainActivity : ComponentActivity() {
      * the moment of first use — a scan that silently returns nothing is far more
      * confusing than a permission dialog.
      */
-    private val bluetoothPermissions = arrayOf(
-        Manifest.permission.BLUETOOTH_SCAN,
-        Manifest.permission.BLUETOOTH_CONNECT,
-        Manifest.permission.POST_NOTIFICATIONS,
-    )
+    private val bluetoothPermissions = buildList {
+        add(Manifest.permission.BLUETOOTH_SCAN)
+        add(Manifest.permission.BLUETOOTH_CONNECT)
+
+        // Notifications only became a runtime permission in API 33; below that the
+        // foreground service's notification appears without being asked for.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }.toTypedArray()
 
     private val requestBluetooth =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
