@@ -47,18 +47,6 @@ jobs:
     # few lines buried in a build.
     runs-on: ubuntu-latest
     steps:
-      - name: Can the Android 17 platform be installed
-        run: |
-          sdk="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          yes | "$sdk" --licenses > /dev/null 2>&1 || true
-          for channel in 0 1 2 3; do
-            if "$sdk" --channel=$channel "platforms;android-37" > /dev/null 2>&1; then
-              echo "android-37 installs from channel $channel"
-              exit 0
-            fi
-          done
-          echo "android-37 is not installable from any channel"
-
       - name: Published versions
         run: |
           for artifact in \
@@ -71,13 +59,26 @@ jobs:
             androidx/room/room-runtime \
             androidx/work/work-runtime-ktx \
             androidx/datastore/datastore-preferences \
+            androidx/compose/ui/ui \
             com/android/tools/build/gradle
           do
             versions=$(curl -s "https://dl.google.com/dl/android/maven2/$artifact/maven-metadata.xml" \
               | grep -o "<version>[^<]*</version>" | sed "s/<[^>]*>//g")
-            stable=$(echo "$versions" | grep -v -- "-alpha\|-beta\|-rc\|-dev" | tail -3 | tr "\n" " ")
+            stable=$(echo "$versions" | grep -v -- "-alpha\|-beta\|-rc\|-dev" | tail -10 | tr "\n" " ")
             echo "$artifact -> stable: ${stable:-none} | newest: $(echo "$versions" | tail -2 | tr "\n" " ")"
           done
+
+      - name: Can the Android 17 platform be installed
+        run: |
+          sdk="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdk" --licenses > /dev/null 2>&1 || true
+          for channel in 0 1 2 3; do
+            if "$sdk" --channel=$channel "platforms;android-37" > /dev/null 2>&1; then
+              echo "android-37 installs from channel $channel"
+              exit 0
+            fi
+          done
+          echo "android-37 is not installable from any channel"
 
   app:
     runs-on: ubuntu-latest
