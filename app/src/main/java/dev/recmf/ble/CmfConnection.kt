@@ -330,7 +330,7 @@ class CmfConnection(
 
             is CmfDecoded.Dropped -> {
                 Log.w(TAG, "Dropped ${decoded.cmd ?: "frame"}: ${decoded.reason}")
-                ProtocolLog.dropped(decoded.cmd, decoded.reason.name)
+                ProtocolLog.dropped(decoded.cmd, decoded.reason.name, decoded.cmd1, decoded.cmd2)
             }
 
             is CmfDecoded.Command -> {

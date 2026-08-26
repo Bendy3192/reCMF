@@ -229,10 +229,13 @@ class CmfCodecTest {
 
         val unknown = CmfFrame.header(CmfCommand.BATTERY, 0, 1, 1)
         unknown[3] = 0x7e // clobber cmd1 into an opcode we do not know
-        assertEquals(
-            CmfDropReason.UNKNOWN_COMMAND,
-            (rx.decode(unknown) as CmfDecoded.Dropped).reason,
-        )
+
+        val decoded = rx.decode(unknown) as CmfDecoded.Dropped
+        assertEquals(CmfDropReason.UNKNOWN_COMMAND, decoded.reason)
+
+        // The opcodes survive: an unknown command is only identifiable by its numbers.
+        assertEquals(0x7e5c, decoded.cmd1)
+        assertEquals(0x0001, decoded.cmd2)
     }
 
     @Test

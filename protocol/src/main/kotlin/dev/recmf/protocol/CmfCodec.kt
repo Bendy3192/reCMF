@@ -28,7 +28,17 @@ sealed interface CmfDecoded {
     /** A chunk was buffered; more are expected before the payload is complete. */
     data object Pending : CmfDecoded
 
-    data class Dropped(val reason: CmfDropReason, val cmd: CmfCommand?) : CmfDecoded
+    /**
+     * [cmd1] and [cmd2] are carried even when the pair is unknown — an opcode the watch
+     * uses and this app does not is exactly the thing worth writing down, and without the
+     * numbers there is nothing to identify it by.
+     */
+    data class Dropped(
+        val reason: CmfDropReason,
+        val cmd: CmfCommand?,
+        val cmd1: Int? = null,
+        val cmd2: Int? = null,
+    ) : CmfDecoded
 }
 
 /**
@@ -122,13 +132,18 @@ class CmfCodec(
             ?: return CmfDecoded.Dropped(CmfDropReason.MALFORMED_HEADER, null)
 
         val cmd = frame.command
-            ?: return CmfDecoded.Dropped(CmfDropReason.UNKNOWN_COMMAND, null)
+            ?: return CmfDecoded.Dropped(
+                CmfDropReason.UNKNOWN_COMMAND,
+                cmd = null,
+                cmd1 = frame.cmd1,
+                cmd2 = frame.cmd2,
+            )
 
         val chunk = when (val body = extractBody(cmd, frame)) {
             is BodyResult.Ok -> body.bytes
             is BodyResult.Fail -> {
                 chunkBuffers.remove(cmd)
-                return CmfDecoded.Dropped(body.reason, cmd)
+                return CmfDecoded.Dropped(body.reason, cmd, frame.cmd1, frame.cmd2)
             }
         }
 
@@ -192,7 +207,7 @@ class CmfCodec(
             // The watch interleaves at most a couple of transfers. More than that means
             // buffers are being abandoned rather than completed, and each one is allowed
             // to reach maxReassemblySize — so refuse instead of keeping one per command.
-            return CmfDecoded.Dropped(CmfDropReason.REASSEMBLY_TOO_LARGE, cmd)
+            return CmfDecoded.Dropped(CmfDropReason.REASSEMBLY_TOO_LARGE, cmd, frame.cmd1, frame.cmd2)
         }
 
         val buffer = chunkBuffers.getOrPut(cmd) { ChunkBuffer() }
@@ -202,7 +217,7 @@ class CmfCodec(
                 // Lost a chunk mid-payload and this is not the start of a new one, so
                 // there is nothing coherent left to build. Drop the whole transfer.
                 chunkBuffers.remove(cmd)
-                return CmfDecoded.Dropped(CmfDropReason.CHUNK_OUT_OF_ORDER, cmd)
+                return CmfDecoded.Dropped(CmfDropReason.CHUNK_OUT_OF_ORDER, cmd, frame.cmd1, frame.cmd2)
             }
             // The watch restarted the transfer — discard what we had and follow it.
             buffer.reset()
@@ -210,7 +225,7 @@ class CmfCodec(
 
         if (buffer.bytes.size() + chunk.size > maxReassemblySize) {
             chunkBuffers.remove(cmd)
-            return CmfDecoded.Dropped(CmfDropReason.REASSEMBLY_TOO_LARGE, cmd)
+            return CmfDecoded.Dropped(CmfDropReason.REASSEMBLY_TOO_LARGE, cmd, frame.cmd1, frame.cmd2)
         }
 
         buffer.bytes.write(chunk)

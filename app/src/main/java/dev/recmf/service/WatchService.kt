@@ -40,6 +40,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -172,6 +174,7 @@ class WatchService : LifecycleService() {
         connection.connect(address, settings.authKey())
     }
 
+    @OptIn(FlowPreview::class)
     private fun observeConnection() {
         lifecycleScope.launch {
             connection.state.collect { state ->
@@ -194,9 +197,15 @@ class WatchService : LifecycleService() {
             // Re-applied whenever they change, and again on every connection: the watch
             // has no read-back for most of these, so the phone is the source of truth and
             // a watch that was reset elsewhere converges back.
-            settings.watchPreferences.distinctUntilChanged().collect { preferences ->
-                if (_status.value == ConnectionState.READY) applyWatchPreferences(preferences)
-            }
+            // Debounced because each write pushes the whole configuration: without it,
+            // flicking three switches sends two dozen commands the watch has to chew
+            // through before it will answer anything else.
+            settings.watchPreferences
+                .distinctUntilChanged()
+                .debounce(SETTINGS_DEBOUNCE_MILLIS)
+                .collect { preferences ->
+                    if (_status.value == ConnectionState.READY) applyWatchPreferences(preferences)
+                }
         }
 
         lifecycleScope.launch {
@@ -416,6 +425,9 @@ class WatchService : LifecycleService() {
     companion object {
         private const val TAG = "WatchService"
         private const val CHANNEL_ID = "recmf.connection"
+
+        /** Long enough to cover a run of switch taps, short enough to feel immediate. */
+        private const val SETTINGS_DEBOUNCE_MILLIS = 700L
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_STOP = "dev.recmf.action.STOP"
