@@ -47,6 +47,17 @@ data class WatchPreferences(
     val stepsGoal: Int = 8_000,
     val distanceGoalMeters: Int = 5_000,
     val caloriesGoal: Int = 300,
+
+    /** Alert thresholds; zero means the watch does not alert on that measure at all. */
+    val heartRateAlertLow: Int = 0,
+    val heartRateAlertRestingHigh: Int = 0,
+    val heartRateAlertActiveHigh: Int = 0,
+    val spo2AlertLow: Int = 0,
+
+    val standReminder: Boolean = false,
+    val standIntervalMinutes: Int = 60,
+    val drinkReminder: Boolean = false,
+    val drinkIntervalMinutes: Int = 60,
 )
 
 class SettingsStore(private val context: Context) {
@@ -75,6 +86,14 @@ class SettingsStore(private val context: Context) {
             stepsGoal = prefs[KEY_STEPS_GOAL] ?: 8_000,
             distanceGoalMeters = prefs[KEY_DISTANCE_GOAL] ?: 5_000,
             caloriesGoal = prefs[KEY_CALORIES_GOAL] ?: 300,
+            heartRateAlertLow = prefs[KEY_HR_ALERT_LOW] ?: 0,
+            heartRateAlertRestingHigh = prefs[KEY_HR_ALERT_RESTING_HIGH] ?: 0,
+            heartRateAlertActiveHigh = prefs[KEY_HR_ALERT_ACTIVE_HIGH] ?: 0,
+            spo2AlertLow = prefs[KEY_SPO2_ALERT_LOW] ?: 0,
+            standReminder = prefs[KEY_STAND_REMINDER] ?: false,
+            standIntervalMinutes = prefs[KEY_STAND_INTERVAL] ?: 60,
+            drinkReminder = prefs[KEY_DRINK_REMINDER] ?: false,
+            drinkIntervalMinutes = prefs[KEY_DRINK_INTERVAL] ?: 60,
         )
     }
 
@@ -91,6 +110,14 @@ class SettingsStore(private val context: Context) {
             prefs[KEY_STEPS_GOAL] = updated.stepsGoal
             prefs[KEY_DISTANCE_GOAL] = updated.distanceGoalMeters
             prefs[KEY_CALORIES_GOAL] = updated.caloriesGoal
+            prefs[KEY_HR_ALERT_LOW] = updated.heartRateAlertLow
+            prefs[KEY_HR_ALERT_RESTING_HIGH] = updated.heartRateAlertRestingHigh
+            prefs[KEY_HR_ALERT_ACTIVE_HIGH] = updated.heartRateAlertActiveHigh
+            prefs[KEY_SPO2_ALERT_LOW] = updated.spo2AlertLow
+            prefs[KEY_STAND_REMINDER] = updated.standReminder
+            prefs[KEY_STAND_INTERVAL] = updated.standIntervalMinutes
+            prefs[KEY_DRINK_REMINDER] = updated.drinkReminder
+            prefs[KEY_DRINK_INTERVAL] = updated.drinkIntervalMinutes
         }
     }
 
@@ -164,5 +191,13 @@ class SettingsStore(private val context: Context) {
         val KEY_STEPS_GOAL = intPreferencesKey("watch_steps_goal")
         val KEY_DISTANCE_GOAL = intPreferencesKey("watch_distance_goal")
         val KEY_CALORIES_GOAL = intPreferencesKey("watch_calories_goal")
+        val KEY_HR_ALERT_LOW = intPreferencesKey("watch_hr_alert_low")
+        val KEY_HR_ALERT_RESTING_HIGH = intPreferencesKey("watch_hr_alert_resting_high")
+        val KEY_HR_ALERT_ACTIVE_HIGH = intPreferencesKey("watch_hr_alert_active_high")
+        val KEY_SPO2_ALERT_LOW = intPreferencesKey("watch_spo2_alert_low")
+        val KEY_STAND_REMINDER = booleanPreferencesKey("watch_stand_reminder")
+        val KEY_STAND_INTERVAL = intPreferencesKey("watch_stand_interval")
+        val KEY_DRINK_REMINDER = booleanPreferencesKey("watch_drink_reminder")
+        val KEY_DRINK_INTERVAL = intPreferencesKey("watch_drink_interval")
     }
 }

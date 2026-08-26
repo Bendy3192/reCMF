@@ -115,5 +115,28 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
         }
 
         fun fromCodes(cmd1: Int, cmd2: Int): CmfCommand? = byCodes[(cmd1 shl 16) or cmd2]
+
+        /**
+         * The command a frame acknowledges, if it is an acknowledgement.
+         *
+         * The watch confirms every setting it applies, and does so by a rule rather than
+         * with a distinct opcode per command: a generic command answered as
+         * `<cmd1>/0x0003`, and a vendor command `0xffff/0x9xxx` answered as
+         * `0xffff/0xaxxx`. Recognising the rule turns a wall of unknown frames into
+         * "the watch accepted this", which is the difference between a setting that was
+         * sent and one that took effect.
+         */
+        fun acknowledgedBy(cmd1: Int, cmd2: Int): CmfCommand? = when {
+            cmd2 == ACK_GENERIC -> fromCodes(cmd1, 0x0001)
+            cmd1 == VENDOR && cmd2 in ACK_VENDOR_RANGE -> fromCodes(VENDOR, cmd2 - ACK_VENDOR_OFFSET)
+            else -> null
+        }
+
+        /** `cmd1` of the vendor-specific commands, which have no channel of their own. */
+        const val VENDOR = 0xffff
+
+        private const val ACK_GENERIC = 0x0003
+        private const val ACK_VENDOR_OFFSET = 0x1000
+        private val ACK_VENDOR_RANGE = 0xa000..0xafff
     }
 }

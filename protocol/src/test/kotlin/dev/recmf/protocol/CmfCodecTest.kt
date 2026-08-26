@@ -32,6 +32,7 @@ class CmfCodecTest {
 
                 is CmfDecoded.Pending -> assertNotEquals(frames.lastIndex, index, "last frame left the payload pending")
                 is CmfDecoded.Dropped -> error("frame $index dropped: ${decoded.reason}")
+                is CmfDecoded.Acknowledgement -> error("frame $index decoded as an ack for ${decoded.of}")
             }
         }
 

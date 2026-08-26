@@ -2,7 +2,10 @@ package dev.recmf.protocol
 
 import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class CmfSettingsTest {
     @Test
@@ -80,6 +83,86 @@ class CmfSettingsTest {
         assertArrayEquals(
             byteArrayOf(0x01, 45, 120, 180.toByte(), 90, 0, 0, 0, 0),
             payload,
+        )
+    }
+}
+
+class CmfAcknowledgementTest {
+    @Test
+    fun `a generic command is acknowledged as cmd1 over 0003`() {
+        // Observed on firmware 1.0.0.73: every setting comes back this way.
+        assertEquals(CmfCommand.GOALS_SET, CmfCommand.acknowledgedBy(0x005e, 0x0003))
+        assertEquals(CmfCommand.TIME_FORMAT, CmfCommand.acknowledgedBy(0x005f, 0x0003))
+        assertEquals(CmfCommand.WAKE_ON_WRIST_RAISE, CmfCommand.acknowledgedBy(0x0062, 0x0003))
+        assertEquals(
+            CmfCommand.HEART_MONITORING_ENABLED_SET,
+            CmfCommand.acknowledgedBy(0x009b, 0x0003),
+        )
+    }
+
+    @Test
+    fun `a vendor command is acknowledged with 9 replaced by a`() {
+        assertEquals(CmfCommand.UNIT_LENGTH, CmfCommand.acknowledgedBy(0xffff, 0xa067))
+        assertEquals(CmfCommand.UNIT_TEMPERATURE, CmfCommand.acknowledgedBy(0xffff, 0xa068))
+    }
+
+    @Test
+    fun `a frame that is not an acknowledgement is not mistaken for one`() {
+        assertNull(CmfCommand.acknowledgedBy(0x0056, 0x0001)) // ACTIVITY_DATA itself
+        assertNull(CmfCommand.acknowledgedBy(0x1234, 0x0003)) // no such command to ack
+        assertNull(CmfCommand.acknowledgedBy(0xffff, 0xa999)) // no such vendor command
+    }
+
+    @Test
+    fun `commands that already have a named acknowledgement keep it`() {
+        // ACTIVITY_FETCH_2 is 0xffff/0x9057 and its ack 0xffff/0xa057 is a command in its
+        // own right, so the rule must agree with the table rather than shadow it.
+        assertEquals(CmfCommand.ACTIVITY_FETCH_2, CmfCommand.acknowledgedBy(0xffff, 0xa057))
+        assertEquals(CmfCommand.ACTIVITY_FETCH_ACK_2, CmfCommand.fromCodes(0xffff, 0xa057))
+    }
+}
+
+class CmfReminderTest {
+    @Test
+    fun `a reminder is eleven bytes of interval and quiet hours`() {
+        val payload = CmfSettings.reminder(
+            enabled = true,
+            intervalMinutes = 60,
+            quietStartSeconds = 12 * 3600,
+            quietEndSeconds = 14 * 3600,
+        )
+
+        assertEquals(11, payload.size)
+        assertEquals(1, payload[0].toInt())
+        assertEquals(60, ByteBuffer.wrap(payload, 1, 2).order(ByteOrder.BIG_ENDIAN).short.toInt())
+        assertEquals(12 * 3600, ByteBuffer.wrap(payload, 3, 4).order(ByteOrder.BIG_ENDIAN).int)
+        assertEquals(14 * 3600, ByteBuffer.wrap(payload, 7, 4).order(ByteOrder.BIG_ENDIAN).int)
+    }
+
+    @Test
+    fun `quiet hours are cleared when the reminder is off`() {
+        val payload = CmfSettings.reminder(false, 60, 12 * 3600, 14 * 3600)
+
+        assertEquals(0, payload[0].toInt())
+        assertEquals(0, ByteBuffer.wrap(payload, 3, 4).order(ByteOrder.BIG_ENDIAN).int)
+        assertEquals(0, ByteBuffer.wrap(payload, 7, 4).order(ByteOrder.BIG_ENDIAN).int)
+    }
+
+    @Test
+    fun `an empty quiet window is sent as none, not as all day`() {
+        val payload = CmfSettings.reminder(true, 30, 9 * 3600, 9 * 3600)
+
+        assertEquals(0, ByteBuffer.wrap(payload, 3, 4).order(ByteOrder.BIG_ENDIAN).int)
+        assertEquals(0, ByteBuffer.wrap(payload, 7, 4).order(ByteOrder.BIG_ENDIAN).int)
+    }
+
+    @Test
+    fun `an interval the watch would reject is clamped`() {
+        val payload = CmfSettings.reminder(true, 999)
+
+        assertEquals(
+            CmfSettings.MAX_REMINDER_INTERVAL_MINUTES,
+            ByteBuffer.wrap(payload, 1, 2).order(ByteOrder.BIG_ENDIAN).short.toInt(),
         )
     }
 }

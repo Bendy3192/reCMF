@@ -25,6 +25,12 @@ sealed interface CmfDecoded {
     /** A whole payload, reassembled and (if applicable) decrypted and CRC-checked. */
     class Command(val cmd: CmfCommand, val payload: ByteArray) : CmfDecoded
 
+    /**
+     * The watch confirming a command it applied. Carries no payload: the information is
+     * that it was accepted.
+     */
+    data class Acknowledgement(val of: CmfCommand, val cmd1: Int, val cmd2: Int) : CmfDecoded
+
     /** A chunk was buffered; more are expected before the payload is complete. */
     data object Pending : CmfDecoded
 
@@ -132,12 +138,14 @@ class CmfCodec(
             ?: return CmfDecoded.Dropped(CmfDropReason.MALFORMED_HEADER, null)
 
         val cmd = frame.command
-            ?: return CmfDecoded.Dropped(
-                CmfDropReason.UNKNOWN_COMMAND,
-                cmd = null,
-                cmd1 = frame.cmd1,
-                cmd2 = frame.cmd2,
-            )
+            ?: return CmfCommand.acknowledgedBy(frame.cmd1, frame.cmd2)
+                ?.let { CmfDecoded.Acknowledgement(it, frame.cmd1, frame.cmd2) }
+                ?: CmfDecoded.Dropped(
+                    CmfDropReason.UNKNOWN_COMMAND,
+                    cmd = null,
+                    cmd1 = frame.cmd1,
+                    cmd2 = frame.cmd2,
+                )
 
         val chunk = when (val body = extractBody(cmd, frame)) {
             is BodyResult.Ok -> body.bytes

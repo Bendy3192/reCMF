@@ -65,4 +65,14 @@
     <string name="auto_sync_1m">1 min</string>
     <string name="auto_sync_5m">5 min</string>
     <string name="auto_sync_15m">15 min</string>
+    <string name="reminders">Reminders</string>
+    <string name="reminder_stand">Move reminder</string>
+    <string name="reminder_drink">Drink reminder</string>
+    <string name="reminder_interval">Every, minutes</string>
+    <string name="alerts">Alerts</string>
+    <string name="alerts_explainer">Zero turns an alert off. Quiet hours are not configurable yet.</string>
+    <string name="alert_hr_low">Heart rate below</string>
+    <string name="alert_hr_resting_high">Resting heart rate above</string>
+    <string name="alert_hr_active_high">Active heart rate above</string>
+    <string name="alert_spo2_low">SpO2 below</string>
 </resources>

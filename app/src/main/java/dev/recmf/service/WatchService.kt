@@ -343,6 +343,26 @@ class WatchService : LifecycleService() {
                 calories = preferences.caloriesGoal,
             ),
         )
+
+        connection.send(
+            CmfCommand.HEART_MONITORING_ALERTS,
+            CmfSettings.heartAlerts(
+                restingHigh = preferences.heartRateAlertRestingHigh,
+                activeHigh = preferences.heartRateAlertActiveHigh,
+                low = preferences.heartRateAlertLow,
+                spo2Low = preferences.spo2AlertLow,
+            ),
+        )
+
+        // Quiet hours are not exposed yet, so both reminders are sent without a window.
+        connection.send(
+            CmfCommand.STANDING_REMINDER_SET,
+            CmfSettings.reminder(preferences.standReminder, preferences.standIntervalMinutes),
+        )
+        connection.send(
+            CmfCommand.WATER_REMINDER_SET,
+            CmfSettings.reminder(preferences.drinkReminder, preferences.drinkIntervalMinutes),
+        )
     }
 
     /**

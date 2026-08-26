@@ -86,6 +86,36 @@ object CmfSettings {
             .array()
     }
 
+    /**
+     * `STANDING_REMINDER_SET` and `WATER_REMINDER_SET`: the same eleven bytes for both.
+     *
+     * The quiet window is seconds since midnight, and is sent as zeroes when the reminder
+     * is off — the watch reads a window of nothing as "no quiet hours" rather than as
+     * "quiet from midnight to midnight".
+     *
+     * @param intervalMinutes how long between nudges; the watch rejects anything above
+     *   [MAX_REMINDER_INTERVAL_MINUTES].
+     */
+    fun reminder(
+        enabled: Boolean,
+        intervalMinutes: Int,
+        quietStartSeconds: Int = 0,
+        quietEndSeconds: Int = 0,
+    ): ByteArray {
+        val interval = intervalMinutes.coerceIn(0, MAX_REMINDER_INTERVAL_MINUTES)
+        val quiet = enabled && quietEndSeconds != quietStartSeconds
+
+        return ByteBuffer.allocate(11).order(ByteOrder.BIG_ENDIAN)
+            .put(if (enabled) 1 else 0)
+            .putShort(interval.toShort())
+            .putInt(if (quiet) quietStartSeconds else 0)
+            .putInt(if (quiet) quietEndSeconds else 0)
+            .array()
+    }
+
+    /** The watch refuses a longer gap between nudges. */
+    const val MAX_REMINDER_INTERVAL_MINUTES: Int = 180
+
     /** The goal fields are unsigned 16-bit; a larger target would wrap into a tiny one. */
     private fun Int.toUShortClamped(): Short = coerceIn(0, 0xFFFF).toShort()
 }

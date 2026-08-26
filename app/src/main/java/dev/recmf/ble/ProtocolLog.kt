@@ -20,7 +20,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * of payload rendered. This has to be able to run for days without growing.
  */
 object ProtocolLog {
-    enum class Direction { OUT, IN, DROP, NOTE }
+    enum class Direction { OUT, IN, ACK, DROP, NOTE }
 
     data class Entry(
         val atMillis: Long,
@@ -48,6 +48,11 @@ object ProtocolLog {
 
     fun received(cmd: CmfCommand, payload: ByteArray) {
         record(Direction.IN, cmd.name, payload.takeIf { it.isNotEmpty() }?.preview())
+    }
+
+    /** The watch confirming a command it applied. */
+    fun acknowledged(cmd: CmfCommand) {
+        record(Direction.ACK, cmd.name, "applied")
     }
 
     fun dropped(cmd: CmfCommand?, reason: String, cmd1: Int? = null, cmd2: Int? = null) {

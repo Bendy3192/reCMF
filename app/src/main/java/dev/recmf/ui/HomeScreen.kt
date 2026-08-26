@@ -4,6 +4,8 @@
 package dev.recmf.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -190,6 +192,7 @@ private fun ConnectionCard(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
@@ -214,7 +217,12 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
 
             // Each poll is radio time on both sides, so how often is the user's call —
             // including not at all.
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow, not Row: five chips do not fit a narrow screen, and a Row squeezes
+            // the last one into a one-character-wide column rather than wrapping it.
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 AUTO_SYNC_CHOICES.forEach { (seconds, labelRes) ->
                     FilterChip(
                         selected = state.settings.autoSyncSeconds == seconds,
@@ -393,6 +401,49 @@ private fun WatchSettingsCard(
             GoalField(stringResource(R.string.goal_calories), preferences.caloriesGoal) {
                 onChange { current -> current.copy(caloriesGoal = it) }
             }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Text(stringResource(R.string.reminders), style = MaterialTheme.typography.titleSmall)
+
+            SettingSwitch(stringResource(R.string.reminder_stand), preferences.standReminder) {
+                onChange { current -> current.copy(standReminder = it) }
+            }
+            if (preferences.standReminder) {
+                GoalField(stringResource(R.string.reminder_interval), preferences.standIntervalMinutes) {
+                    onChange { current -> current.copy(standIntervalMinutes = it) }
+                }
+            }
+
+            SettingSwitch(stringResource(R.string.reminder_drink), preferences.drinkReminder) {
+                onChange { current -> current.copy(drinkReminder = it) }
+            }
+            if (preferences.drinkReminder) {
+                GoalField(stringResource(R.string.reminder_interval), preferences.drinkIntervalMinutes) {
+                    onChange { current -> current.copy(drinkIntervalMinutes = it) }
+                }
+            }
+
+            HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+            Text(stringResource(R.string.alerts), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.alerts_explainer),
+                style = MaterialTheme.typography.bodySmall,
+            )
+
+            GoalField(stringResource(R.string.alert_hr_low), preferences.heartRateAlertLow) {
+                onChange { current -> current.copy(heartRateAlertLow = it) }
+            }
+            GoalField(stringResource(R.string.alert_hr_resting_high), preferences.heartRateAlertRestingHigh) {
+                onChange { current -> current.copy(heartRateAlertRestingHigh = it) }
+            }
+            GoalField(stringResource(R.string.alert_hr_active_high), preferences.heartRateAlertActiveHigh) {
+                onChange { current -> current.copy(heartRateAlertActiveHigh = it) }
+            }
+            GoalField(stringResource(R.string.alert_spo2_low), preferences.spo2AlertLow) {
+                onChange { current -> current.copy(spo2AlertLow = it) }
+            }
         }
     }
 }
@@ -536,6 +587,7 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
                             when (entry.direction) {
                                 ProtocolLog.Direction.OUT -> "→"
                                 ProtocolLog.Direction.IN -> "←"
+                                ProtocolLog.Direction.ACK -> "✓"
                                 ProtocolLog.Direction.DROP -> "✕"
                                 ProtocolLog.Direction.NOTE -> "·"
                             },
@@ -546,10 +598,10 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
                     },
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
-                    color = if (entry.direction == ProtocolLog.Direction.DROP) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                    color = when (entry.direction) {
+                        ProtocolLog.Direction.DROP -> MaterialTheme.colorScheme.error
+                        ProtocolLog.Direction.ACK -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
             }

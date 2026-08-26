@@ -62,4 +62,14 @@
     <string name="auto_sync_1m">1 мин</string>
     <string name="auto_sync_5m">5 мин</string>
     <string name="auto_sync_15m">15 мин</string>
+    <string name="reminders">Напоминания</string>
+    <string name="reminder_stand">Напоминать вставать</string>
+    <string name="reminder_drink">Напоминать пить</string>
+    <string name="reminder_interval">Каждые, минут</string>
+    <string name="alerts">Оповещения</string>
+    <string name="alerts_explainer">Ноль отключает оповещение. Тихие часы пока не настраиваются.</string>
+    <string name="alert_hr_low">Пульс ниже</string>
+    <string name="alert_hr_resting_high">Пульс покоя выше</string>
+    <string name="alert_hr_active_high">Пульс при нагрузке выше</string>
+    <string name="alert_spo2_low">SpO2 ниже</string>
 </resources>
