@@ -3,6 +3,11 @@ name: build
 on:
   push:
     branches: ["**"]
+    # Documentation changes cannot break the build, and every push costs three jobs.
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "NOTICE"
   pull_request:
   workflow_dispatch:
 
@@ -45,6 +50,10 @@ jobs:
     # this lists what is actually published for each dependency the catalog pins. It is
     # its own job, with no Gradle setup, so the answer is the whole log rather than a
     # few lines buried in a build.
+    #
+    # Diagnostic, not a gate: it runs only when asked for, so an ordinary push costs two
+    # jobs rather than three.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - name: Published versions
