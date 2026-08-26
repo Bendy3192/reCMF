@@ -47,6 +47,18 @@ jobs:
     # few lines buried in a build.
     runs-on: ubuntu-latest
     steps:
+      - name: Can the Android 17 platform be installed
+        run: |
+          sdk="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$sdk" --licenses > /dev/null 2>&1 || true
+          for channel in 0 1 2 3; do
+            if "$sdk" --channel=$channel "platforms;android-37" > /dev/null 2>&1; then
+              echo "android-37 installs from channel $channel"
+              exit 0
+            fi
+          done
+          echo "android-37 is not installable from any channel"
+
       - name: Published versions
         run: |
           for artifact in \
@@ -86,6 +98,11 @@ jobs:
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
 
       - uses: gradle/actions/setup-gradle@v4
+        with:
+          # Saving the cache prints several hundred lines after the build, which pushes
+          # the failure extract out of reach. Reads still come from the protocol job's
+          # entries.
+          cache-read-only: true
 
       - name: Assemble debug
         run: |
@@ -106,7 +123,8 @@ jobs:
           for log in /tmp/assemble.log /tmp/lint.log; do
             [ -f "$log" ] || continue
             echo "===== $log"
-            grep -E "^e: |^\s+> |What went wrong|^FAILURE|Error:" "$log" | head -60 || true
+            sed -n "/^\* What went wrong:/,/^\* Try:/p" "$log" | head -70
+            grep -E "^e: " "$log" | head -30 || true
           done
 
       - uses: actions/upload-artifact@v4
