@@ -67,14 +67,6 @@ jobs:
             echo "$artifact -> stable: ${stable:-none} | newest: $(echo "$versions" | tail -2 | tr "\n" " ")"
           done
 
-      - name: Available SDK platforms
-        run: |
-          listing=$("$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --list 2>/dev/null)
-          for prefix in "platforms;android-" "build-tools;"; do
-            echo "$listing" | grep -oE "$prefix[0-9A-Za-z.-]+" | sort -uV | tail -8 | tr "\n" " "
-            echo
-          done
-
   app:
     runs-on: ubuntu-latest
     steps:
@@ -91,7 +83,7 @@ jobs:
         # revision it wants once the licences are accepted.
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-36"
 
       - uses: gradle/actions/setup-gradle@v4
 

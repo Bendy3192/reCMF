@@ -7,12 +7,15 @@ plugins {
 
 android {
     namespace = "dev.recmf"
-    compileSdk = 37
+    // Android 17's platform is only published to the preview channel, so 36 is the
+    // newest that installs from a plain SDK setup. Material 3 Expressive is unaffected:
+    // it ships in compose-material3, not in the platform.
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "dev.recmf"
         minSdk = 31
-        targetSdk = 37
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
 
