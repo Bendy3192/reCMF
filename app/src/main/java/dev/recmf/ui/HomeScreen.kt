@@ -17,10 +17,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -89,7 +88,6 @@ fun HomeScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ConnectionCard(
     state: HomeUiState,
@@ -121,10 +119,10 @@ private fun ConnectionCard(
                 )
             }
 
-            // The wavy indicator only shows while something is genuinely in flight; a
-            // permanently animating bar teaches people to ignore it.
+            // Only shown while something is genuinely in flight; a permanently
+            // animating bar teaches people to ignore it.
             if (state.connection.isSettling()) {
-                LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
 
             if (state.settings.isPaired) {

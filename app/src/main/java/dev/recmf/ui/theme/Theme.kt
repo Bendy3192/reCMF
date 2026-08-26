@@ -5,21 +5,25 @@ package dev.recmf.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.MaterialExpressiveTheme
-import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
 
 /**
- * Material 3 Expressive, wired to the wallpaper palette.
+ * Material 3 with the wallpaper palette.
  *
- * Dynamic colour is unconditional here: the minimum SDK is already above the version
- * that introduced it, so there is no static fallback palette to keep in sync.
+ * Dynamic colour is unconditional: the minimum SDK is already above the version that
+ * introduced it, so there is no static fallback palette to keep in sync.
+ *
+ * Material 3 Expressive — `MaterialExpressiveTheme`, `MotionScheme.expressive()`, the
+ * wavy progress indicators — is deliberately not used here. Those APIs are still
+ * `internal` in material3 1.4.0 and only become public in the 1.5.0 line, which pulls
+ * Compose 1.12 and so requires compileSdk 37; the Android 17 platform is not published
+ * to any installable SDK channel yet. See gradle/libs.versions.toml. Switching over is a
+ * change to this file and two call sites once that lands.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ReCmfTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -32,11 +36,5 @@ fun ReCmfTheme(
         dynamicLightColorScheme(context)
     }
 
-    MaterialExpressiveTheme(
-        colorScheme = colorScheme,
-        // The expressive spring set: state changes overshoot slightly instead of easing
-        // flatly, which is what makes a connection state change read as a change.
-        motionScheme = MotionScheme.expressive(),
-        content = content,
-    )
+    MaterialTheme(colorScheme = colorScheme, content = content)
 }
