@@ -84,4 +84,5 @@
     <string name="weather_not_found">No such place found.</string>
     <string name="weather_found">Using %1$s</string>
     <string name="action_find">Find</string>
+    <string name="watch_settings_explainer">Only what you change here is sent to the watch. Anything you leave alone stays as the watch has it.</string>
 </resources>

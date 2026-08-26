@@ -14,6 +14,7 @@ import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
 import dev.recmf.data.WatchPreferences
+import dev.recmf.data.WatchSetting
 import dev.recmf.data.WatchSettings
 import dev.recmf.health.HealthConnectAvailability
 import androidx.core.app.NotificationManagerCompat
@@ -102,8 +103,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), WatchPreferences())
 
     /** Applied to the watch by the service, which is watching the same flow. */
-    fun updateWatchPreferences(transform: (WatchPreferences) -> WatchPreferences) {
-        viewModelScope.launch { settingsStore.updateWatchPreferences(transform) }
+    fun updateWatchPreferences(
+        setting: WatchSetting,
+        transform: (WatchPreferences) -> WatchPreferences,
+    ) {
+        viewModelScope.launch { settingsStore.updateWatchPreferences(setting, transform) }
     }
 
     /** The recent protocol exchange, for the in-app log. */

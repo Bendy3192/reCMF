@@ -28,6 +28,7 @@ import dev.recmf.ble.ReconnectBackoff
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
 import dev.recmf.data.WatchPreferences
+import dev.recmf.data.WatchSetting
 import dev.recmf.notifications.OutgoingNotifications
 import dev.recmf.weather.WeatherClient
 import dev.recmf.weather.WeatherLocation
@@ -384,70 +385,103 @@ class WatchService : LifecycleService() {
      * dozen small writes, it is idempotent, and it means there is no way for the watch and
      * the phone to disagree about a setting that failed to apply once.
      */
+    /**
+     * Pushes the settings the user has actually changed in reCMF, and only those.
+     *
+     * Most of these have no read-back command, so reCMF does not know what the watch
+     * already holds. Sending its own defaults would silently replace a configuration the
+     * user made in the official app — which is what it used to do.
+     */
     private suspend fun applyWatchPreferences(preferences: WatchPreferences) {
-        connection.send(
-            CmfCommand.HEART_MONITORING_ENABLED_SET,
-            CmfSettings.monitoring(MonitoringChannel.HEART_RATE, preferences.heartRateMonitoring),
-        )
-        connection.send(
-            CmfCommand.HEART_MONITORING_ENABLED_SET,
-            CmfSettings.monitoring(MonitoringChannel.SPO2, preferences.spo2Monitoring),
-        )
-        connection.send(
-            CmfCommand.HEART_MONITORING_ENABLED_SET,
-            CmfSettings.monitoring(MonitoringChannel.STRESS, preferences.stressMonitoring),
-        )
+        suspend fun ifSet(setting: WatchSetting, send: suspend () -> Unit) {
+            if (setting in preferences.configured) send()
+        }
 
-        connection.send(
-            CmfCommand.WAKE_ON_WRIST_RAISE,
-            CmfSettings.wakeOnWristRaise(preferences.raiseToWake),
-        )
-        connection.send(CmfCommand.TIME_FORMAT, CmfSettings.timeFormat(preferences.use24Hour))
+        ifSet(WatchSetting.MONITORING) {
+            connection.send(
+                CmfCommand.HEART_MONITORING_ENABLED_SET,
+                CmfSettings.monitoring(MonitoringChannel.HEART_RATE, preferences.heartRateMonitoring),
+            )
+            connection.send(
+                CmfCommand.HEART_MONITORING_ENABLED_SET,
+                CmfSettings.monitoring(MonitoringChannel.SPO2, preferences.spo2Monitoring),
+            )
+            connection.send(
+                CmfCommand.HEART_MONITORING_ENABLED_SET,
+                CmfSettings.monitoring(MonitoringChannel.STRESS, preferences.stressMonitoring),
+            )
+        }
 
-        // The watch expects length and temperature to be set together.
-        val units = CmfSettings.measurementSystem(preferences.metric)
-        connection.send(CmfCommand.UNIT_LENGTH, units)
-        connection.send(CmfCommand.UNIT_TEMPERATURE, units)
+        ifSet(WatchSetting.RAISE_TO_WAKE) {
+            connection.send(
+                CmfCommand.WAKE_ON_WRIST_RAISE,
+                CmfSettings.wakeOnWristRaise(preferences.raiseToWake),
+            )
+        }
 
-        connection.send(
-            CmfCommand.GOALS_SET,
-            CmfSettings.goals(
-                steps = preferences.stepsGoal,
-                distanceMeters = preferences.distanceGoalMeters,
-                calories = preferences.caloriesGoal,
-            ),
-        )
+        ifSet(WatchSetting.TIME_FORMAT) {
+            connection.send(CmfCommand.TIME_FORMAT, CmfSettings.timeFormat(preferences.use24Hour))
+        }
 
-        connection.send(
-            CmfCommand.HEART_MONITORING_ALERTS,
-            CmfSettings.heartAlerts(
-                restingHigh = preferences.heartRateAlertRestingHigh,
-                activeHigh = preferences.heartRateAlertActiveHigh,
-                low = preferences.heartRateAlertLow,
-                spo2Low = preferences.spo2AlertLow,
-            ),
-        )
+        ifSet(WatchSetting.UNITS) {
+            // The watch expects length and temperature to be set together.
+            val units = CmfSettings.measurementSystem(preferences.metric)
+            connection.send(CmfCommand.UNIT_LENGTH, units)
+            connection.send(CmfCommand.UNIT_TEMPERATURE, units)
+        }
 
-        connection.send(
-            CmfCommand.STANDING_REMINDER_SET,
-            CmfSettings.reminder(
-                enabled = preferences.standReminder,
-                intervalMinutes = preferences.standIntervalMinutes,
-                quietStartSeconds = preferences.standQuietStartMinutes * 60,
-                quietEndSeconds = preferences.standQuietEndMinutes * 60,
-            ),
-        )
-        connection.send(
-            CmfCommand.WATER_REMINDER_SET,
-            CmfSettings.reminder(
-                enabled = preferences.drinkReminder,
-                intervalMinutes = preferences.drinkIntervalMinutes,
-                quietStartSeconds = preferences.drinkQuietStartMinutes * 60,
-                quietEndSeconds = preferences.drinkQuietEndMinutes * 60,
-            ),
-        )
+        ifSet(WatchSetting.GOALS) {
+            connection.send(
+                CmfCommand.GOALS_SET,
+                CmfSettings.goals(
+                    steps = preferences.stepsGoal,
+                    distanceMeters = preferences.distanceGoalMeters,
+                    calories = preferences.caloriesGoal,
+                ),
+            )
+        }
 
-        connection.send(CmfCommand.SPORTS_SET, CmfSettings.sportTypes(preferences.sportTypes))
+        ifSet(WatchSetting.ALERTS) {
+            connection.send(
+                CmfCommand.HEART_MONITORING_ALERTS,
+                CmfSettings.heartAlerts(
+                    restingHigh = preferences.heartRateAlertRestingHigh,
+                    activeHigh = preferences.heartRateAlertActiveHigh,
+                    low = preferences.heartRateAlertLow,
+                    spo2Low = preferences.spo2AlertLow,
+                ),
+            )
+        }
+
+        ifSet(WatchSetting.STAND_REMINDER) {
+            connection.send(
+                CmfCommand.STANDING_REMINDER_SET,
+                CmfSettings.reminder(
+                    enabled = preferences.standReminder,
+                    intervalMinutes = preferences.standIntervalMinutes,
+                    quietStartSeconds = preferences.standQuietStartMinutes * 60,
+                    quietEndSeconds = preferences.standQuietEndMinutes * 60,
+                ),
+            )
+        }
+
+        ifSet(WatchSetting.DRINK_REMINDER) {
+            connection.send(
+                CmfCommand.WATER_REMINDER_SET,
+                CmfSettings.reminder(
+                    enabled = preferences.drinkReminder,
+                    intervalMinutes = preferences.drinkIntervalMinutes,
+                    quietStartSeconds = preferences.drinkQuietStartMinutes * 60,
+                    quietEndSeconds = preferences.drinkQuietEndMinutes * 60,
+                ),
+            )
+        }
+
+        // The most destructive of the lot: the watch replaces its whole sport menu with
+        // whatever list arrives, so sending reCMF's default would delete most of it.
+        ifSet(WatchSetting.SPORTS) {
+            connection.send(CmfCommand.SPORTS_SET, CmfSettings.sportTypes(preferences.sportTypes))
+        }
     }
 
     /**

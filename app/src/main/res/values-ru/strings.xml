@@ -81,4 +81,5 @@
     <string name="weather_not_found">Такое место не найдено.</string>
     <string name="weather_found">Используется %1$s</string>
     <string name="action_find">Найти</string>
+    <string name="watch_settings_explainer">На часы уходит только то, что вы здесь меняете. Всё, к чему вы не притронулись, остаётся таким, как на часах.</string>
 </resources>

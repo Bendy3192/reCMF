@@ -39,12 +39,27 @@ data class WatchSettings(
     val isPaired: Boolean get() = address != null
 }
 
+/** A group of watch settings that travel together in one command. */
+enum class WatchSetting {
+    MONITORING,
+    RAISE_TO_WAKE,
+    TIME_FORMAT,
+    UNITS,
+    GOALS,
+    ALERTS,
+    STAND_REMINDER,
+    DRINK_REMINDER,
+    SPORTS,
+}
+
 /**
- * The watch's own configuration, as reCMF believes it to be.
+ * The watch's own configuration, as far as reCMF has been told.
  *
- * Held here rather than read from the watch because most of these have no read-back
- * command; the app is the source of truth and re-applies them on every connection, so a
- * watch that was reset or configured elsewhere converges back.
+ * The values below are reCMF's defaults, **not** the watch's — most of these settings
+ * have no read-back command, so the app has no idea what the watch already holds. Only
+ * the groups named in [configured] are ever sent: pushing a default would silently
+ * replace whatever the user set up in the official app, and for the exercise list that
+ * means deleting most of the watch's sport menu.
  */
 data class WatchPreferences(
     val heartRateMonitoring: Boolean = true,
@@ -79,6 +94,9 @@ data class WatchPreferences(
 
     /** Which exercises the watch shows in its own sport menu. */
     val sportTypes: List<CmfActivityType> = CmfActivityType.DEFAULT,
+
+    /** The groups the user has actually changed here. Everything else is left alone. */
+    val configured: Set<WatchSetting> = emptySet(),
 )
 
 class SettingsStore(private val context: Context) {
@@ -129,11 +147,23 @@ class SettingsStore(private val context: Context) {
                 ?.mapNotNull { name -> CmfActivityType.entries.firstOrNull { it.name == name } }
                 ?.takeIf { it.isNotEmpty() }
                 ?: CmfActivityType.DEFAULT,
+            configured = prefs[KEY_CONFIGURED]
+                ?.mapNotNull { name -> WatchSetting.entries.firstOrNull { it.name == name } }
+                ?.toSet()
+                .orEmpty(),
         )
     }
 
-    suspend fun updateWatchPreferences(transform: (WatchPreferences) -> WatchPreferences) {
-        val updated = transform(watchPreferences.first())
+    /**
+     * @param setting the group being changed, recorded so that from now on it is sent to
+     *   the watch. Settings never touched here stay the watch's own business.
+     */
+    suspend fun updateWatchPreferences(
+        setting: WatchSetting,
+        transform: (WatchPreferences) -> WatchPreferences,
+    ) {
+        val current = watchPreferences.first()
+        val updated = transform(current).copy(configured = current.configured + setting)
 
         context.dataStore.edit { prefs ->
             prefs[KEY_HR_MONITORING] = updated.heartRateMonitoring
@@ -159,6 +189,7 @@ class SettingsStore(private val context: Context) {
             prefs[KEY_DRINK_QUIET_END] = updated.drinkQuietEndMinutes
             // Stored by name, not by code: a name survives the codes being corrected.
             prefs[KEY_SPORT_TYPES] = updated.sportTypes.map { it.name }.toSet()
+            prefs[KEY_CONFIGURED] = updated.configured.map { it.name }.toSet()
         }
     }
 
@@ -272,5 +303,6 @@ class SettingsStore(private val context: Context) {
         val KEY_DRINK_QUIET_START = intPreferencesKey("watch_drink_quiet_start")
         val KEY_DRINK_QUIET_END = intPreferencesKey("watch_drink_quiet_end")
         val KEY_SPORT_TYPES = stringSetPreferencesKey("watch_sport_types")
+        val KEY_CONFIGURED = stringSetPreferencesKey("watch_configured_settings")
     }
 }

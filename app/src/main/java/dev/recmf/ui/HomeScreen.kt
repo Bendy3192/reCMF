@@ -53,6 +53,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.WatchPreferences
+import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.health.HealthConnectAvailability
@@ -66,7 +67,7 @@ fun HomeScreen(
     healthConnectAvailability: HealthConnectAvailability,
     protocolLog: List<ProtocolLog.Entry>,
     watchPreferences: WatchPreferences,
-    onWatchPreferences: ((WatchPreferences) -> WatchPreferences) -> Unit,
+    onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
     onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
@@ -360,11 +361,15 @@ private fun ConnectionState.isSettling(): Boolean = when (this) {
 private fun WatchSettingsCard(
     preferences: WatchPreferences,
     connected: Boolean,
-    onChange: ((WatchPreferences) -> WatchPreferences) -> Unit,
+    onChange: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.watch_settings), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.watch_settings_explainer),
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             if (!connected) {
                 Text(
@@ -376,25 +381,25 @@ private fun WatchSettingsCard(
             Spacer(Modifier.padding(4.dp))
 
             SettingSwitch(stringResource(R.string.setting_hr_monitoring), preferences.heartRateMonitoring) {
-                onChange { current -> current.copy(heartRateMonitoring = it) }
+                onChange(WatchSetting.MONITORING) { current -> current.copy(heartRateMonitoring = it) }
             }
             SettingSwitch(stringResource(R.string.setting_spo2_monitoring), preferences.spo2Monitoring) {
-                onChange { current -> current.copy(spo2Monitoring = it) }
+                onChange(WatchSetting.MONITORING) { current -> current.copy(spo2Monitoring = it) }
             }
             SettingSwitch(stringResource(R.string.setting_stress_monitoring), preferences.stressMonitoring) {
-                onChange { current -> current.copy(stressMonitoring = it) }
+                onChange(WatchSetting.MONITORING) { current -> current.copy(stressMonitoring = it) }
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             SettingSwitch(stringResource(R.string.setting_raise_to_wake), preferences.raiseToWake) {
-                onChange { current -> current.copy(raiseToWake = it) }
+                onChange(WatchSetting.RAISE_TO_WAKE) { current -> current.copy(raiseToWake = it) }
             }
             SettingSwitch(stringResource(R.string.setting_24_hour), preferences.use24Hour) {
-                onChange { current -> current.copy(use24Hour = it) }
+                onChange(WatchSetting.TIME_FORMAT) { current -> current.copy(use24Hour = it) }
             }
             SettingSwitch(stringResource(R.string.setting_metric), preferences.metric) {
-                onChange { current -> current.copy(metric = it) }
+                onChange(WatchSetting.UNITS) { current -> current.copy(metric = it) }
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -402,13 +407,13 @@ private fun WatchSettingsCard(
             Text(stringResource(R.string.daily_goals), style = MaterialTheme.typography.titleSmall)
 
             GoalField(stringResource(R.string.goal_steps), preferences.stepsGoal) {
-                onChange { current -> current.copy(stepsGoal = it) }
+                onChange(WatchSetting.GOALS) { current -> current.copy(stepsGoal = it) }
             }
             GoalField(stringResource(R.string.goal_distance), preferences.distanceGoalMeters) {
-                onChange { current -> current.copy(distanceGoalMeters = it) }
+                onChange(WatchSetting.GOALS) { current -> current.copy(distanceGoalMeters = it) }
             }
             GoalField(stringResource(R.string.goal_calories), preferences.caloriesGoal) {
-                onChange { current -> current.copy(caloriesGoal = it) }
+                onChange(WatchSetting.GOALS) { current -> current.copy(caloriesGoal = it) }
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
@@ -416,34 +421,34 @@ private fun WatchSettingsCard(
             Text(stringResource(R.string.reminders), style = MaterialTheme.typography.titleSmall)
 
             SettingSwitch(stringResource(R.string.reminder_stand), preferences.standReminder) {
-                onChange { current -> current.copy(standReminder = it) }
+                onChange(WatchSetting.STAND_REMINDER) { current -> current.copy(standReminder = it) }
             }
             if (preferences.standReminder) {
                 GoalField(stringResource(R.string.reminder_interval), preferences.standIntervalMinutes) {
-                    onChange { current -> current.copy(standIntervalMinutes = it) }
+                    onChange(WatchSetting.STAND_REMINDER) { current -> current.copy(standIntervalMinutes = it) }
                 }
                 QuietHoursRow(
                     startMinutes = preferences.standQuietStartMinutes,
                     endMinutes = preferences.standQuietEndMinutes,
                 ) { start, end ->
-                    onChange { current ->
+                    onChange(WatchSetting.STAND_REMINDER) { current ->
                         current.copy(standQuietStartMinutes = start, standQuietEndMinutes = end)
                     }
                 }
             }
 
             SettingSwitch(stringResource(R.string.reminder_drink), preferences.drinkReminder) {
-                onChange { current -> current.copy(drinkReminder = it) }
+                onChange(WatchSetting.DRINK_REMINDER) { current -> current.copy(drinkReminder = it) }
             }
             if (preferences.drinkReminder) {
                 GoalField(stringResource(R.string.reminder_interval), preferences.drinkIntervalMinutes) {
-                    onChange { current -> current.copy(drinkIntervalMinutes = it) }
+                    onChange(WatchSetting.DRINK_REMINDER) { current -> current.copy(drinkIntervalMinutes = it) }
                 }
                 QuietHoursRow(
                     startMinutes = preferences.drinkQuietStartMinutes,
                     endMinutes = preferences.drinkQuietEndMinutes,
                 ) { start, end ->
-                    onChange { current ->
+                    onChange(WatchSetting.DRINK_REMINDER) { current ->
                         current.copy(drinkQuietStartMinutes = start, drinkQuietEndMinutes = end)
                     }
                 }
@@ -458,22 +463,22 @@ private fun WatchSettingsCard(
             )
 
             GoalField(stringResource(R.string.alert_hr_low), preferences.heartRateAlertLow) {
-                onChange { current -> current.copy(heartRateAlertLow = it) }
+                onChange(WatchSetting.ALERTS) { current -> current.copy(heartRateAlertLow = it) }
             }
             GoalField(stringResource(R.string.alert_hr_resting_high), preferences.heartRateAlertRestingHigh) {
-                onChange { current -> current.copy(heartRateAlertRestingHigh = it) }
+                onChange(WatchSetting.ALERTS) { current -> current.copy(heartRateAlertRestingHigh = it) }
             }
             GoalField(stringResource(R.string.alert_hr_active_high), preferences.heartRateAlertActiveHigh) {
-                onChange { current -> current.copy(heartRateAlertActiveHigh = it) }
+                onChange(WatchSetting.ALERTS) { current -> current.copy(heartRateAlertActiveHigh = it) }
             }
             GoalField(stringResource(R.string.alert_spo2_low), preferences.spo2AlertLow) {
-                onChange { current -> current.copy(spo2AlertLow = it) }
+                onChange(WatchSetting.ALERTS) { current -> current.copy(spo2AlertLow = it) }
             }
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             SportTypesSection(preferences.sportTypes) { types ->
-                onChange { current -> current.copy(sportTypes = types) }
+                onChange(WatchSetting.SPORTS) { current -> current.copy(sportTypes = types) }
             }
         }
     }
