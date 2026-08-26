@@ -43,6 +43,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -271,11 +272,15 @@ private fun WatchClockNote(watch: WatchInfo) {
     val stamp = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
         .format(Instant.ofEpochSecond(recordAt).atZone(ZoneId.systemDefault()))
 
+    val count = watch.lastRecordCount ?: 0
+
     Text(
         text = stringResource(
             if (agrees) R.string.watch_clock_agrees else R.string.watch_clock_differs,
             stamp,
-            watch.lastRecordCount ?: 0,
+            // A plural, not a formatted number: Russian picks a different ending for one,
+            // for two through four, and for the rest.
+            pluralStringResource(R.plurals.watch_clock_records, count, count),
         ),
         style = MaterialTheme.typography.bodySmall,
         color = if (agrees) {

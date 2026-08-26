@@ -82,6 +82,12 @@
     <string name="weather_found">Используется %1$s</string>
     <string name="action_find">Найти</string>
     <string name="watch_settings_explainer">На часы уходит только то, что вы здесь меняете. Всё, к чему вы не притронулись, остаётся таким, как на часах.</string>
-    <string name="watch_clock_agrees">Последняя запись с часов: %1$s (записей: %2$d)</string>
-    <string name="watch_clock_differs">Часы датируют последнюю запись %1$s (записей: %2$d) — это другой день, чем на телефоне. Всё выше считается по дате телефона, поэтому там будет ноль, пока даты не совпадут. Проверьте дату на часах.</string>
+    <string name="watch_clock_agrees">Последняя запись с часов: %1$s (%2$s)</string>
+    <string name="watch_clock_differs">Часы датируют последнюю запись %1$s (%2$s) — это другой день, чем на телефоне. Всё выше считается по дате телефона, поэтому там будет ноль, пока даты не совпадут. Проверьте дату на часах.</string>
+    <plurals name="watch_clock_records">
+        <item quantity="one">%d запись</item>
+        <item quantity="few">%d записи</item>
+        <item quantity="many">%d записей</item>
+        <item quantity="other">%d записи</item>
+    </plurals>
 </resources>
