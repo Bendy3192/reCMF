@@ -77,4 +77,11 @@
     <string name="alert_spo2_low">SpO2 below</string>
     <string name="quiet_hours">Quiet from</string>
     <string name="sport_types">Exercises (%1$d of %2$d)</string>
+    <string name="weather">Weather</string>
+    <string name="weather_explainer">Sent to the watch for its weather screen. reCMF asks a forecast service for one place — it never asks the phone where you are.</string>
+    <string name="weather_city">City</string>
+    <string name="weather_searching">Searching…</string>
+    <string name="weather_not_found">No such place found.</string>
+    <string name="weather_found">Using %1$s</string>
+    <string name="action_find">Find</string>
 </resources>

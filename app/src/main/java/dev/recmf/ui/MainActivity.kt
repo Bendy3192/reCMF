@@ -56,6 +56,7 @@ class MainActivity : ComponentActivity() {
                 val scanError by model.scanError.collectAsStateWithLifecycle()
                 val protocolLog by model.protocolLog.collectAsStateWithLifecycle()
                 val watchPreferences by model.watchPreferences.collectAsStateWithLifecycle()
+                val cityLookup by model.cityLookup.collectAsStateWithLifecycle()
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -73,6 +74,9 @@ class MainActivity : ComponentActivity() {
                     onClearLog = model::clearLog,
                     onNotificationsEnabled = model::setNotificationsEnabled,
                     onScreenOffOnlyEnabled = model::setNotifyOnlyWhenScreenOff,
+                    cityLookup = cityLookup,
+                    onWeatherEnabled = model::setWeatherEnabled,
+                    onFindCity = model::findCity,
                     onGrantNotificationAccess = {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     },

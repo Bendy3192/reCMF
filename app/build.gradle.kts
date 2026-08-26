@@ -96,6 +96,10 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.datastore.preferences)
 
+    // Android provides org.json, but its unit-test stub throws on every call. This is
+    // the real implementation, for tests only — it must not reach the APK, where it
+    // would collide with the platform's.
+    testImplementation(libs.json)
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.kotlinx.coroutines.test)

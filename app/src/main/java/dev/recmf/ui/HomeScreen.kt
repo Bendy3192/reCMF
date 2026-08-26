@@ -71,6 +71,9 @@ fun HomeScreen(
     onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
+    cityLookup: CityLookup,
+    onWeatherEnabled: (Boolean) -> Unit,
+    onFindCity: (String) -> Unit,
     onGrantNotificationAccess: () -> Unit,
     onScan: () -> Unit,
     onPair: (DiscoveredWatch) -> Unit,
@@ -96,6 +99,7 @@ fun HomeScreen(
                 item { TodayCard(state, onAutoSyncSeconds) }
                 item { WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
+                item { WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity) }
                 item {
                     NotificationsCard(
                         state = state,
@@ -608,6 +612,90 @@ private fun GoalField(label: String, value: Int, onValue: (Int) -> Unit) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * Weather for the watch's own weather screen.
+ *
+ * A typed place, not a location permission: a city is all a watch face needs, and asking
+ * for coordinates the phone knows would be asking for far more than the feature uses.
+ */
+@Composable
+private fun WeatherCard(
+    state: HomeUiState,
+    lookup: CityLookup,
+    onEnabled: (Boolean) -> Unit,
+    onFindCity: (String) -> Unit,
+) {
+    var typed by remember(state.settings.weatherCity) {
+        mutableStateOf(state.settings.weatherCity.orEmpty())
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.weather), style = MaterialTheme.typography.titleMedium)
+                Switch(
+                    checked = state.settings.weatherEnabled,
+                    onCheckedChange = onEnabled,
+                    enabled = state.settings.weatherCity != null,
+                )
+            }
+
+            HorizontalDivider()
+
+            Text(stringResource(R.string.weather_explainer), style = MaterialTheme.typography.bodyMedium)
+
+            OutlinedTextField(
+                value = typed,
+                onValueChange = { typed = it },
+                label = { Text(stringResource(R.string.weather_city)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Button(
+                    onClick = { onFindCity(typed) },
+                    enabled = typed.isNotBlank() && lookup != CityLookup.Searching,
+                ) {
+                    Text(stringResource(R.string.action_find))
+                }
+
+                when (lookup) {
+                    CityLookup.Searching -> Text(
+                        stringResource(R.string.weather_searching),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                    CityLookup.NotFound -> Text(
+                        stringResource(R.string.weather_not_found),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+
+                    is CityLookup.Found -> Text(
+                        stringResource(R.string.weather_found, lookup.name),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                    CityLookup.Idle -> state.settings.weatherCity?.let {
+                        Text(
+                            stringResource(R.string.weather_found, it),
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

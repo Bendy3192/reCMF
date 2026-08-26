@@ -5,6 +5,7 @@ package dev.recmf.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
@@ -27,6 +28,12 @@ data class WatchSettings(
     val notifyOnlyWhenScreenOff: Boolean = true,
     /** Seconds between automatic syncs while connected; zero means only on request. */
     val autoSyncSeconds: Int = 300,
+
+    val weatherEnabled: Boolean = false,
+    /** The place the user typed, as the provider resolved it. */
+    val weatherCity: String? = null,
+    val weatherLatitude: Double = 0.0,
+    val weatherLongitude: Double = 0.0,
     val lastSyncEpochSeconds: Long = 0,
 ) {
     val isPaired: Boolean get() = address != null
@@ -83,6 +90,10 @@ class SettingsStore(private val context: Context) {
             notificationsEnabled = prefs[KEY_NOTIFICATIONS] ?: false,
             notifyOnlyWhenScreenOff = prefs[KEY_SCREEN_OFF_ONLY] ?: true,
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
+            weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
+            weatherCity = prefs[KEY_WEATHER_CITY],
+            weatherLatitude = prefs[KEY_WEATHER_LAT] ?: 0.0,
+            weatherLongitude = prefs[KEY_WEATHER_LON] ?: 0.0,
             lastSyncEpochSeconds = prefs[KEY_LAST_SYNC] ?: 0L,
         )
     }
@@ -198,6 +209,18 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_AUTO_SYNC] = seconds }
     }
 
+    suspend fun setWeatherEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_WEATHER_ENABLED] = enabled }
+    }
+
+    suspend fun setWeatherPlace(name: String, latitude: Double, longitude: Double) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_WEATHER_CITY] = name
+            prefs[KEY_WEATHER_LAT] = latitude
+            prefs[KEY_WEATHER_LON] = longitude
+        }
+    }
+
     suspend fun setLastSync(epochSeconds: Long) {
         context.dataStore.edit { it[KEY_LAST_SYNC] = epochSeconds }
     }
@@ -210,6 +233,10 @@ class SettingsStore(private val context: Context) {
         val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
+        val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
+        val KEY_WEATHER_CITY = stringPreferencesKey("weather_city")
+        val KEY_WEATHER_LAT = doublePreferencesKey("weather_latitude")
+        val KEY_WEATHER_LON = doublePreferencesKey("weather_longitude")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")
 
         val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")

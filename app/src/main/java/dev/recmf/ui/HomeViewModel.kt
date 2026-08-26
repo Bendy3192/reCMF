@@ -22,6 +22,7 @@ import dev.recmf.protocol.BatteryStatus
 import dev.recmf.service.WatchService
 import dev.recmf.service.WatchStatus
 import dev.recmf.service.WatchdogWorker
+import dev.recmf.weather.WeatherClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -42,6 +43,14 @@ data class HomeUiState(
 )
 
 /** What the watch itself has told us this session. */
+/** How the search for a place is going. */
+sealed interface CityLookup {
+    data object Idle : CityLookup
+    data object Searching : CityLookup
+    data class Found(val name: String) : CityLookup
+    data object NotFound : CityLookup
+}
+
 data class WatchInfo(
     val battery: BatteryStatus? = null,
     val firmware: String? = null,
@@ -54,6 +63,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = RecmfDatabase.get(application).sampleDao()
     private val scanner = WatchScanner(application)
     private val healthConnect = HealthConnectSync(application)
+    private val weatherClient = WeatherClient()
 
     private val _discovered = MutableStateFlow<List<DiscoveredWatch>>(emptyList())
     val discovered: StateFlow<List<DiscoveredWatch>> = _discovered.asStateFlow()
@@ -123,6 +133,30 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setAutoSyncSeconds(seconds: Int) {
         viewModelScope.launch { settingsStore.setAutoSyncSeconds(seconds) }
+    }
+
+    fun setWeatherEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setWeatherEnabled(enabled) }
+    }
+
+    private val _cityLookup = MutableStateFlow<CityLookup>(CityLookup.Idle)
+    val cityLookup: StateFlow<CityLookup> = _cityLookup.asStateFlow()
+
+    /** Resolves a typed place to coordinates once, so nothing has to ask for location. */
+    fun findCity(city: String) {
+        if (city.isBlank()) return
+
+        viewModelScope.launch {
+            _cityLookup.value = CityLookup.Searching
+
+            val found = weatherClient.geocode(city, java.util.Locale.getDefault().language)
+            _cityLookup.value = if (found == null) {
+                CityLookup.NotFound
+            } else {
+                settingsStore.setWeatherPlace(found.name, found.latitude, found.longitude)
+                CityLookup.Found(found.name)
+            }
+        }
     }
 
     /** Restarts the scan. Cancelling the previous one stops the radio between presses. */

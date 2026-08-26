@@ -29,10 +29,13 @@ import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
 import dev.recmf.data.WatchPreferences
 import dev.recmf.notifications.OutgoingNotifications
+import dev.recmf.weather.WeatherClient
+import dev.recmf.weather.WeatherLocation
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
+import dev.recmf.protocol.CmfWeather
 import dev.recmf.protocol.MonitoringChannel
 import dev.recmf.protocol.ActivityFetchState
 import kotlinx.coroutines.CoroutineScope
@@ -86,6 +89,11 @@ class WatchService : LifecycleService() {
     private val backoff = ReconnectBackoff()
 
     private var autoSyncJob: Job? = null
+
+    private val weather = WeatherClient()
+
+    /** When the forecast was last fetched, so a short refresh interval does not hammer it. */
+    private var weatherFetchedAtMillis = 0L
 
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
@@ -183,9 +191,53 @@ class WatchService : LifecycleService() {
         autoSyncJob = lifecycleScope.launch {
             while (true) {
                 delay(intervalSeconds * 1000L)
-                if (_status.value == ConnectionState.READY) requestSync()
+                if (_status.value != ConnectionState.READY) continue
+
+                requestSync()
+                sendWeather()
             }
         }
+    }
+
+    /**
+     * Fetches the forecast and hands it to the watch.
+     *
+     * Rate-limited independently of the refresh interval: steps are worth polling every
+     * thirty seconds, a forecast is not, and the provider is a free service being asked
+     * for a favour.
+     */
+    private suspend fun sendWeather() {
+        val current = settings.current()
+        if (!current.weatherEnabled) return
+
+        val city = current.weatherCity ?: return
+        val now = System.currentTimeMillis()
+        if (now - weatherFetchedAtMillis < WEATHER_REFRESH_MILLIS) return
+
+        val snapshot = weather.forecast(
+            WeatherLocation(city, current.weatherLatitude, current.weatherLongitude),
+            nowEpochSeconds = now / 1000,
+        )
+
+        if (snapshot == null) {
+            ProtocolLog.note("Weather unavailable")
+            return
+        }
+
+        // Only after a successful fetch: a failure should be retried on the next tick,
+        // not held off for another half hour.
+        weatherFetchedAtMillis = now
+
+        connection.send(
+            CmfCommand.WEATHER_SET_1,
+            CmfWeather.payload(
+                today = snapshot.today,
+                forecast = snapshot.forecast,
+                hourly = snapshot.hourly,
+                location = city,
+                sun = snapshot.sun,
+            ),
+        )
     }
 
     private fun isScreenOn(): Boolean =
@@ -303,6 +355,7 @@ class WatchService : LifecycleService() {
         applyWatchPreferences(settings.watchPreferences.first())
 
         requestSync()
+        sendWeather()
     }
 
     /**
@@ -495,6 +548,9 @@ class WatchService : LifecycleService() {
 
         /** Long enough to cover a run of switch taps, short enough to feel immediate. */
         private const val SETTINGS_DEBOUNCE_MILLIS = 700L
+
+        /** A forecast does not change faster than this, whatever the refresh interval is. */
+        private const val WEATHER_REFRESH_MILLIS = 30 * 60_000L
         private const val NOTIFICATION_ID = 1
 
         const val ACTION_STOP = "dev.recmf.action.STOP"

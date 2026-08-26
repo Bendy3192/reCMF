@@ -1,6 +1,7 @@
 [versions]
 coroutines = "1.11.0"
 junit = "5.14.0"
+json = "20260814"
 
 # Compose 1.12 and the 2026.x BOMs require compileSdk 37 and AGP 9.1, and the Android 17
 # platform is not published to any installable SDK channel yet. So the Compose artifacts
@@ -21,6 +22,7 @@ kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-c
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 
+json = { module = "org.json:json", version.ref = "json" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.14.0" }
 

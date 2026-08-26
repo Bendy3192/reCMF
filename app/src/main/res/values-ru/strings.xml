@@ -74,4 +74,11 @@
     <string name="alert_spo2_low">SpO2 ниже</string>
     <string name="quiet_hours">Тишина с</string>
     <string name="sport_types">Тренировки (%1$d из %2$d)</string>
+    <string name="weather">Погода</string>
+    <string name="weather_explainer">Отправляется на часы для их экрана погоды. reCMF спрашивает прогноз для одного места и никогда не спрашивает телефон, где вы.</string>
+    <string name="weather_city">Город</string>
+    <string name="weather_searching">Поиск…</string>
+    <string name="weather_not_found">Такое место не найдено.</string>
+    <string name="weather_found">Используется %1$s</string>
+    <string name="action_find">Найти</string>
 </resources>
