@@ -133,7 +133,6 @@ fun HomeScreen(
 private fun ConnectionCard(
     state: HomeUiState,
     onSyncNow: () -> Unit,
-    onAutoSyncSeconds: (Int) -> Unit,
     onForget: () -> Unit,
 ) {
     Card(
