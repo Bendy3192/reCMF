@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDate
@@ -50,6 +51,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _scanError = MutableStateFlow<String?>(null)
     val scanError: StateFlow<String?> = _scanError.asStateFlow()
 
+    private var scanJob: Job? = null
+
+    init {
+        // A watch that has been used with the stock app is already paired at the OS
+        // level, and may not advertise at all while it is connected to something else.
+        // Offer it before the user asks for a scan.
+        _discovered.value = scanner.bonded()
+    }
+
     val uiState: StateFlow<HomeUiState> = combine(
         WatchStatus.state,
         settingsStore.settings,
@@ -64,9 +74,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     val healthConnectAvailability: HealthConnectAvailability get() = healthConnect.availability()
 
-    /** Scans while [scanning] is collected, and stops the radio when it is not. */
+    /** Restarts the scan. Cancelling the previous one stops the radio between presses. */
     fun startScan() {
-        viewModelScope.launch {
+        scanJob?.cancel()
+        scanJob = viewModelScope.launch {
             _scanError.value = null
             try {
                 scanner.scan().collect { _discovered.value = it }

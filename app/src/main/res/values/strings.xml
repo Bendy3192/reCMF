@@ -29,7 +29,8 @@
     <string name="last_sync">Last written %1$s</string>
 
     <string name="pair_title">Pair your watch</string>
-    <string name="pair_explainer">Make sure the watch is not connected to the CMF app, then scan. reCMF negotiates its own key — you do not need to find one by hand.</string>
+    <string name="pair_explainer">A watch already paired in Android’s Bluetooth settings is listed below without scanning. Otherwise press Scan. reCMF negotiates its own key — you do not need to find one by hand.</string>
+    <string name="device_paired">%1$s · paired</string>
 
     <string name="action_scan">Scan</string>
     <string name="action_pair">Pair</string>

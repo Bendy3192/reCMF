@@ -26,7 +26,8 @@
     <string name="last_sync">Последняя запись %1$s</string>
 
     <string name="pair_title">Подключите часы</string>
-    <string name="pair_explainer">Отключите часы от приложения CMF и нажмите «Поиск». reCMF сам согласует ключ — искать его вручную не нужно.</string>
+    <string name="pair_explainer">Часы, уже сопряжённые в настройках Bluetooth, показаны ниже без поиска. Если их там нет — нажмите «Поиск». reCMF сам согласует ключ, искать его вручную не нужно.</string>
+    <string name="device_paired">%1$s · сопряжено</string>
 
     <string name="action_scan">Поиск</string>
     <string name="action_pair">Подключить</string>

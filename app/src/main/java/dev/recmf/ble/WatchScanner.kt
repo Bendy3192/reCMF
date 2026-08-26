@@ -6,7 +6,6 @@ package dev.recmf.ble
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
@@ -14,46 +13,83 @@ import androidx.core.content.getSystemService
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import android.os.ParcelUuid
 
-/** A watch seen during a scan. */
+/** A device the user could pair with. */
 data class DiscoveredWatch(
     val address: String,
     val name: String?,
-    val rssi: Int,
-)
+    /** Null for a device that is known from the bond list but has not been seen in a scan. */
+    val rssi: Int?,
+    /** Already paired in Android's Bluetooth settings. */
+    val isBonded: Boolean,
+) {
+    /** Whether the name matches what a CMF Watch Pro calls itself. */
+    val looksLikeWatch: Boolean get() = name != null && WatchScanner.WATCH_NAME.containsMatchIn(name)
+}
 
 /**
- * Scans for watches advertising the CMF command service.
+ * Finds candidate watches, from the bond list and from a BLE scan.
  *
- * Filtered by service UUID rather than by name: filtering in the scanner is handled by
- * the Bluetooth controller, which is far cheaper than waking this process for every
- * advertisement in range — and the user's phone sees a lot of them.
+ * Two things here are deliberate, and both were learned the hard way:
  *
- * The flow stops the scan when it is cancelled, so collecting it in a screen scope means
- * the radio stops as soon as the user leaves the screen.
+ * **No service-UUID filter.** The obvious filter is the command service, and it finds
+ * nothing: the watch does not put its GATT services in its advertisement. Gadgetbridge
+ * matches these devices on their name for the same reason. So the scan is unfiltered and
+ * the list is merely *sorted* by how much each result looks like a watch — the user can
+ * still pick a device whose name did not come through.
+ *
+ * **Bonded devices are listed without scanning.** A watch that has been paired in
+ * Android's Bluetooth settings — which is the normal state for one that has been used
+ * with the stock app — may not advertise at all while it is connected to something else.
+ * It is already known by address, so it is offered immediately.
  */
 @SuppressLint("MissingPermission")
 class WatchScanner(private val context: Context) {
 
+    private val adapter get() = context.getSystemService<BluetoothManager>()?.adapter
+
+    /** Devices already paired at the OS level. Empty if Bluetooth is off or unpermitted. */
+    fun bonded(): List<DiscoveredWatch> = try {
+        adapter?.bondedDevices.orEmpty().map { device ->
+            DiscoveredWatch(
+                address = device.address,
+                name = device.name,
+                rssi = null,
+                isBonded = true,
+            )
+        }.sortedWith(ORDER)
+    } catch (e: SecurityException) {
+        emptyList()
+    }
+
+    /**
+     * Emits the candidate list, starting from the bond list and growing as advertisements
+     * arrive. Stops the scan when collection ends, so leaving the screen stops the radio.
+     */
     fun scan(): Flow<List<DiscoveredWatch>> = callbackFlow {
-        val scanner = context.getSystemService<BluetoothManager>()?.adapter?.bluetoothLeScanner
+        val scanner = adapter?.bluetoothLeScanner
         if (scanner == null) {
             close(IllegalStateException("Bluetooth is unavailable"))
             return@callbackFlow
         }
 
         val found = LinkedHashMap<String, DiscoveredWatch>()
+        bonded().forEach { found[it.address] = it }
+        trySend(found.values.sortedWith(ORDER))
 
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val watch = DiscoveredWatch(
-                    address = result.device.address,
-                    name = result.device.name ?: result.scanRecord?.deviceName,
+                val address = result.device.address
+                val name = result.device.name ?: result.scanRecord?.deviceName
+
+                found[address] = DiscoveredWatch(
+                    address = address,
+                    // Keep a name we already had: an advertisement often carries none.
+                    name = name ?: found[address]?.name,
                     rssi = result.rssi,
+                    isBonded = found[address]?.isBonded == true,
                 )
-                found[watch.address] = watch
-                trySend(found.values.sortedByDescending { it.rssi })
+                trySend(found.values.sortedWith(ORDER))
             }
 
             override fun onScanFailed(errorCode: Int) {
@@ -61,16 +97,26 @@ class WatchScanner(private val context: Context) {
             }
         }
 
-        val filter = ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(CmfUuids.SERVICE_COMMAND))
-            .build()
+        scanner.startScan(null, SCAN_SETTINGS, callback)
 
-        val settings = ScanSettings.Builder()
+        awaitClose { scanner.stopScan(callback) }
+    }
+
+    companion object {
+        /**
+         * What a CMF Watch Pro advertises as, e.g. `CMF Watch Pro 2-7219`. Used only to
+         * sort the list — never to hide anything, since a device can turn up unnamed.
+         */
+        val WATCH_NAME = Regex("CMF Watch Pro|Watch Pro", RegexOption.IGNORE_CASE)
+
+        private val SCAN_SETTINGS = ScanSettings.Builder()
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .build()
 
-        scanner.startScan(listOf(filter), settings, callback)
-
-        awaitClose { scanner.stopScan(callback) }
+        /** Likely watches first, then already-paired devices, then the strongest signal. */
+        private val ORDER = compareByDescending<DiscoveredWatch> { it.looksLikeWatch }
+            .thenByDescending { it.isBonded }
+            .thenByDescending { it.rssi ?: Int.MIN_VALUE }
+            .thenBy { it.address }
     }
 }

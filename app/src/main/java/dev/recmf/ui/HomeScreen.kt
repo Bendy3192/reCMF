@@ -72,7 +72,15 @@ fun HomeScreen(
                 items(discovered, key = { it.address }) { watch ->
                     ListItem(
                         headlineContent = { Text(watch.name ?: stringResource(R.string.unnamed_watch)) },
-                        supportingContent = { Text(watch.address) },
+                        supportingContent = {
+                            Text(
+                                if (watch.isBonded) {
+                                    stringResource(R.string.device_paired, watch.address)
+                                } else {
+                                    watch.address
+                                },
+                            )
+                        },
                         trailingContent = {
                             FilledTonalButton(onClick = { onPair(watch) }) {
                                 Text(stringResource(R.string.action_pair))
