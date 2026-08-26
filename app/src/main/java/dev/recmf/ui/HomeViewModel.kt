@@ -54,6 +54,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         WatchStatus.state,
         settingsStore.settings,
         WatchStatus.battery,
+        // Bound at construction, so a screen left open across midnight keeps counting
+        // into yesterday until it is recreated.
         dao.stepsSince(startOfToday()),
         dao.latestHeartRate(),
     ) { connection, settings, battery, steps, heartRate ->

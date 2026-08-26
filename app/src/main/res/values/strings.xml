@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">reCMF</string>
+    <string name="app_name" translatable="false">reCMF</string>
 
     <string name="notification_channel_connection">Watch connection</string>
     <string name="notification_channel_connection_description">Shows while reCMF is keeping your watch connected.</string>
@@ -22,7 +22,7 @@
     <string name="metric_steps">steps</string>
     <string name="metric_heart_rate">bpm</string>
 
-    <string name="health_connect">Health Connect</string>
+    <string name="health_connect" translatable="false">Health Connect</string>
     <string name="health_connect_available">Steps and heart rate are written to Health Connect, so other apps can read them.</string>
     <string name="health_connect_update_required">Health Connect needs an update before reCMF can write to it.</string>
     <string name="health_connect_not_installed">Health Connect is not available on this device.</string>

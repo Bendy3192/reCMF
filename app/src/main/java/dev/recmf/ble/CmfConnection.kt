@@ -393,7 +393,9 @@ class CmfConnection(
             return false
         }
 
-        return queued.result.await()
+        // Bounded even if the queue worker goes away between the send and the result —
+        // a caller waiting on a write must never be able to wedge for good.
+        return withTimeoutOrNull(ENQUEUE_TIMEOUT_MILLIS) { queued.result.await() } ?: false
     }
 
     /**
@@ -421,8 +423,13 @@ class CmfConnection(
             delay(INTER_OPERATION_DELAY_MILLIS)
         }
 
-        // The channel closed (teardown): release anything still waiting on it.
-        for (queued in generateSequence { channel.tryReceive().getOrNull() }) {
+        drain(channel)
+    }
+
+    /** Fails every operation still queued, so no caller is left awaiting a dead queue. */
+    private fun drain(channel: Channel<QueuedOperation>) {
+        while (true) {
+            val queued = channel.tryReceive().getOrNull() ?: return
             queued.result.complete(false)
         }
     }
@@ -501,12 +508,17 @@ class CmfConnection(
     }
 
     private fun teardown() {
-        operations?.close()
+        val channel = operations
         operations = null
         queueJob?.cancel()
         queueJob = null
         pending?.complete(false)
         pending = null
+
+        // Cancelling the worker means its own drain never runs, so release anything
+        // still queued here instead of leaving those callers waiting on the timeout.
+        channel?.close()
+        channel?.let { drain(it) }
 
         resetProtocolState()
         authenticator = null
@@ -532,6 +544,9 @@ class CmfConnection(
          * mid-write unblocks the queue while the user is still looking at the screen.
          */
         const val OPERATION_TIMEOUT_MILLIS = 10_000L
+
+        /** Covers the queue wait as well as the operation itself. */
+        const val ENQUEUE_TIMEOUT_MILLIS = 30_000L
 
         const val INTER_OPERATION_DELAY_MILLIS = 20L
 
