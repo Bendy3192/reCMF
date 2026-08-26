@@ -57,6 +57,10 @@ import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.health.HealthConnectAvailability
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -221,6 +225,12 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
                 )
             }
 
+            // The watch's own clock, as the app can best see it. A zero above means
+            // "nothing recorded under today's date", which happens both when the watch
+            // was not worn and when its calendar has drifted off the phone's — and those
+            // want opposite responses, so the app should not make the user guess which.
+            WatchClockNote(state.watch)
+
             HorizontalDivider()
 
             Text(stringResource(R.string.auto_sync), style = MaterialTheme.typography.labelLarge)
@@ -243,6 +253,37 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
             }
         }
     }
+}
+
+/**
+ * Reports the date on the newest record the watch handed over.
+ *
+ * Silent while nothing has been fetched — an empty line every launch would be noise. It
+ * speaks up when the watch's date and the phone's disagree, because from that point on
+ * every figure in this app is filtered against a midnight the watch does not share.
+ */
+@Composable
+private fun WatchClockNote(watch: WatchInfo) {
+    val recordAt = watch.lastRecordEpochSeconds ?: return
+
+    val watchDate = Instant.ofEpochSecond(recordAt).atZone(ZoneId.systemDefault()).toLocalDate()
+    val agrees = watchDate == LocalDate.now()
+    val stamp = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
+        .format(Instant.ofEpochSecond(recordAt).atZone(ZoneId.systemDefault()))
+
+    Text(
+        text = stringResource(
+            if (agrees) R.string.watch_clock_agrees else R.string.watch_clock_differs,
+            stamp,
+            watch.lastRecordCount ?: 0,
+        ),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (agrees) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.error
+        },
+    )
 }
 
 private val AUTO_SYNC_CHOICES = listOf(

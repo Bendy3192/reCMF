@@ -43,7 +43,6 @@ data class HomeUiState(
     val latestHeartRate: HeartRateSampleEntity? = null,
 )
 
-/** What the watch itself has told us this session. */
 /** How the search for a place is going. */
 sealed interface CityLookup {
     data object Idle : CityLookup
@@ -52,10 +51,14 @@ sealed interface CityLookup {
     data object NotFound : CityLookup
 }
 
+/** What the watch itself has told us this session. */
 data class WatchInfo(
     val battery: BatteryStatus? = null,
     val firmware: String? = null,
     val serialNumber: String? = null,
+    /** The newest record the watch handed over, timestamped by the watch's own clock. */
+    val lastRecordEpochSeconds: Long? = null,
+    val lastRecordCount: Int? = null,
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -85,7 +88,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         WatchStatus.battery,
         WatchStatus.firmware,
         WatchStatus.serialNumber,
-    ) { battery, firmware, serial -> WatchInfo(battery, firmware, serial) }
+        WatchStatus.lastRecordEpochSeconds,
+        WatchStatus.lastRecordCount,
+    ) { battery, firmware, serial, recordAt, recordCount ->
+        WatchInfo(battery, firmware, serial, recordAt, recordCount)
+    }
 
     val uiState: StateFlow<HomeUiState> = combine(
         WatchStatus.state,

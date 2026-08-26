@@ -381,11 +381,6 @@ class WatchService : LifecycleService() {
     }
 
     /**
-     * Pushes the whole configuration rather than the one field that changed. It is a
-     * dozen small writes, it is idempotent, and it means there is no way for the watch and
-     * the phone to disagree about a setting that failed to apply once.
-     */
-    /**
      * Pushes the settings the user has actually changed in reCMF, and only those.
      *
      * Most of these have no read-back command, so reCMF does not know what the watch
@@ -503,8 +498,14 @@ class WatchService : LifecycleService() {
                 null -> Log.w(TAG, "Unrecognised fetch acknowledgement")
             }
 
-            CmfCommand.ACTIVITY_DATA ->
-                ingest.storeActivity(CmfParsers.parseActivity(message.payload))
+            CmfCommand.ACTIVITY_DATA -> {
+                val samples = CmfParsers.parseActivity(message.payload)
+                if (samples.isNotEmpty()) {
+                    WatchStatus.lastRecordCount.value = samples.size
+                    WatchStatus.lastRecordEpochSeconds.value = samples.maxOf { it.timestamp }
+                }
+                ingest.storeActivity(samples)
+            }
 
             CmfCommand.HEART_RATE_MANUAL_AUTO, CmfCommand.HEART_RATE_WORKOUT ->
                 ingest.storeHeartRate(CmfParsers.parseHeartRate(message.payload))
