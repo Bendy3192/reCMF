@@ -124,7 +124,10 @@ class HealthConnectSync(private val context: Context) {
             endTime = end,
             endZoneOffset = zoneOffsetAt(end),
             count = sample.steps.toLong(),
-            metadata = Metadata.autoRecorded(device = device),
+            metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-steps-${sample.timestamp}",
+            ),
         )
     }
 
@@ -164,7 +167,10 @@ class HealthConnectSync(private val context: Context) {
                         beatsPerMinute = it.bpm.toLong(),
                     )
                 },
-                metadata = Metadata.autoRecorded(device = device),
+                metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-steps-${sample.timestamp}",
+            ),
             )
         }
     }

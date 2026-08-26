@@ -138,6 +138,8 @@ jobs:
             sed -n "/^\* What went wrong:/,/^\* Try:/p" "$log" | head -70
             grep -E "^e: " "$log" | head -30 || true
           done
+          # Lint points at a report file rather than listing what it found.
+          find app/build -name "lint-results-*.txt" -exec head -100 {} \; 2>/dev/null || true
 
       - uses: actions/upload-artifact@v4
         with:
