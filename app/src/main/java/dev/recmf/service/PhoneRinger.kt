@@ -23,6 +23,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import dev.recmf.R
+import dev.recmf.ui.MainActivity
 
 /**
  * Makes the phone findable from the wrist.
@@ -158,15 +159,24 @@ class PhoneRinger(private val context: Context) {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
 
+        // Tapping the body has to open an activity: a notification that starts a service
+        // or a receiver instead is a trampoline, which Android 12 forbids and lint calls
+        // out. So the tap opens reCMF, and reCMF silences the ringing on the way in —
+        // same outcome for whoever just found the phone, by the route the platform wants.
+        val openAndSilence = PendingIntent.getActivity(
+            context,
+            REQUEST_OPEN,
+            MainActivity.silenceIntent(context),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_watch)
             .setContentTitle(context.getString(R.string.find_phone_title))
             .setContentText(context.getString(R.string.find_phone_text))
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
-            // Whoever is reading this has found the phone, which is the whole goal, so
-            // the tap does the obvious thing rather than opening an app nobody asked for.
-            .setContentIntent(silence)
+            .setContentIntent(openAndSilence)
             .addAction(0, context.getString(R.string.find_phone_silence), silence)
             .setOngoing(true)
             .setAutoCancel(false)
@@ -178,6 +188,7 @@ class PhoneRinger(private val context: Context) {
         const val CHANNEL_ID = "recmf.findphone"
         const val NOTIFICATION_ID = 2
         const val REQUEST_SILENCE = 1
+        const val REQUEST_OPEN = 2
 
         /** Long enough to search a room, short enough not to be a nuisance. */
         const val RING_MILLIS = 30_000L

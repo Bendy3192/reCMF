@@ -17,7 +17,9 @@ import android.annotation.SuppressLint
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.content.Context
 import dev.recmf.health.HealthConnectSync
+import dev.recmf.service.WatchService
 import dev.recmf.ui.theme.ReCmfTheme
 
 class MainActivity : ComponentActivity() {
@@ -64,10 +66,33 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    /**
+     * Stops the find-phone ringing when this was opened from its notification.
+     *
+     * The notification cannot stop it directly — a notification that starts a service is
+     * a trampoline, which Android 12 forbids — so the tap comes here and here asks the
+     * service. Whoever tapped is holding the phone; the ringing has done its job.
+     */
+    private fun silenceIfAsked(intent: Intent?) {
+        if (intent?.getBooleanExtra(EXTRA_SILENCE, false) != true) return
+
+        // Cleared so returning to this activity later — from Recents, or a rotation —
+        // does not re-run this on an intent that has already been acted on.
+        intent.removeExtra(EXTRA_SILENCE)
+        startService(WatchService.stopRingingIntent(this))
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        silenceIfAsked(intent)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        silenceIfAsked(intent)
         requestBluetooth.launch(bluetoothPermissions)
 
         setContent {
@@ -119,5 +144,17 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    companion object {
+        private const val EXTRA_SILENCE = "dev.recmf.extra.SILENCE"
+
+        /** What the find-phone notification opens when its body is tapped. */
+        fun silenceIntent(context: Context): Intent =
+            Intent(context, MainActivity::class.java)
+                .putExtra(EXTRA_SILENCE, true)
+                // Reuse the activity if it is already on top rather than stacking a
+                // second copy of the app behind the first.
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
 }
