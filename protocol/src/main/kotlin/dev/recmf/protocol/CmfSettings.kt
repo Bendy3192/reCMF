@@ -204,28 +204,47 @@ object CmfSettings {
     }
 
     /**
-     * `GOALS_SET` read back: five little-endian 32-bit numbers and eight trailing bytes.
+     * `GOALS_SET` read back: five little-endian 32-bit numbers, a byte, and seven flags.
      *
-     * Only the first is identified. It is the step goal, and it matched exactly. The rest
-     * are returned unlabelled on purpose — a real capture read 4000, 400, 720 and 30 where
-     * reCMF had written 5000 metres and 300 calories, so whatever they are, they are not
-     * the fields this app writes in the order it writes them. Naming them on that evidence
-     * would be inventing a layout, and the cost of getting it wrong is the wearer's own
-     * goals overwritten.
+     * ```
+     * steps:u32 | distance:u32 | calories:u32 | ?:u32 | activeMinutes:u32 | climbs:u8 | 7 bytes
+     * ```
      *
-     * The write is a different shape again — ten big-endian bytes — and the watch accepts
-     * it, so the two directions are not symmetric here as they are everywhere else.
+     * Four of the six are confirmed against what the watch's own screen showed: 10000
+     * steps, 400 calories, 30 active minutes, and — the byte after the numbers — 12
+     * climbs. Distance is read as metres because 4000 is where it sat and nothing else
+     * fits, but the wearer had never set it, so it is a default agreeing with itself
+     * rather than a match.
+     *
+     * The fourth number is not identified. One capture reads 720, which would be twelve
+     * hours in minutes and so might be a sleep goal, but a single default-looking number
+     * is not evidence. It is carried through unnamed.
+     *
+     * The seven trailing bytes were all `01`. A flag per goal is the obvious reading and
+     * there is nothing yet to test it against, so they too are carried rather than named.
+     *
+     * The *write* is a different shape — ten big-endian bytes — and the watch takes it
+     * without complaint. This is the one command here whose two directions are not
+     * symmetric, and the evidence says the write does not entirely land: reCMF had sent
+     * 5000 metres and 300 calories, and the watch reported 4000 and 400.
      */
     fun parseGoals(payload: ByteArray): WatchGoals? {
-        if (payload.size < GOAL_FIELDS * 4) return null
+        if (payload.size < GOAL_BYTES) return null
 
         val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
-        val fields = List(GOAL_FIELDS) { buffer.int }
 
-        return WatchGoals(steps = fields[0], unidentified = fields.drop(1))
+        return WatchGoals(
+            steps = buffer.int,
+            distanceMeters = buffer.int,
+            calories = buffer.int,
+            unidentified = buffer.int,
+            activeMinutes = buffer.int,
+            climbs = buffer.get().toInt() and 0xff,
+        )
     }
 
-    private const val GOAL_FIELDS = 5
+    /** Five 32-bit numbers and the climb byte; the flags after them are not read. */
+    private const val GOAL_BYTES = 5 * 4 + 1
     // endregion
 
     /** The goal fields are unsigned 16-bit; a larger target would wrap into a tiny one. */
@@ -235,7 +254,14 @@ object CmfSettings {
 /**
  * What the watch says its goals are.
  *
- * @param unidentified the four numbers after the step goal, kept as read so the log can
- *   show them without this file pretending to know what they mean.
+ * @param unidentified the fourth number, kept as read so the log can show it without this
+ *   file pretending to know what it means.
  */
-data class WatchGoals(val steps: Int, val unidentified: List<Int>)
+data class WatchGoals(
+    val steps: Int,
+    val distanceMeters: Int,
+    val calories: Int,
+    val unidentified: Int,
+    val activeMinutes: Int,
+    val climbs: Int,
+)

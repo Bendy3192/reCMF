@@ -76,17 +76,26 @@ class CmfSettingsReadBackTest {
     }
 
     @Test
-    fun `the goal reply is five little-endian numbers`() {
+    fun `the goals are read as the watch's own screen showed them`() {
+        // Steps, calories, active minutes and the climb byte were all read off the watch
+        // and match. Distance is the one number nobody had set, so 4000 agreeing with
+        // itself is not the same kind of evidence.
         val goals = CmfSettings.parseGoals(
             bytes("10270000a00f000090010000d00200001e0000000c01010101010101"),
         )
 
         assertEquals(10_000, goals?.steps)
-        assertEquals(listOf(4_000, 400, 720, 30), goals?.unidentified)
+        assertEquals(400, goals?.calories)
+        assertEquals(30, goals?.activeMinutes)
+        assertEquals(12, goals?.climbs)
+        assertEquals(4_000, goals?.distanceMeters)
+        assertEquals(720, goals?.unidentified)
     }
 
     @Test
-    fun `a goal reply too short to hold five numbers is refused`() {
+    fun `a goal reply too short for the climb byte is refused`() {
+        // One byte short of the whole thing: five numbers present, the climb byte not.
+        assertNull(CmfSettings.parseGoals(bytes("10270000a00f000090010000d00200001e000000")))
         assertNull(CmfSettings.parseGoals(bytes("10270000a00f0000")))
     }
 }

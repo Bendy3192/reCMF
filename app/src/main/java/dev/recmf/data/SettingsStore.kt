@@ -16,6 +16,7 @@ import androidx.datastore.preferences.preferencesDataStore
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfWeekday
+import dev.recmf.protocol.WatchGoals
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -213,10 +214,18 @@ class SettingsStore(private val context: Context) {
         }
     }
 
-    suspend fun adoptStepsGoalFromWatch(steps: Int): Boolean {
-        if (steps <= 0) return false
+    /**
+     * Takes the three goals reCMF holds. The watch keeps two more — active minutes and
+     * climbs — which this app has nowhere to put and does not write.
+     */
+    suspend fun adoptGoalsFromWatch(goals: WatchGoals): Boolean {
+        if (goals.steps <= 0) return false
 
-        return adoptFromWatch(WatchSetting.GOALS) { it[KEY_STEPS_GOAL] = steps }
+        return adoptFromWatch(WatchSetting.GOALS) { prefs ->
+            prefs[KEY_STEPS_GOAL] = goals.steps
+            if (goals.distanceMeters > 0) prefs[KEY_DISTANCE_GOAL] = goals.distanceMeters
+            if (goals.calories > 0) prefs[KEY_CALORIES_GOAL] = goals.calories
+        }
     }
 
     suspend fun adoptStandReminderFromWatch(enabled: Boolean, intervalMinutes: Int): Boolean =

@@ -253,6 +253,14 @@ class WatchService : LifecycleService() {
      * That is why the forecast refreshed on no schedule anyone could name.
      */
     private suspend fun refreshNow() {
+        // Asked a second time, after the writes above. The read at the top of this
+        // connection is the watch's state *before* reCMF said anything, so comparing the
+        // two says whether a write landed — and the goals write is under suspicion: it
+        // sends 5000 metres and 300 calories, and the watch reported 4000 and 400.
+        if (WatchSetting.GOALS in preferences.configured) {
+            connection.send(CmfCommand.GOALS_GET)
+        }
+
         requestSync()
         sendNowPlaying()
 
@@ -871,17 +879,18 @@ class WatchService : LifecycleService() {
                 adopt = { false },
             )
 
-            // Only the step goal is taken. The other four numbers are read out but left
-            // unnamed: a capture read 4000, 400, 720 and 30 where reCMF had written 5000
-            // metres and 300 calories, so the layout is not the one this app writes, and
-            // guessing it would overwrite the wearer's own targets.
+            // Steps, calories, active minutes and climbs were each read off the watch's
+            // own screen and match. reCMF keeps only three of these, so only three are
+            // taken; the rest are shown, because a goal the app cannot hold is still one
+            // the wearer may want to know reCMF can see.
             CmfCommand.GOALS_SET -> readBack(
                 value = CmfSettings.parseGoals(message.payload),
                 describe = {
-                    "Goals on the watch: ${it.steps} steps" +
-                        ", then " + it.unidentified.joinToString(", ") + " (unidentified)"
+                    "Goals on the watch: ${it.steps} steps, ${it.distanceMeters} m, " +
+                        "${it.calories} kcal, ${it.activeMinutes} active min, " +
+                        "${it.climbs} climbs (and ${it.unidentified}, unidentified)"
                 },
-                adopt = { settings.adoptStepsGoalFromWatch(it.steps) },
+                adopt = { settings.adoptGoalsFromWatch(it) },
             )
 
             CmfCommand.STANDING_REMINDER_SET, CmfCommand.WATER_REMINDER_SET -> {
