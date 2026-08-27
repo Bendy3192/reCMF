@@ -113,4 +113,16 @@
     <string name="find_watch_explainer">Часы зазвонят и завибрируют — если они в зоне действия Bluetooth.</string>
     <string name="action_find_watch">Позвонить на часы</string>
     <string name="protocol_log_title">Лог протокола</string>
+    <string name="alarms">Будильники</string>
+    <string name="alarms_explainer">Показаны так, как часы сообщили о них при подключении. Часы оставляют ровно тот список, который получили, поэтому на них ничего не уходит, пока вы здесь что-то не измените.</string>
+    <string name="alarms_none">На часах нет будильников.</string>
+    <string name="action_add_alarm">Добавить будильник</string>
+    <string name="action_delete">Удалить</string>
+    <string name="day_mon">Пн</string>
+    <string name="day_tue">Вт</string>
+    <string name="day_wed">Ср</string>
+    <string name="day_thu">Чт</string>
+    <string name="day_fri">Пт</string>
+    <string name="day_sat">Сб</string>
+    <string name="day_sun">Вс</string>
 </resources>

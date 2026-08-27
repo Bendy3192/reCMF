@@ -1,6 +1,7 @@
 package dev.recmf.protocol
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -57,17 +58,6 @@ class CmfAlarmsTest {
     }
 
     @Test
-    fun `a Cyrillic label is cut on a character boundary`() {
-        // Eight bytes is four Cyrillic characters, and cutting at the byte would send the
-        // watch half of the fifth.
-        val payload = CmfAlarms.payload(listOf(CmfAlarm(7, 0, label = "Подъём")))
-        val label = payload.copyOfRange(CmfAlarms.RECORD_SIZE - 8, CmfAlarms.RECORD_SIZE)
-
-        val text = String(label.dropWhile { it == 0.toByte() }.toByteArray(), Charsets.UTF_8)
-        assertEquals("Подъ", text)
-    }
-
-    @Test
     fun `more alarms than the watch holds are cut rather than sent`() {
         val payload = CmfAlarms.payload(List(20) { CmfAlarm(hour = it % 24, minute = 0) })
 
@@ -79,5 +69,40 @@ class CmfAlarmsTest {
         // Worth pinning: the watch keeps exactly what it receives, so this is the
         // difference between "no change requested" and "delete every alarm".
         assertTrue(CmfAlarms.payload(emptyList()).isEmpty())
+    }
+
+    @Test
+    fun `an empty reply is no alarms, not a broken one`() {
+        // What a real watch with nothing set answers ALARMS_GET with: no bytes at all.
+        assertEquals(emptyList<CmfAlarm>(), CmfAlarms.parse(ByteArray(0)))
+    }
+
+    @Test
+    fun `what payload writes, parse reads`() {
+        val alarms = listOf(
+            CmfAlarm(7, 30, enabled = true, days = setOf(CmfWeekday.MONDAY, CmfWeekday.FRIDAY)),
+            CmfAlarm(9, 5, enabled = false),
+        )
+
+        assertEquals(alarms, CmfAlarms.parse(CmfAlarms.payload(alarms)))
+    }
+
+    @Test
+    fun `a reply that is not a whole number of records is refused`() {
+        assertNull(CmfAlarms.parse(ByteArray(CmfAlarms.RECORD_SIZE + 7)))
+    }
+
+    @Test
+    fun `every repeat day survives the round trip`() {
+        val daily = CmfAlarm(6, 0, days = CmfWeekday.entries.toSet())
+
+        assertEquals(daily.days, CmfAlarms.parse(CmfAlarms.payload(listOf(daily)))!!.single().days)
+    }
+
+    @Test
+    fun `midnight and one minute to midnight both survive`() {
+        val edges = listOf(CmfAlarm(0, 0), CmfAlarm(23, 59))
+
+        assertEquals(edges, CmfAlarms.parse(CmfAlarms.payload(edges)))
     }
 }

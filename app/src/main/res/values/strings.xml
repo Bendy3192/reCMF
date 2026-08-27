@@ -112,4 +112,16 @@
     <string name="find_watch_explainer">Makes the watch ring and vibrate, as long as it is in Bluetooth range.</string>
     <string name="action_find_watch">Ring the watch</string>
     <string name="protocol_log_title">Protocol log</string>
+    <string name="alarms">Alarms</string>
+    <string name="alarms_explainer">Shown as the watch reported them when it connected. The watch keeps exactly the list it is sent, so nothing goes to it until you change something here.</string>
+    <string name="alarms_none">No alarms on the watch.</string>
+    <string name="action_add_alarm">Add an alarm</string>
+    <string name="action_delete">Delete</string>
+    <string name="day_mon">Mon</string>
+    <string name="day_tue">Tue</string>
+    <string name="day_wed">Wed</string>
+    <string name="day_thu">Thu</string>
+    <string name="day_fri">Fri</string>
+    <string name="day_sat">Sat</string>
+    <string name="day_sun">Sun</string>
 </resources>

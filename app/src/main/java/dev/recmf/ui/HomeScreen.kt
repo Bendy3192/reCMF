@@ -72,7 +72,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
+import dev.recmf.protocol.CmfAlarm
+import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfActivityType
+import dev.recmf.protocol.CmfWeekday
 import dev.recmf.protocol.CmfSettings
 import android.content.ClipData
 import android.os.Build
@@ -220,6 +223,7 @@ private fun TabContent(
                         onGrantAccess = onGrantNotificationAccess,
                     )
                 }
+                item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
                 item { ProtocolLogCard() }
             }
@@ -1199,6 +1203,147 @@ private fun ProtocolLogCard() {
             }
         }
     }
+}
+
+/**
+ * The watch's alarms, as reCMF believes them to be.
+ *
+ * What is shown starts as what the watch reported at connection, so editing here changes
+ * the real list rather than replacing it with a guess. The watch keeps exactly what it is
+ * sent — there is no "add one alarm" — which is why nothing is sent until something here
+ * is changed.
+ */
+@Composable
+private fun AlarmsCard(
+    alarms: List<CmfAlarm>,
+    onChange: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
+) {
+    var editing by remember { mutableStateOf<Int?>(null) }
+
+    fun update(transform: (List<CmfAlarm>) -> List<CmfAlarm>) {
+        onChange(WatchSetting.ALARMS) { current -> current.copy(alarms = transform(current.alarms)) }
+    }
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.alarms), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.alarms_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            if (alarms.isEmpty()) {
+                Text(
+                    stringResource(R.string.alarms_none),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            alarms.forEachIndexed { index, alarm ->
+                HorizontalDivider()
+                AlarmRow(
+                    alarm = alarm,
+                    onTime = { editing = index },
+                    onEnabled = { enabled ->
+                        update { list -> list.mapIndexed { i, a -> if (i == index) a.copy(enabled = enabled) else a } }
+                    },
+                    onToggleDay = { day ->
+                        update { list ->
+                            list.mapIndexed { i, a ->
+                                if (i != index) {
+                                    a
+                                } else {
+                                    a.copy(days = if (day in a.days) a.days - day else a.days + day)
+                                }
+                            }
+                        }
+                    },
+                    onDelete = { update { list -> list.filterIndexed { i, _ -> i != index } } },
+                )
+            }
+
+            if (alarms.size < CmfAlarms.MAX_ALARMS) {
+                FilledTonalButton(
+                    onClick = { update { list -> list + CmfAlarm(hour = 7, minute = 0) } },
+                ) {
+                    Text(stringResource(R.string.action_add_alarm))
+                }
+            }
+        }
+    }
+
+    editing?.let { index ->
+        val alarm = alarms.getOrNull(index)
+        if (alarm == null) {
+            editing = null
+        } else {
+            TimePickerDialog(
+                initialMinutes = alarm.hour * 60 + alarm.minute,
+                onDismiss = { editing = null },
+                onConfirm = { minutes ->
+                    update { list ->
+                        list.mapIndexed { i, a ->
+                            if (i == index) a.copy(hour = minutes / 60, minute = minutes % 60) else a
+                        }
+                    }
+                    editing = null
+                },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AlarmRow(
+    alarm: CmfAlarm,
+    onTime: () -> Unit,
+    onEnabled: (Boolean) -> Unit,
+    onToggleDay: (CmfWeekday) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onTime) {
+                Text(
+                    "%02d:%02d".format(alarm.hour, alarm.minute),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = alarm.enabled, onCheckedChange = onEnabled)
+                TextButton(onClick = onDelete) { Text(stringResource(R.string.action_delete)) }
+            }
+        }
+
+        // No days selected is a one-shot alarm, which is what a mask of zero means to the
+        // watch — so an empty row here is a real choice rather than an unfinished one.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            CmfWeekday.entries.forEach { day ->
+                FilterChip(
+                    selected = day in alarm.days,
+                    onClick = { onToggleDay(day) },
+                    label = { Text(stringResource(day.labelRes())) },
+                )
+            }
+        }
+    }
+}
+
+@StringRes
+private fun CmfWeekday.labelRes(): Int = when (this) {
+    CmfWeekday.MONDAY -> R.string.day_mon
+    CmfWeekday.TUESDAY -> R.string.day_tue
+    CmfWeekday.WEDNESDAY -> R.string.day_wed
+    CmfWeekday.THURSDAY -> R.string.day_thu
+    CmfWeekday.FRIDAY -> R.string.day_fri
+    CmfWeekday.SATURDAY -> R.string.day_sat
+    CmfWeekday.SUNDAY -> R.string.day_sun
 }
 
 /** Rings the watch. Disabled while it is out of range, where the button would do nothing. */

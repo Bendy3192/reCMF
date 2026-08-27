@@ -13,6 +13,8 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.recmf.protocol.CmfActivityType
+import dev.recmf.protocol.CmfAlarm
+import dev.recmf.protocol.CmfWeekday
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -50,6 +52,7 @@ enum class WatchSetting {
     STAND_REMINDER,
     DRINK_REMINDER,
     SPORTS,
+    ALARMS,
 }
 
 /**
@@ -94,6 +97,15 @@ data class WatchPreferences(
 
     /** Which exercises the watch shows in its own sport menu. */
     val sportTypes: List<CmfActivityType> = CmfActivityType.DEFAULT,
+
+    /**
+     * The watch's alarms, in the order it numbers them.
+     *
+     * Empty is a real value here, not "unknown": a watch with no alarms answers with no
+     * bytes. Whether reCMF may send this list at all is decided by [configured], as for
+     * every other group — the watch keeps exactly what it is given.
+     */
+    val alarms: List<CmfAlarm> = emptyList(),
 
     /** The groups the user has actually changed here. Everything else is left alone. */
     val configured: Set<WatchSetting> = emptySet(),
@@ -147,6 +159,7 @@ class SettingsStore(private val context: Context) {
                 ?.mapNotNull { name -> CmfActivityType.entries.firstOrNull { it.name == name } }
                 ?.takeIf { it.isNotEmpty() }
                 ?: CmfActivityType.DEFAULT,
+            alarms = prefs[KEY_ALARMS]?.let(::decodeAlarms).orEmpty(),
             configured = prefs[KEY_CONFIGURED]
                 ?.mapNotNull { name -> WatchSetting.entries.firstOrNull { it.name == name } }
                 ?.toSet()
@@ -158,6 +171,23 @@ class SettingsStore(private val context: Context) {
      * @param setting the group being changed, recorded so that from now on it is sent to
      *   the watch. Settings never touched here stay the watch's own business.
      */
+    /**
+     * Takes the alarms the watch reported, without treating that as the user asking for
+     * them.
+     *
+     * Reading a setting and choosing one are different things, and only the second earns a
+     * place in [WatchPreferences.configured]. Adopting silently would turn the first
+     * connection into a write-back of what was just read, which is how a read-back turns
+     * into the overwriting it exists to prevent. A group the user has already configured
+     * is left alone: their choice outranks the watch's current state.
+     */
+    suspend fun adoptAlarmsFromWatch(alarms: List<CmfAlarm>) {
+        val current = watchPreferences.first()
+        if (WatchSetting.ALARMS in current.configured) return
+
+        context.dataStore.edit { it[KEY_ALARMS] = encodeAlarms(alarms) }
+    }
+
     suspend fun updateWatchPreferences(
         setting: WatchSetting,
         transform: (WatchPreferences) -> WatchPreferences,
@@ -189,6 +219,7 @@ class SettingsStore(private val context: Context) {
             prefs[KEY_DRINK_QUIET_END] = updated.drinkQuietEndMinutes
             // Stored by name, not by code: a name survives the codes being corrected.
             prefs[KEY_SPORT_TYPES] = updated.sportTypes.map { it.name }.toSet()
+            prefs[KEY_ALARMS] = encodeAlarms(updated.alarms)
             prefs[KEY_CONFIGURED] = updated.configured.map { it.name }.toSet()
         }
     }
@@ -303,6 +334,37 @@ class SettingsStore(private val context: Context) {
         val KEY_DRINK_QUIET_START = intPreferencesKey("watch_drink_quiet_start")
         val KEY_DRINK_QUIET_END = intPreferencesKey("watch_drink_quiet_end")
         val KEY_SPORT_TYPES = stringSetPreferencesKey("watch_sport_types")
+        val KEY_ALARMS = stringPreferencesKey("watch_alarms")
+
+        /**
+         * Alarms as `hour,minute,enabled,dayMask` joined by semicolons.
+         *
+         * A string rather than a string set, because a set has no order and would fold two
+         * alarms set to the same time into one — and the watch numbers them by position.
+         */
+        internal fun encodeAlarms(alarms: List<CmfAlarm>): String =
+            alarms.joinToString(";") { alarm ->
+                val mask = alarm.days.fold(0) { acc, day -> acc or day.bit }
+                "${alarm.hour},${alarm.minute},${if (alarm.enabled) 1 else 0},$mask"
+            }
+
+        internal fun decodeAlarms(text: String): List<CmfAlarm> =
+            text.split(";").mapNotNull { entry ->
+                val parts = entry.split(",")
+                if (parts.size != 4) return@mapNotNull null
+
+                val hour = parts[0].toIntOrNull() ?: return@mapNotNull null
+                val minute = parts[1].toIntOrNull() ?: return@mapNotNull null
+                val mask = parts[3].toIntOrNull() ?: return@mapNotNull null
+                if (hour !in 0..23 || minute !in 0..59) return@mapNotNull null
+
+                CmfAlarm(
+                    hour = hour,
+                    minute = minute,
+                    enabled = parts[2] == "1",
+                    days = CmfWeekday.entries.filter { it.bit and mask != 0 }.toSet(),
+                )
+            }
         val KEY_CONFIGURED = stringSetPreferencesKey("watch_configured_settings")
     }
 }

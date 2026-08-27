@@ -33,6 +33,7 @@ import dev.recmf.notifications.OutgoingNotifications
 import dev.recmf.weather.WeatherClient
 import dev.recmf.weather.WeatherLocation
 import dev.recmf.weather.WeatherSnapshot
+import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
@@ -570,6 +571,10 @@ class WatchService : LifecycleService() {
 
         // The most destructive of the lot: the watch replaces its whole sport menu with
         // whatever list arrives, so sending reCMF's default would delete most of it.
+        ifSet(WatchSetting.ALARMS) {
+            connection.send(CmfCommand.ALARMS_SET, CmfAlarms.payload(preferences.alarms))
+        }
+
         ifSet(WatchSetting.SPORTS) {
             connection.send(CmfCommand.SPORTS_SET, CmfSettings.sportTypes(preferences.sportTypes))
         }
@@ -635,6 +640,29 @@ class WatchService : LifecycleService() {
             // seen arriving at all, which is worth knowing when the time comes to use it
             // for the settings that do have one.
             CmfCommand.LANGUAGE_RET -> Unit
+
+            // The alarms the watch already holds, arriving under the SET opcode. Adopted
+            // rather than only reported, because this list is the one reCMF must not
+            // guess at: the watch keeps exactly what it is sent, so editing without
+            // knowing what is there deletes the rest.
+            CmfCommand.ALARMS_SET -> {
+                val alarms = CmfAlarms.parse(message.payload)
+                if (alarms == null) {
+                    ProtocolLog.note("Alarm list did not fit the expected layout")
+                } else {
+                    ProtocolLog.note(
+                        if (alarms.isEmpty()) {
+                            "No alarms on the watch"
+                        } else {
+                            "Alarms on the watch: " + alarms.joinToString(", ") {
+                                "%02d:%02d".format(it.hour, it.minute) +
+                                    if (it.enabled) "" else " (off)"
+                            }
+                        },
+                    )
+                    settings.adoptAlarmsFromWatch(alarms)
+                }
+            }
 
             // The reply to our GET, arriving under the SET opcode. Reported rather than
             // adopted: reading a setting is one thing, and letting a read change what the
