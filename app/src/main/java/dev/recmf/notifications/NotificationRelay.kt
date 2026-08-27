@@ -78,6 +78,28 @@ class NotificationRelay : NotificationListenerService() {
         scope.launch { settings.notificationBlockedPackages.collect { blocked = it } }
     }
 
+    /**
+     * Seeds the list from what is already on the shade.
+     *
+     * Without this the picker starts empty and stays empty until something new arrives,
+     * which on a quiet phone can be a while — and an empty list is indistinguishable from
+     * a feature that does not work. Whatever is already posted has already earned its
+     * place there.
+     */
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+
+        val packages = runCatching { activeNotifications }.getOrNull()
+            ?.filter(::shouldForward)
+            ?.map { it.packageName }
+            ?.distinct()
+            .orEmpty()
+
+        if (packages.isEmpty()) return
+
+        scope.launch { packages.forEach { settings.rememberNotificationPackage(it) } }
+    }
+
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()

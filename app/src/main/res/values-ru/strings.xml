@@ -42,6 +42,7 @@
     <string name="notifications_explainer">Сообщения и оповещения с телефона отправляются на часы.</string>
     <string name="notifications_need_access">Доступ к уведомлениям выдаётся в системных настройках, а не здесь.</string>
     <string name="notification_apps">Какие приложения доходят до часов</string>
+    <string name="notification_apps_none">Пока ничего не приходило. Приложения появятся здесь сами, когда пришлют уведомление.</string>
     <plurals name="notification_apps_all">
         <item quantity="one">%d приложение уже что-то присылало. Все доходят до часов.</item>
         <item quantity="few">%d приложения уже что-то присылали. Все доходят до часов.</item>

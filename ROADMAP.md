@@ -68,7 +68,10 @@ Two exceptions:
   watch's own screen: 10000 steps, 400 calories, 30 active minutes and — the byte after
   the numbers — 12 climbs. The fourth number, 720, is still unnamed.
 
-  Writing them does not work on this firmware, in either shape tried. The ten big-endian
+  Writing them does not work on this firmware, in either shape tried — and goals are the
+  only setting that behaves this way. Every other write was confirmed to land by reading
+  it back: both reminders came back exactly as sent, byte for byte, including their quiet
+  hours. The ten big-endian
   bytes ported from Gadgetbridge were acknowledged and ignored; so was the watch's own
   twenty-eight byte block with three fields patched in place. Both times the very next
   read reported the values the watch already held. `applied` on this command means the

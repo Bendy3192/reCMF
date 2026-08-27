@@ -1147,42 +1147,48 @@ private fun NotificationsCard(
                     )
                 }
 
-                if (apps.isNotEmpty()) {
-                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-                    var expanded by rememberSaveable { mutableStateOf(false) }
-                    val silenced = apps.count { it.blocked }
+                // Shown even with nothing in it. The list fills as apps notify, so on the
+                // first run it is empty — and a feature that hides until it has something
+                // to show is a feature nobody can find. It says so instead.
+                var expanded by rememberSaveable { mutableStateOf(false) }
+                val silenced = apps.count { it.blocked }
 
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { expanded = !expanded },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                stringResource(R.string.notification_apps),
-                                style = MaterialTheme.typography.bodyMedium,
-                            )
-                            Text(
-                                if (silenced == 0) {
-                                    pluralStringResource(
-                                        R.plurals.notification_apps_all,
-                                        apps.size,
-                                        apps.size,
-                                    )
-                                } else {
-                                    pluralStringResource(
-                                        R.plurals.notification_apps_silenced,
-                                        silenced,
-                                        silenced,
-                                    )
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                        }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(if (apps.isEmpty()) Modifier else Modifier.clickable { expanded = !expanded }),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            stringResource(R.string.notification_apps),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            when {
+                                apps.isEmpty() -> stringResource(R.string.notification_apps_none)
+
+                                silenced == 0 -> pluralStringResource(
+                                    R.plurals.notification_apps_all,
+                                    apps.size,
+                                    apps.size,
+                                )
+
+                                else -> pluralStringResource(
+                                    R.plurals.notification_apps_silenced,
+                                    silenced,
+                                    silenced,
+                                )
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+
+                    if (apps.isNotEmpty()) {
                         Text(
                             stringResource(
                                 if (expanded) R.string.action_hide else R.string.action_show,
@@ -1191,30 +1197,30 @@ private fun NotificationsCard(
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
+                }
 
-                    if (expanded) {
-                        // A plain column, not a lazy list: this is already inside a
-                        // scrolling page, and nesting one scroller in another is how a
-                        // list ends up unscrollable. The set is bounded and short.
-                        apps.forEach { app ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    app.label,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Switch(
-                                    checked = !app.blocked,
-                                    onCheckedChange = { allowed ->
-                                        onAppBlocked(app.packageName, !allowed)
-                                    },
-                                    enabled = state.settings.notificationsEnabled,
-                                )
-                            }
+                if (expanded) {
+                    // A plain column, not a lazy list: this is already inside a scrolling
+                    // page, and nesting one scroller in another is how a list ends up
+                    // unscrollable. The set is bounded and short.
+                    apps.forEach { app ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                app.label,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = !app.blocked,
+                                onCheckedChange = { allowed ->
+                                    onAppBlocked(app.packageName, !allowed)
+                                },
+                                enabled = state.settings.notificationsEnabled,
+                            )
                         }
                     }
                 }
