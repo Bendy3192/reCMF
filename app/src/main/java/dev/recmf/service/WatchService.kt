@@ -32,6 +32,7 @@ import dev.recmf.data.WatchSetting
 import dev.recmf.notifications.OutgoingNotifications
 import dev.recmf.weather.WeatherClient
 import dev.recmf.weather.WeatherLocation
+import dev.recmf.weather.WeatherSnapshot
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
@@ -48,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -95,6 +97,9 @@ class WatchService : LifecycleService() {
 
     /** When the forecast was last fetched, so a short refresh interval does not hammer it. */
     private var weatherFetchedAtMillis = 0L
+
+    /** The last forecast fetched, kept so a reconnect does not leave the watch blank. */
+    private var weatherSnapshot: WeatherSnapshot? = null
 
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
@@ -201,33 +206,49 @@ class WatchService : LifecycleService() {
     }
 
     /**
-     * Fetches the forecast and hands it to the watch.
+     * Puts a forecast on the watch, fetching a fresh one only when the one in hand has
+     * gone stale.
      *
-     * Rate-limited independently of the refresh interval: steps are worth polling every
-     * thirty seconds, a forecast is not, and the provider is a free service being asked
-     * for a favour.
+     * Fetching and sending are deliberately separate. They used to be one step behind a
+     * single half-hour timer, which meant that reconnecting inside that half hour sent
+     * the watch nothing at all — the rate limit was written to spare the provider, and it
+     * was silencing the watch instead. The provider is still asked at most every half
+     * hour; the watch is given what we have every time it asks.
      */
     private suspend fun sendWeather() {
         val current = settings.current()
         if (!current.weatherEnabled) return
 
-        val city = current.weatherCity ?: return
-        val now = System.currentTimeMillis()
-        if (now - weatherFetchedAtMillis < WEATHER_REFRESH_MILLIS) return
-
-        val snapshot = weather.forecast(
-            WeatherLocation(city, current.weatherLatitude, current.weatherLongitude),
-            nowEpochSeconds = now / 1000,
-        )
-
-        if (snapshot == null) {
-            ProtocolLog.note("Weather unavailable")
+        val city = current.weatherCity
+        if (city == null) {
+            WatchStatus.weatherProblem.value = WeatherProblem.NO_CITY
             return
         }
 
-        // Only after a successful fetch: a failure should be retried on the next tick,
-        // not held off for another half hour.
-        weatherFetchedAtMillis = now
+        val now = System.currentTimeMillis()
+        val stale = now - weatherFetchedAtMillis >= WEATHER_REFRESH_MILLIS
+
+        if (stale || weatherSnapshot == null) {
+            val fetched = weather.forecast(
+                WeatherLocation(city, current.weatherLatitude, current.weatherLongitude),
+                nowEpochSeconds = now / 1000,
+            )
+
+            if (fetched != null) {
+                weatherSnapshot = fetched
+                // Only after a success: a failure should be retried on the next tick,
+                // not held off for another half hour.
+                weatherFetchedAtMillis = now
+                WatchStatus.weatherProblem.value = null
+            } else {
+                ProtocolLog.note("Weather provider unreachable")
+                WatchStatus.weatherProblem.value = WeatherProblem.UNREACHABLE
+            }
+        }
+
+        // Whatever we last managed to fetch still beats leaving the watch with nothing:
+        // an hour-old temperature is a better watch face than a blank one.
+        val snapshot = weatherSnapshot ?: return
 
         connection.send(
             CmfCommand.WEATHER_SET_1,
@@ -239,6 +260,9 @@ class WatchService : LifecycleService() {
                 sun = snapshot.sun,
             ),
         )
+
+        WatchStatus.weatherSentAtMillis.value = now
+        WatchStatus.weatherTemperatureC.value = snapshot.today.temperatureC
     }
 
     private fun isScreenOn(): Boolean =
@@ -318,6 +342,25 @@ class WatchService : LifecycleService() {
                 .map { it.autoSyncSeconds }
                 .distinctUntilChanged()
                 .collect(::restartAutoSync)
+        }
+
+        lifecycleScope.launch {
+            // Turning weather on, or naming a different place, used to change nothing
+            // until the next reconnect or refresh tick — with automatic refresh off, that
+            // meant never. A setting the user just changed should take effect while they
+            // are still looking at the screen.
+            settings.settings
+                .map { Triple(it.weatherEnabled, it.weatherCity, it.weatherLatitude) }
+                .distinctUntilChanged()
+                .drop(1)
+                .collect {
+                    if (_status.value == ConnectionState.READY) {
+                        // The place changed, so what we are holding is for somewhere else.
+                        weatherFetchedAtMillis = 0L
+                        weatherSnapshot = null
+                        sendWeather()
+                    }
+                }
         }
 
         lifecycleScope.launch {

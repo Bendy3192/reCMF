@@ -58,6 +58,7 @@ import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.health.HealthConnectAvailability
+import dev.recmf.service.WeatherProblem
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -745,8 +746,49 @@ private fun WeatherCard(
                     }
                 }
             }
+
+            if (state.settings.weatherEnabled) {
+                HorizontalDivider()
+                WeatherStatusLine(state.weather)
+            }
         }
     }
+}
+
+/**
+ * Says what became of the forecast.
+ *
+ * Every way this can fail used to be a silent return, so "the weather is not updating"
+ * looked the same whether no place had been resolved, the provider could not be reached,
+ * or the watch simply had not been asked yet.
+ */
+@Composable
+private fun WeatherStatusLine(weather: WeatherStatus) {
+    val (textRes, isError) = when {
+        weather.problem == WeatherProblem.NO_CITY -> R.string.weather_status_no_city to true
+        weather.problem == WeatherProblem.UNREACHABLE -> R.string.weather_status_unreachable to true
+        weather.sentAtMillis == null -> R.string.weather_status_waiting to false
+        else -> R.string.weather_status_sent to false
+    }
+
+    val detail = weather.sentAtMillis?.let {
+        DateTimeFormatter.ofPattern("HH:mm")
+            .format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
+    }
+
+    Text(
+        text = if (textRes == R.string.weather_status_sent) {
+            stringResource(textRes, detail.orEmpty(), weather.temperatureC ?: 0)
+        } else {
+            stringResource(textRes)
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (isError) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
 }
 
 @Composable

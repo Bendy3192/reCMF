@@ -37,4 +37,23 @@ object WatchStatus {
      */
     val lastRecordEpochSeconds = MutableStateFlow<Long?>(null)
     val lastRecordCount = MutableStateFlow<Int?>(null)
+
+    /** When a forecast last reached the watch, and what temperature went with it. */
+    val weatherSentAtMillis = MutableStateFlow<Long?>(null)
+    val weatherTemperatureC = MutableStateFlow<Int?>(null)
+
+    /** Why there is no forecast on the watch, when there is not one. */
+    val weatherProblem = MutableStateFlow<WeatherProblem?>(null)
+}
+
+/**
+ * The reasons a forecast fails to reach the watch, as far apart as they need to be for
+ * the user to know what to do about each.
+ */
+enum class WeatherProblem {
+    /** No place has been resolved yet, so there is nothing to ask the provider about. */
+    NO_CITY,
+
+    /** The provider could not be reached, or answered something unreadable. */
+    UNREACHABLE,
 }

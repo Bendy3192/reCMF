@@ -21,6 +21,7 @@ import androidx.core.app.NotificationManagerCompat
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
 import dev.recmf.service.WatchService
+import dev.recmf.service.WeatherProblem
 import dev.recmf.service.WatchStatus
 import dev.recmf.service.WatchdogWorker
 import dev.recmf.weather.WeatherClient
@@ -41,6 +42,7 @@ data class HomeUiState(
     val watch: WatchInfo = WatchInfo(),
     val stepsToday: Int = 0,
     val latestHeartRate: HeartRateSampleEntity? = null,
+    val weather: WeatherStatus = WeatherStatus(),
 )
 
 /** How the search for a place is going. */
@@ -59,6 +61,13 @@ data class WatchInfo(
     /** The newest record the watch handed over, timestamped by the watch's own clock. */
     val lastRecordEpochSeconds: Long? = null,
     val lastRecordCount: Int? = null,
+)
+
+/** What has become of the forecast, so the card can say rather than sit blank. */
+data class WeatherStatus(
+    val sentAtMillis: Long? = null,
+    val temperatureC: Int? = null,
+    val problem: WeatherProblem? = null,
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -94,6 +103,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         WatchInfo(battery, firmware, serial, recordAt, recordCount)
     }
 
+    private val weatherStatus = combine(
+        WatchStatus.weatherSentAtMillis,
+        WatchStatus.weatherTemperatureC,
+        WatchStatus.weatherProblem,
+    ) { sentAt, temperature, problem -> WeatherStatus(sentAt, temperature, problem) }
+
     val uiState: StateFlow<HomeUiState> = combine(
         WatchStatus.state,
         settingsStore.settings,
@@ -101,9 +116,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // Bound at construction, so a screen left open across midnight keeps counting
         // into yesterday until it is recreated.
         dao.stepsSince(startOfToday()),
-        dao.latestHeartRate(),
-    ) { connection, settings, watch, steps, heartRate ->
-        HomeUiState(connection, settings, watch, steps, heartRate)
+        combine(dao.latestHeartRate(), weatherStatus, ::Pair),
+    ) { connection, settings, watch, steps, (heartRate, weather) ->
+        HomeUiState(connection, settings, watch, steps, heartRate, weather)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
 
     val watchPreferences: StateFlow<WatchPreferences> = settingsStore.watchPreferences

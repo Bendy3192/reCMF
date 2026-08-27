@@ -91,4 +91,8 @@
         <item quantity="one">%d record</item>
         <item quantity="other">%d records</item>
     </plurals>
+    <string name="weather_status_sent">Sent to the watch at %1$s, %2$d°</string>
+    <string name="weather_status_waiting">Not sent to the watch yet — this happens on the next refresh, or as soon as the watch connects.</string>
+    <string name="weather_status_no_city">No place chosen yet, so there is nothing to ask for.</string>
+    <string name="weather_status_unreachable">The weather service could not be reached. reCMF will try again on the next refresh; the watch keeps the last forecast it was given.</string>
 </resources>
