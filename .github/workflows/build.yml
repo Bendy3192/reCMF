@@ -96,6 +96,10 @@ jobs:
     # Only to publish the release below; everything else here reads.
     permissions:
       contents: write
+    # Lifted to the job so the signing step can test whether it was configured: the
+    # `secrets` context is not available to a step's `if`, but `env` is.
+    env:
+      RECMF_KEYSTORE_BASE64: ${{ secrets.RECMF_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
 
@@ -122,16 +126,19 @@ jobs:
       # Optional. Without it the build falls back to the key checked into the
       # repository, which is public and therefore signs an APK anyone could also sign.
       - name: Use the private signing key, if one is configured
-        # The step's own env is not available to `if`, so the secret is tested directly.
-        if: ${{ secrets.RECMF_KEYSTORE_BASE64 != '' }}
+        if: env.RECMF_KEYSTORE_BASE64 != ''
         env:
-          KEYSTORE_BASE64: ${{ secrets.RECMF_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.RECMF_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RECMF_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RECMF_KEY_PASSWORD }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/recmf.keystore"
-          echo "RECMF_KEYSTORE=$RUNNER_TEMP/recmf.keystore" >> "$GITHUB_ENV"
-          echo "RECMF_KEYSTORE_PASSWORD=${{ secrets.RECMF_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
-          echo "RECMF_KEY_ALIAS=${{ secrets.RECMF_KEY_ALIAS }}" >> "$GITHUB_ENV"
-          echo "RECMF_KEY_PASSWORD=${{ secrets.RECMF_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "$RECMF_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/recmf.keystore"
+          {
+            echo "RECMF_KEYSTORE=$RUNNER_TEMP/recmf.keystore"
+            echo "RECMF_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "RECMF_KEY_ALIAS=$KEY_ALIAS"
+            echo "RECMF_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
 
       - name: Assemble debug
         run: |
