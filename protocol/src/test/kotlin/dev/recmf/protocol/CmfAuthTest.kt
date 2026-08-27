@@ -13,7 +13,7 @@ class CmfAuthTest {
     private val random2 = ByteArray(16) { 0x22 }
 
     private fun authenticator(storedKey: ByteArray? = null) =
-        CmfAuthenticator("Pixel 8a", storedKey, randomBytes = { size -> random1.copyOf(size) })
+        CmfAuthenticator("Test Phone", storedKey, randomBytes = { size -> random1.copyOf(size) })
 
     private fun pairReply(secret: ByteArray = appSecret) = random2 + CmfCrypto.sha256(random2, secret)
 
@@ -47,7 +47,7 @@ class CmfAuthTest {
         val send = authenticator(ByteArray(16)).start().filterIsInstance<CmfAuthAction.Send>().single()
 
         assertEquals(0xa5.toByte(), send.payload[0])
-        assertEquals("Pixel 8a", String(send.payload, 1, send.payload.size - 1))
+        assertEquals("Test Phone", String(send.payload, 1, send.payload.size - 1))
     }
 
     @Test

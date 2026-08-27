@@ -119,6 +119,20 @@ jobs:
           # entries.
           cache-read-only: true
 
+      # Optional. Without it the build falls back to the key checked into the
+      # repository, which is public and therefore signs an APK anyone could also sign.
+      - name: Use the private signing key, if one is configured
+        # The step's own env is not available to `if`, so the secret is tested directly.
+        if: ${{ secrets.RECMF_KEYSTORE_BASE64 != '' }}
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RECMF_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/recmf.keystore"
+          echo "RECMF_KEYSTORE=$RUNNER_TEMP/recmf.keystore" >> "$GITHUB_ENV"
+          echo "RECMF_KEYSTORE_PASSWORD=${{ secrets.RECMF_KEYSTORE_PASSWORD }}" >> "$GITHUB_ENV"
+          echo "RECMF_KEY_ALIAS=${{ secrets.RECMF_KEY_ALIAS }}" >> "$GITHUB_ENV"
+          echo "RECMF_KEY_PASSWORD=${{ secrets.RECMF_KEY_PASSWORD }}" >> "$GITHUB_ENV"
+
       - name: Assemble debug
         run: |
           set -o pipefail

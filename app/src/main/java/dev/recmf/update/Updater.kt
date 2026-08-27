@@ -158,7 +158,10 @@ class Updater(private val context: Context) {
                 in 200..299 ->
                     Fetched.Body(connection.inputStream.bufferedReader().use { it.readText() })
 
-                404 -> Fetched.Problem("no release published yet")
+                // GitHub answers 404 for a repository it will not admit exists, so this
+                // covers both "no release yet" and "the repository is private" — which is
+                // what it turned out to mean the first time it appeared.
+                404 -> Fetched.Problem("no release visible (404) — is the repository private?")
                 403, 429 -> Fetched.Problem("GitHub refused the request ($code)")
                 else -> {
                     Log.i(TAG, "Release check answered $code")

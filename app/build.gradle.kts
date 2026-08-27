@@ -11,6 +11,12 @@ val buildNumber: Int = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull()
 /** Bumped by hand when something is worth calling a new version. */
 val RELEASE_NAME = "0.2"
 
+/**
+ * The password of the checked-in fallback key. Not a secret and not treated as one: the
+ * keystore it opens is in the repository, so hiding its password would protect nothing.
+ */
+val FALLBACK_KEY_SECRET = "recmfdebug"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -36,20 +42,22 @@ android {
     }
 
     signingConfigs {
-        // Checked into the repository on purpose. Without a fixed key, every CI runner
-        // generates its own debug keystore, every build is signed by a different one, and
-        // Android refuses to install one over another — so updating meant uninstalling,
-        // and uninstalling took the goals, the paired watch and every setting with it.
+        // A fixed key, so each build installs over the last one and the app keeps its
+        // settings, its paired watch and its data. Without one, every machine generates
+        // its own and Android refuses one build as an update to another — the only way in
+        // is uninstall, which takes all of that with it.
         //
-        // What it costs: anyone with this file can build an APK Android will accept as an
-        // update to reCMF. For a sideloaded personal app installed only from its own CI
-        // that is a fair trade for being able to update at all. Moving the keystore into
-        // an Actions secret is a small change if that stops being true.
+        // The checked-in key is a fallback so that a fresh clone builds and installs with
+        // no setup. It is public, and a public signing key means anyone can build an APK
+        // Android will accept as an update to reCMF. A private key in RECMF_KEYSTORE
+        // takes precedence; see the README for how to set one up.
         getByName("debug") {
-            storeFile = file("recmf-debug.keystore")
-            storePassword = "recmfdebug"
-            keyAlias = "recmf"
-            keyPassword = "recmfdebug"
+            val provided = System.getenv("RECMF_KEYSTORE")?.takeIf { it.isNotBlank() }
+
+            storeFile = provided?.let(::file) ?: file("recmf-debug.keystore")
+            storePassword = System.getenv("RECMF_KEYSTORE_PASSWORD") ?: FALLBACK_KEY_SECRET
+            keyAlias = System.getenv("RECMF_KEY_ALIAS") ?: "recmf"
+            keyPassword = System.getenv("RECMF_KEY_PASSWORD") ?: FALLBACK_KEY_SECRET
         }
     }
 

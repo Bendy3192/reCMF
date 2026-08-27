@@ -4,25 +4,68 @@ A third-party companion app for the **CMF Watch Pro 2**, built to do the two thi
 stock app does badly: stay connected without being killed, and put the watch's data into
 **Health Connect** where anything else on the phone can read it.
 
-> **Status: running daily against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
+> **Unofficial.** Not made by, endorsed by, or connected to Nothing Technology or CMF by
+> Nothing. "CMF" and "Nothing" are their trademarks and are used here only to say which
+> watch this talks to. Nothing's own app is not required, modified or redistributed.
+
+> **Status: in daily use against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
 > steps, heart rate, resting heart rate, blood oxygen, stress, weather, notifications,
 > incoming calls, alarms and find-watch are confirmed on hardware. Sleep is parsed but has
-> not yet met a real night, and is not stored until it has.
-> See [What is verified](#what-is-verified) for the line between the two.
+> not yet met a real night, and is not stored until it has. Only one watch on one firmware
+> has ever run it — see [What is verified](#what-is-verified) before trusting it with
+> anything.
 
-## Installing an update
+## Installing
 
-Builds are signed with a key checked into the repository (`app/recmf-debug.keystore`), so
-each APK installs over the last one and the app keeps its settings, its paired watch and
-its data. Without a fixed key every CI runner generates its own, Android refuses one build
-as an update to another, and the only way in is uninstall — which takes everything with it.
+Download the newest `recmf.apk` from
+[Releases](../../releases/latest) and open it. Android will ask permission to install from
+this source the first time; that setting is per-app and can be turned off again afterwards.
 
-The first build after this change is the exception: the signature moves from a random key
-to the fixed one, so that one install still needs the old app removed. Every update after
-it goes over the top.
+Once installed, reCMF updates itself: **Watch → Updates → Check for updates**. It reads
+this repository's releases, downloads the APK and hands it to Android's installer. The
+install is never silent — Android confirms every sideloaded package itself — but there is
+no browser or file manager in the way.
 
-The version shown on the connection card is the build number the APK came from, so a phone
-can say which of a day's builds it is running.
+Every build is signed with the same key, so an update installs over the last one and keeps
+your settings, your paired watch and its data.
+
+### What it needs from you
+
+| Permission | Why | Optional? |
+|---|---|---|
+| Nearby devices | To find and talk to the watch. Declared `neverForLocation` — reCMF never asks where you are | no |
+| Notifications | To show the connection notice Android requires of a foreground service | no |
+| Notification access | To forward notifications, SMS and incoming callers' names to the watch | yes |
+| Health Connect | To write steps, heart rate, resting rate and blood oxygen | yes |
+| Unrestricted background use | So the background refresh runs on a schedule instead of when Android gets round to it | strongly recommended |
+| Install unknown apps | Only for the in-app updater | yes |
+
+### What leaves your phone
+
+Two things, and nothing else. There is no account, no analytics, and no server of ours.
+
+- **A city name and its coordinates go to [Open-Meteo](https://open-meteo.com)** when you
+  turn weather on, at most once every thirty minutes. No key, no account, no device
+  identifier. Leave weather off and nothing is sent.
+- **A version check goes to GitHub** when you press Check for updates, and the APK is
+  downloaded from there if you accept.
+
+Your watch's data goes to your watch, to this app's own database, and to Health Connect if
+you enable it. Nowhere else.
+
+## Using it with your own fork
+
+Two things are specific to this repository:
+
+- `UpdateCheck.LATEST_RELEASE_URL` points at this repository's releases. Change it, or the
+  updater will offer builds from here.
+- The signing key in `app/recmf-debug.keystore` is public, which means anyone can build an
+  APK that Android will accept as an update to an install signed with it. That is the price
+  of a fresh clone building and installing with no setup. To use your own instead, put a
+  base64 keystore in the `RECMF_KEYSTORE_BASE64` Actions secret along with
+  `RECMF_KEYSTORE_PASSWORD`, `RECMF_KEY_ALIAS` and `RECMF_KEY_PASSWORD`; the build prefers
+  them and falls back to the checked-in key when they are absent. Locally, the same four
+  as environment variables.
 
 
 ## Why
@@ -49,13 +92,19 @@ exists because of it.
 | | |
 |---|---|
 | Pairing | Negotiates its own key over the watch's shell characteristic — no auth key to find |
-| Sync | Steps, distance, calories, heart rate, battery |
-| Health Connect | Writes `StepsRecord` and `HeartRateRecord`, deduplicated |
+| Health | Steps, distance, calories, heart rate, resting heart rate, blood oxygen, stress, battery |
+| Health Connect | Steps, heart rate, resting rate and blood oxygen, deduplicated by client record id |
+| Watch settings | 24/7 heart rate, all-day SpO₂, stress, raise-to-wake, clock format, units, daily goals, alert thresholds, stand and drink reminders with quiet hours, the visible sport list |
+| Alarms | Read from the watch and edited here, with repeat days |
+| Notifications | Forwarded with icons, optionally only while the phone's screen is off; SMS included; incoming calls show the caller's name |
+| Weather | Fetched from Open-Meteo for a typed city and pushed to the watch face |
+| Find watch | Makes it ring |
+| Updates | Checks this repository's releases and installs them |
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
-| UI | Compose, Material 3, dynamic colour |
+| UI | Compose, Material 3, dynamic colour, two tabs |
 
-Sleep, SpO₂, stress, workouts and notifications are parsed by the protocol in
-Gadgetbridge but are not wired up here yet.
+**Not done:** sleep (parsed, unverified, not stored), workouts and their GPS tracks,
+contacts, music control, a call screen with answer and reject, watchfaces, firmware.
 
 ### About Material 3 Expressive
 
@@ -183,8 +232,25 @@ check. Workouts and their GPS tracks are not started.
 not the monitoring state; and `ffff/a055`, a stable list of six identifiers the watch
 volunteers at connection time.
 
+## Contributing and reporting
+
+Everything about how this watch speaks was worked out by the
+[Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) project, and by José
+Rebelo in particular. reCMF only exists because that work was published.
+
+Bug reports about the **protocol** belong upstream. Bug reports about **this app** belong
+here — and the single most useful thing you can attach is the in-app protocol log:
+**Watch → Protocol log → Show → Copy**. It carries the frames as hex, which is how every
+undecoded field in this project has been worked out so far.
+
+If your watch reports something reCMF does not understand, the log marks it — `unknown`
+for an opcode not in the table, `no handler yet` for one that is. Both are worth sending.
+
+A second watch on a second firmware would be the most valuable contribution of all: every
+byte layout here has been confirmed against exactly one device.
+
 ## Credit
 
-Everything about how this watch speaks was worked out by the Gadgetbridge project, and by
-José Rebelo in particular. Bug reports about the *protocol* belong upstream; bug reports
-about this app belong here.
+- [Gadgetbridge](https://codeberg.org/Freeyourgadget/Gadgetbridge) — the protocol, and the
+  AGPL sources the `protocol/` module is ported from. See [`NOTICE`](NOTICE).
+- [Open-Meteo](https://open-meteo.com) — the forecast, free and without an account.
