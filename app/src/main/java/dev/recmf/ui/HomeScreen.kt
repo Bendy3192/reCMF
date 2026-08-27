@@ -232,6 +232,27 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
                 )
             }
 
+            // Shown only once the watch has sent one. An em dash next to steps would
+            // suggest reCMF is measuring these and getting nothing, when until now it was
+            // discarding them unread.
+            if (state.spo2 != null || state.stress != null) {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    state.spo2?.let {
+                        Metric(
+                            value = "${it.percent}%",
+                            label = stringResource(R.string.metric_spo2),
+                        )
+                        Spacer(Modifier.width(32.dp))
+                    }
+                    state.stress?.let {
+                        Metric(
+                            value = it.level.toString(),
+                            label = stringResource(R.string.metric_stress),
+                        )
+                    }
+                }
+            }
+
             // The watch's own clock, as the app can best see it. A zero above means
             // "nothing recorded under today's date", which happens both when the watch
             // was not worn and when its calendar has drifted off the phone's — and those

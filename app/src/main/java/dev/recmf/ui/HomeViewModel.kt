@@ -24,6 +24,8 @@ import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
 import dev.recmf.service.WatchService
 import dev.recmf.service.WeatherProblem
+import dev.recmf.protocol.Spo2Sample
+import dev.recmf.protocol.StressSample
 import dev.recmf.service.WatchStatus
 import dev.recmf.service.WatchdogWorker
 import dev.recmf.weather.WeatherClient
@@ -45,6 +47,8 @@ data class HomeUiState(
     val stepsToday: Int = 0,
     val latestHeartRate: HeartRateSampleEntity? = null,
     val weather: WeatherStatus = WeatherStatus(),
+    val spo2: Spo2Sample? = null,
+    val stress: StressSample? = null,
 )
 
 /** How the search for a place is going. */
@@ -65,6 +69,17 @@ data class WatchInfo(
     val lastRecordCount: Int? = null,
     /** When the watch last finished answering, new data or not. */
     val lastExchangeAtMillis: Long? = null,
+)
+
+/**
+ * The tail of [HomeUiState], bundled only because `combine` takes five flows and the
+ * state needs more than five sources. Not a concept — just the overflow.
+ */
+private data class Extras(
+    val heartRate: HeartRateSampleEntity?,
+    val weather: WeatherStatus,
+    val spo2: Spo2Sample?,
+    val stress: StressSample?,
 )
 
 /** What has become of the forecast, so the card can say rather than sit blank. */
@@ -119,9 +134,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // Bound at construction, so a screen left open across midnight keeps counting
         // into yesterday until it is recreated.
         dao.stepsSince(startOfToday()),
-        combine(dao.latestHeartRate(), weatherStatus, ::Pair),
-    ) { connection, settings, watch, steps, (heartRate, weather) ->
-        HomeUiState(connection, settings, watch, steps, heartRate, weather)
+        combine(
+            dao.latestHeartRate(),
+            weatherStatus,
+            WatchStatus.spo2,
+            WatchStatus.stress,
+            ::Extras,
+        ),
+    ) { connection, settings, watch, steps, extras ->
+        HomeUiState(
+            connection = connection,
+            settings = settings,
+            watch = watch,
+            stepsToday = steps,
+            latestHeartRate = extras.heartRate,
+            weather = extras.weather,
+            spo2 = extras.spo2,
+            stress = extras.stress,
+        )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
 
     val watchPreferences: StateFlow<WatchPreferences> = settingsStore.watchPreferences

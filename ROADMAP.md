@@ -14,20 +14,25 @@ but because without them a watch cannot be configured at all once Nothing X is u
   (firmware 1.0.0.73).
 - Activity and battery readout, foreground service, reconnect, Health Connect writing.
 - Phone notifications, with screen-off-only delivery.
-- Automatic refresh on a chosen interval.
+- Automatic refresh on a chosen interval, and a background refresh that survives Doze.
 - An in-app protocol log. Keep using it: every phase below is verified by reading it.
 
-Verified on hardware so far: pairing, activity and heart rate, and continuous heart-rate
-monitoring — the setting that turned out to be why heart rate never arrived.
+Verified on hardware: pairing, activity and heart rate, continuous heart-rate monitoring —
+the setting that turned out to be why heart rate never arrived — and the weather push.
 
-## Phase 1 — Watch settings *(in progress)*
+## Phase 1 — Watch settings *(done, except read-back)*
 
 The blocker. All of it is one command each, and most are two or three bytes.
 
-Done: continuous heart rate, all-day SpO₂, stress monitoring, raise-to-wake, clock
-format, units, daily goals. Remaining: the alert thresholds (the payload builder is
-written and tested, it needs a UI), the stand and drink reminders, do not disturb, watch
-language, and the visible sport list.
+Built: continuous heart rate, all-day SpO₂, stress monitoring, raise-to-wake, clock
+format, units, daily goals, the alert thresholds, the stand and drink reminders with their
+quiet hours, and the visible sport list.
+
+Dropped rather than left open: **do not disturb** has an opcode but no known payload, and
+Gadgetbridge does not implement it either — inventing bytes to send a watch is not a guess
+worth making. **Watch language** is sent as a locale string that Gadgetbridge records the
+watch as ignoring, and a control that does nothing is worse than no control. Both can be
+set on the watch itself.
 
 | Setting | Command | Payload |
 |---|---|---|
@@ -45,35 +50,67 @@ language, and the visible sport list.
 | Do not disturb | `DO_NOT_DISTURB` | window |
 | Visible sport types | `SPORTS_SET` | ordered list |
 
-Read-back exists for some (`*_GET`), so the UI can show what the watch actually holds
-rather than what the phone last sent — worth doing, because a setting that silently failed
-to apply is worse than one that is missing.
+**Still open: read-back.** `*_GET` exists for some of these, and reCMF uses none of it, so
+the app cannot show what the watch actually holds — only what the phone last sent. That
+gap is why settings are now sent only once the user has touched them: an app that has
+never read a setting has no business overwriting it. Worth closing, because a setting that
+silently failed to apply is worse than one that is missing.
 
-## Phase 2 — Weather
+## Phase 2 — Weather *(done)*
 
 Moved forward from the transfers phase, because it does not belong there: `WEATHER_SET_1`
 is a single command with a fixed 199-byte payload, not a chunked upload. The payload
 builder is written and tested — today plus six days, twenty-four hours, a place name and a
 week of sun times.
 
-What remains is a source. reCMF has none, and this is the first thing it would fetch from
-outside the phone, so the choice matters:
+The source is Open-Meteo, chosen on two rules that held:
 
 - **A place name, not a location permission.** The user types a city, it is resolved once
   to coordinates, and those are stored. No GPS, no background location, and the app keeps
   the `neverForLocation` flag it declares on Bluetooth scanning.
 - **A provider with no account and no key**, queried for one city at a time.
 
-Then it is a periodic push to the watch, on the same timer as everything else.
+Two intervals, deliberately separate: the provider is asked at most every thirty minutes,
+and the watch is handed whatever snapshot we hold on every refresh and every connect. They
+used to be one, which meant reconnecting inside that half hour sent the watch nothing.
 
-## Phase 3 — The rest of the health data
+Gadgetbridge takes weather from a companion app over a broadcast instead, and reCMF could
+register the same receiver to accept BreezyWeather's. Not built: it is a second source for
+a problem the first one solves, and the failure it was proposed to work around turned out
+to be scheduling, not parsing.
+
+## Phase 3 — The rest of the health data *(next)*
 
 Steps and heart rate reach Health Connect today. Gadgetbridge parses the rest and reCMF
 does not yet: `SLEEP_DATA` with its stages, `SPO2`, `STRESS`, `HEART_RATE_RESTING`,
 `WORKOUT_SUMMARY` and `WORKOUT_GPS`.
 
-Sleep is the one worth doing first: it is the reason most people open a watch app in the
-morning, and Gadgetbridge's own Health Connect export does not cover it.
+These almost certainly arrive already. `ACTIVITY_FETCH_2` means "everything you recorded",
+and Gadgetbridge parses all of the above from that same fetch. reCMF has the opcodes in its
+table but no branch for them in `onMessage`, so they fall through to `else -> Unit` — and
+because the opcode *is* known, they do not even appear in the log as unknown. The first
+step is therefore to log a known command that nothing handles, which costs nothing and
+settles whether the data is there.
+
+Order, easiest and most certain first:
+
+1. **SpO₂** and **stress** — records of 8 bytes, little-endian, `timestamp:int` then
+   `value:int`. The size is self-checking and the layout is unit-testable without a watch.
+2. **Sleep** — a session header (`start:int`, `wakeup:int`, 10 metadata bytes nobody has
+   identified) followed by stages of 8 bytes (`timestamp:int`, `duration:short`,
+   `stage:short`). Worth doing early: it is the reason most people open a watch app in the
+   morning, and Gadgetbridge's own Health Connect export does not cover it.
+3. **Resting heart rate**.
+4. **Workouts and their GPS tracks** — last, and the one place where a captured
+   Gadgetbridge log of real bytes is genuinely needed rather than a precaution.
+
+Health Connect has record types for sleep, SpO₂ and resting heart rate, so all three go
+there as well as into the app.
+
+**The two tabs land here**, not after: Health for the metrics, Device for connection,
+watch settings, weather and the log. Splitting earlier would mean splitting one card away
+from six; splitting once sleep and SpO₂ arrive is what makes the single scroll stop
+working.
 
 ## Phase 4 — Alarms, contacts, find
 

@@ -21,7 +21,13 @@ import java.nio.charset.StandardCharsets
  */
 object CmfParsers {
     const val ACTIVITY_RECORD_SIZE: Int = 32
-    const val HEART_RATE_RECORD_SIZE: Int = 8
+
+    /**
+     * Heart rate, SpO2 and stress all arrive as this: a timestamp and one value, in eight
+     * little-endian bytes.
+     */
+    const val PAIR_RECORD_SIZE: Int = 8
+
 
     /**
      * `ACTIVITY_DATA`: a run of 32-byte records — timestamp, steps, distance, calories,
@@ -48,14 +54,34 @@ object CmfParsers {
     }
 
     /** `HEART_RATE_MANUAL_AUTO` / `HEART_RATE_WORKOUT`: 8-byte timestamp+bpm pairs. */
-    fun parseHeartRate(payload: ByteArray): List<HeartRateSample> {
-        if (payload.isEmpty() || payload.size % HEART_RATE_RECORD_SIZE != 0) return emptyList()
+    fun parseHeartRate(payload: ByteArray): List<HeartRateSample> =
+        parsePairs(payload) { timestamp, value -> HeartRateSample(timestamp, value) }
+
+    /**
+     * `SPO2`: 8-byte timestamp+percentage pairs, the same shape as the heart-rate records.
+     */
+    fun parseSpo2(payload: ByteArray): List<Spo2Sample> =
+        parsePairs(payload) { timestamp, value -> Spo2Sample(timestamp, value) }
+
+    /** `STRESS`: 8-byte timestamp+level pairs, on the watch's own 0-100 scale. */
+    fun parseStress(payload: ByteArray): List<StressSample> =
+        parsePairs(payload) { timestamp, value -> StressSample(timestamp, value) }
+
+    /**
+     * The watch's common record shape: a little-endian epoch second, then a value.
+     *
+     * A payload that is not a whole number of records is rejected outright rather than
+     * read up to the last complete one — a partial record means the layout is not what we
+     * think it is, and reading the prefix anyway would turn that into plausible garbage.
+     */
+    private inline fun <T> parsePairs(payload: ByteArray, make: (Long, Int) -> T): List<T> {
+        if (payload.isEmpty() || payload.size % PAIR_RECORD_SIZE != 0) return emptyList()
 
         val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
-        val out = ArrayList<HeartRateSample>(payload.size / HEART_RATE_RECORD_SIZE)
+        val out = ArrayList<T>(payload.size / PAIR_RECORD_SIZE)
 
-        while (buf.remaining() >= HEART_RATE_RECORD_SIZE) {
-            out.add(HeartRateSample(timestamp = buf.int.toUnsignedLong(), bpm = buf.int))
+        while (buf.remaining() >= PAIR_RECORD_SIZE) {
+            out.add(make(buf.int.toUnsignedLong(), buf.int))
         }
 
         return out

@@ -99,4 +99,6 @@
     <string name="background_work">Background updates are restricted</string>
     <string name="background_work_explainer">Android is allowed to defer reCMF\'s scheduled work while the phone is idle, which is why the forecast and the step count can go hours without refreshing. Allowing unrestricted background use fixes that; reCMF still only wakes on its refresh interval.</string>
     <string name="action_allow_background">Allow background use</string>
+    <string name="metric_spo2">blood oxygen</string>
+    <string name="metric_stress">stress</string>
 </resources>

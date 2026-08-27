@@ -578,6 +578,19 @@ class WatchService : LifecycleService() {
             CmfCommand.HEART_RATE_MANUAL_AUTO, CmfCommand.HEART_RATE_WORKOUT ->
                 ingest.storeHeartRate(CmfParsers.parseHeartRate(message.payload))
 
+            // Kept in memory rather than stored: enough to show the newest reading and to
+            // prove the data is arriving. Persistence and Health Connect follow once the
+            // shape has been seen against a real watch rather than only a unit test.
+            CmfCommand.SPO2 ->
+                CmfParsers.parseSpo2(message.payload)
+                    .lastOrNull { it.isValid }
+                    ?.let { WatchStatus.spo2.value = it }
+
+            CmfCommand.STRESS ->
+                CmfParsers.parseStress(message.payload)
+                    .lastOrNull { it.isValid }
+                    ?.let { WatchStatus.stress.value = it }
+
             CmfCommand.BATTERY ->
                 CmfParsers.parseBattery(message.payload)?.let { WatchStatus.battery.value = it }
 
@@ -587,7 +600,18 @@ class WatchService : LifecycleService() {
             CmfCommand.SERIAL_NUMBER_RET ->
                 WatchStatus.serialNumber.value = CmfParsers.parseSerialNumber(message.payload)
 
-            else -> Unit
+            // A command reCMF knows the name of but has no use for yet — sleep, SpO2,
+            // stress, workouts. These arrive from the same fetch as the step counts and
+            // used to be dropped here in silence: an unknown opcode at least shows up in
+            // the log as unknown, whereas a known one with no branch showed up as nothing
+            // at all. Recording them is how we find out what the watch is already sending.
+            else -> ProtocolLog.dropped(
+                reason = "no handler yet",
+                cmd = message.cmd,
+                cmd1 = message.cmd.cmd1,
+                cmd2 = message.cmd.cmd2,
+                payload = message.payload,
+            )
         }
     }
 

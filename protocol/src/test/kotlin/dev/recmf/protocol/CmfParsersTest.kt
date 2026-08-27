@@ -16,9 +16,62 @@ class CmfParsersTest {
             .array()
 
     private fun heartRateRecord(ts: Int, bpm: Int): ByteArray =
-        ByteBuffer.allocate(CmfParsers.HEART_RATE_RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+        ByteBuffer.allocate(CmfParsers.PAIR_RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
             .putInt(ts).putInt(bpm)
             .array()
+
+    private fun pairRecord(ts: Int, value: Int): ByteArray =
+        ByteBuffer.allocate(CmfParsers.PAIR_RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(ts).putInt(value)
+            .array()
+
+    @Test
+    fun `spo2 records decode in order`() {
+        val payload = pairRecord(1_700_000_000, 97) + pairRecord(1_700_003_600, 95)
+
+        assertEquals(
+            listOf(Spo2Sample(1_700_000_000, 97), Spo2Sample(1_700_003_600, 95)),
+            CmfParsers.parseSpo2(payload),
+        )
+    }
+
+    @Test
+    fun `stress records decode in order`() {
+        val payload = pairRecord(1_700_000_000, 34) + pairRecord(1_700_003_600, 71)
+
+        assertEquals(
+            listOf(StressSample(1_700_000_000, 34), StressSample(1_700_003_600, 71)),
+            CmfParsers.parseStress(payload),
+        )
+    }
+
+    @Test
+    fun `a partial spo2 record is refused rather than half-read`() {
+        val payload = pairRecord(1_700_000_000, 97) + byteArrayOf(1, 2, 3)
+
+        assertTrue(CmfParsers.parseSpo2(payload).isEmpty())
+    }
+
+    @Test
+    fun `a zero reading is carried but not counted as valid`() {
+        // The watch reports zero for a measurement it could not take. Dropping it at the
+        // parser would hide a wrist-off gap; treating it as a reading would invent one.
+        val spo2 = CmfParsers.parseSpo2(pairRecord(1_700_000_000, 0)).single()
+        val stress = CmfParsers.parseStress(pairRecord(1_700_000_000, 0)).single()
+
+        assertEquals(0, spo2.percent)
+        assertFalse(spo2.isValid)
+        assertFalse(stress.isValid)
+    }
+
+    @Test
+    fun `paired records keep timestamps past 2038 in the future`() {
+        // The activity records have their own loop; this covers the one heart rate, SpO2
+        // and stress now share, where a signed read would land the sample in 1901.
+        val sample = CmfParsers.parseSpo2(pairRecord(Int.MIN_VALUE, 96)).single()
+
+        assertEquals(2_147_483_648L, sample.timestamp)
+    }
 
     @Test
     fun `activity records decode in order`() {

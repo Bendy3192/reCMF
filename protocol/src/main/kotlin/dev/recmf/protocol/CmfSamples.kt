@@ -40,6 +40,42 @@ data class HeartRateSample(
     }
 }
 
+/**
+ * A blood-oxygen reading, as a percentage.
+ *
+ * The watch records these all day when the SpO2 monitoring setting is on, and on demand
+ * otherwise. A zero is the watch reporting that it could not get a reading, not a
+ * measurement of zero saturation.
+ */
+data class Spo2Sample(
+    val timestamp: Long,
+    val percent: Int,
+) {
+    val isValid: Boolean get() = percent in VALID_RANGE
+
+    companion object {
+        val VALID_RANGE = 50..100
+    }
+}
+
+/**
+ * A stress reading on the watch's own 0-100 scale.
+ *
+ * The scale is the watch's, not a physical unit, so reCMF passes it through rather than
+ * converting it into anything that would imply more precision than it has. Zero means no
+ * reading was taken.
+ */
+data class StressSample(
+    val timestamp: Long,
+    val level: Int,
+) {
+    val isValid: Boolean get() = level in VALID_RANGE
+
+    companion object {
+        val VALID_RANGE = 1..100
+    }
+}
+
 data class BatteryStatus(
     val levelPercent: Int,
     val isCharging: Boolean,

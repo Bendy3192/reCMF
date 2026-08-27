@@ -98,4 +98,6 @@
     <string name="background_work">Работа в фоне ограничена</string>
     <string name="background_work_explainer">Android может откладывать фоновые задачи reCMF, пока телефон простаивает — из-за этого прогноз и шаги обновляются раз в несколько часов. Разрешение на работу в фоне это снимает; reCMF всё так же просыпается только по своему интервалу обновления.</string>
     <string name="action_allow_background">Разрешить работу в фоне</string>
+    <string name="metric_spo2">кислород</string>
+    <string name="metric_stress">стресс</string>
 </resources>
