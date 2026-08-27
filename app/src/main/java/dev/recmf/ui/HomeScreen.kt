@@ -1079,7 +1079,7 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
  * split waited until there was more than one metric to put on the first — a tab holding a
  * single card is a worse arrangement than no tabs at all.
  */
-private enum class HomeTab(@StringRes val labelRes: Int) {
+private enum class HomeTab(@param:StringRes val labelRes: Int) {
     HEALTH(R.string.tab_health),
     DEVICE(R.string.tab_device),
 }
