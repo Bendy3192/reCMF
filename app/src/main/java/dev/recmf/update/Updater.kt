@@ -42,8 +42,10 @@ sealed interface UpdateState {
 class Updater(private val context: Context) {
 
     suspend fun check(currentVersionCode: Int): UpdateState = withContext(Dispatchers.IO) {
-        val body = get(UpdateCheck.LATEST_RELEASE_URL)
-            ?: return@withContext UpdateState.Failed("could not reach GitHub")
+        val body = when (val result = get(UpdateCheck.LATEST_RELEASE_URL)) {
+            is Fetched.Body -> result.text
+            is Fetched.Problem -> return@withContext UpdateState.Failed(result.description)
+        }
 
         val update = runCatching { UpdateCheck.parse(body, currentVersionCode) }
             .onFailure { Log.w(TAG, "Could not read the release", it) }
@@ -79,6 +81,7 @@ class Updater(private val context: Context) {
                     instanceFollowRedirects = true
                     connectTimeout = TIMEOUT_MILLIS
                     readTimeout = TIMEOUT_MILLIS
+                    setRequestProperty("User-Agent", USER_AGENT)
                 }
 
                 try {
@@ -126,24 +129,45 @@ class Updater(private val context: Context) {
         }
     }
 
-    private fun get(url: String): String? {
+    /** Either the body, or something specific enough to act on. */
+    private sealed interface Fetched {
+        data class Body(val text: String) : Fetched
+        data class Problem(val description: String) : Fetched
+    }
+
+    /**
+     * Every failure says what it was.
+     *
+     * The first version reported "could not reach GitHub" for a refusal, a rate limit, a
+     * missing release and a dead network alike — the same unfalsifiable message that has
+     * cost a round of guessing every time it has appeared in this app.
+     */
+    private fun get(url: String): Fetched {
         var connection: HttpURLConnection? = null
         return try {
             connection = (URL(url).openConnection() as HttpURLConnection).apply {
                 connectTimeout = TIMEOUT_MILLIS
                 readTimeout = TIMEOUT_MILLIS
                 setRequestProperty("Accept", "application/vnd.github+json")
+                // Required: GitHub's API refuses a request without one, and what
+                // HttpURLConnection sends by default is not always accepted.
+                setRequestProperty("User-Agent", USER_AGENT)
             }
 
-            if (connection.responseCode !in 200..299) {
-                Log.i(TAG, "Release check answered ${connection.responseCode}")
-                null
-            } else {
-                connection.inputStream.bufferedReader().use { it.readText() }
+            when (val code = connection.responseCode) {
+                in 200..299 ->
+                    Fetched.Body(connection.inputStream.bufferedReader().use { it.readText() })
+
+                404 -> Fetched.Problem("no release published yet")
+                403, 429 -> Fetched.Problem("GitHub refused the request ($code)")
+                else -> {
+                    Log.i(TAG, "Release check answered $code")
+                    Fetched.Problem("GitHub answered $code")
+                }
             }
         } catch (e: IOException) {
-            Log.i(TAG, "Release check could not be made: ${e.message}")
-            null
+            Log.i(TAG, "Release check could not be made", e)
+            Fetched.Problem(e.message ?: "no network")
         } finally {
             connection?.disconnect()
         }
@@ -152,6 +176,7 @@ class Updater(private val context: Context) {
     private companion object {
         const val TAG = "Updater"
         const val TIMEOUT_MILLIS = 30_000
+        const val USER_AGENT = "reCMF"
         const val BUFFER = 64 * 1024
         const val APK_NAME = "recmf"
     }

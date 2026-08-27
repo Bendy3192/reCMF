@@ -179,10 +179,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          # Copied rather than passed with gh's "#label" syntax, which sets a display
+          # label and leaves the asset named app-debug.apk.
+          cp "$(ls app/build/outputs/apk/debug/*.apk | head -1)" recmf.apk
           # The version code is the run number, so the tag is the version and the app can
           # compare without downloading anything.
-          gh release create "build-${{ github.run_number }}" "$apk#recmf.apk" \
+          gh release create "build-${{ github.run_number }}" recmf.apk \
             --title "build ${{ github.run_number }}" \
             --notes "Automatic build of ${{ github.sha }}." \
             --latest
