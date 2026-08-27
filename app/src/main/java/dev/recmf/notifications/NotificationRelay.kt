@@ -41,6 +41,16 @@ object OutgoingNotifications {
  */
 class NotificationRelay : NotificationListenerService() {
 
+    /**
+     * Keys already sent, so a notification that updates itself buzzes the wrist once.
+     *
+     * Calls are why this exists: a ringing call reposts under the same key as it rings
+     * and again when it is answered, and without this the watch would buzz for every
+     * repost. Entries are dropped when the notification goes away, with a cap in case a
+     * removal is missed — this must not grow for as long as the phone is on.
+     */
+    private val forwarded = LinkedHashSet<String>()
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!shouldForward(sbn)) return
 
@@ -52,30 +62,60 @@ class NotificationRelay : NotificationListenerService() {
         // in a moment; forwarding it just buzzes the wrist for nothing.
         if (title.isBlank() && body.isBlank()) return
 
+        if (!remember(sbn.key)) return
+
+        val isCall = sbn.notification.category == Notification.CATEGORY_CALL
+
         OutgoingNotifications.offer(
             WatchNotification(
-                icon = NotificationIcon.forPackage(sbn.packageName),
+                icon = if (isCall) NotificationIcon.TRUECALLER else NotificationIcon.forPackage(sbn.packageName),
                 title = title.ifBlank { sbn.packageName },
                 body = body,
                 whenEpochSeconds = (if (sbn.postTime > 0) sbn.postTime else System.currentTimeMillis()) / 1000,
+                isCall = isCall,
             ),
         )
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        forwarded.remove(sbn.key)
+    }
+
+    /** @return false if this key has already been sent. */
+    private fun remember(key: String): Boolean {
+        if (!forwarded.add(key)) return false
+        while (forwarded.size > MAX_REMEMBERED) {
+            forwarded.remove(forwarded.first())
+        }
+        return true
     }
 
     /**
      * Filters out the notifications that would make the watch useless to wear: ongoing
      * ones (media players, downloads, our own foreground service), the silent
      * housekeeping ones, and group summaries that duplicate a message already forwarded.
+     *
+     * Calls are the exception, and were being caught twice over: a ringing call is an
+     * ongoing notification and is not clearable, so the two filters that keep media
+     * players off the wrist were also keeping every incoming call off it. Which is the
+     * one notification whose whole value is arriving before the phone is picked up.
      */
     private fun shouldForward(sbn: StatusBarNotification): Boolean {
         if (sbn.packageName == packageName) return false
-        if (!sbn.isClearable) return false
 
         val notification = sbn.notification
+        if (notification.category == Notification.CATEGORY_CALL) return true
+
+        if (!sbn.isClearable) return false
         if (notification.flags and Notification.FLAG_ONGOING_EVENT != 0) return false
         if (notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return false
         if (notification.flags and Notification.FLAG_LOCAL_ONLY != 0) return false
 
         return true
+    }
+
+    private companion object {
+        /** A phone does not hold this many live notifications; the cap is for a missed removal. */
+        const val MAX_REMEMBERED = 200
     }
 }

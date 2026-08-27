@@ -404,7 +404,13 @@ class WatchService : LifecycleService() {
 
                 // With the screen on the user is already looking at the phone, and the
                 // watch buzzing for what they just read is noise.
-                if (prefs.notifyOnlyWhenScreenOff && isScreenOn()) return@collect
+                //
+                // A ringing phone is the exception, and it is not a small one: an incoming
+                // call turns the screen on by itself, so this rule would have silenced
+                // exactly the notification the wrist is for.
+                if (prefs.notifyOnlyWhenScreenOff && isScreenOn() && !notification.isCall) {
+                    return@collect
+                }
 
                 connection.send(CmfCommand.APP_NOTIFICATION, notification.toPayload())
             }

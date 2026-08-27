@@ -1,6 +1,7 @@
 package dev.recmf.notifications
 
 import dev.recmf.protocol.truncateToUtf8Bytes
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -61,5 +62,15 @@ class WatchNotificationTest {
         assertEquals(NotificationIcon.TELEGRAM, NotificationIcon.forPackage("org.telegram.messenger"))
         assertEquals(NotificationIcon.WHATSAPP, NotificationIcon.forPackage("com.whatsapp"))
         assertEquals(NotificationIcon.UNKNOWN, NotificationIcon.forPackage("com.example.something"))
+    }
+
+    @Test
+    fun `marking a notification as a call does not change the bytes`() {
+        // isCall decides whether the notification may be delivered while the screen is
+        // on. The watch is told the same thing either way, and this pins that: a delivery
+        // rule leaking into the wire format would be a bug that only shows on a watch.
+        val plain = notification()
+
+        assertArrayEquals(plain.toPayload(), plain.copy(isCall = true).toPayload())
     }
 }

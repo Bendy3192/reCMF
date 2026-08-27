@@ -77,6 +77,14 @@ data class WatchNotification(
     val title: String,
     val body: String,
     val whenEpochSeconds: Long,
+    /**
+     * Whether this is a ringing phone, which changes when it may be delivered.
+     *
+     * Not part of the payload — the watch is told the same bytes either way. It exists
+     * because "only when the screen is off" is a rule about the user looking at the
+     * phone, and an incoming call turns the screen on by itself.
+     */
+    val isCall: Boolean = false,
 ) {
     /**
      * ```
