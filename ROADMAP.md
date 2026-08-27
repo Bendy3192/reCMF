@@ -20,7 +20,7 @@ but because without them a watch cannot be configured at all once Nothing X is u
 Verified on hardware: pairing, activity and heart rate, continuous heart-rate monitoring —
 the setting that turned out to be why heart rate never arrived — and the weather push.
 
-## Phase 1 — Watch settings *(done, except read-back)*
+## Phase 1 — Watch settings *(done, read-back mostly done)*
 
 The blocker. All of it is one command each, and most are two or three bytes.
 
@@ -50,11 +50,28 @@ set on the watch itself.
 | Do not disturb | `DO_NOT_DISTURB` | window |
 | Visible sport types | `SPORTS_SET` | ordered list |
 
-**Still open: read-back.** `*_GET` exists for some of these, and reCMF uses none of it, so
-the app cannot show what the watch actually holds — only what the phone last sent. That
-gap is why settings are now sent only once the user has touched them: an app that has
-never read a setting has no business overwriting it. Worth closing, because a setting that
-silently failed to apply is worse than one that is missing.
+**Read-back works, and the rule for it is the same everywhere.** Send the `0x0002` half of
+a pair and the watch answers under the matching `0x0001`. That held for every setting it
+was tried on — serial number, alarms, both reminders, raise-to-wake, clock format, the
+sport list, Do Not Disturb, goals and the battery — so it is the rule here, not a trick
+that happens to work on one command.
+
+What comes back is *reported* always and *taken* only when the user has not configured
+that group themselves. Their choice outranks the watch's current state, and a read-back
+that overwrote it would be the overwriting it exists to prevent. The log says which of the
+two happened, because "taken" and "already yours" look identical on the settings screen
+afterwards.
+
+Two exceptions:
+
+- **Goals.** Only the step goal is taken. The reply is five little-endian numbers, and one
+  capture read 10000, 4000, 400, 720, 30 where reCMF had written 10000 steps, 5000 metres
+  and 300 calories. The steps match exactly; nothing else does, so the remaining four are
+  logged unnamed rather than guessed at. The write is a different shape again — ten
+  big-endian bytes the watch accepts — so this is the one command whose two directions are
+  not symmetric.
+- **Do Not Disturb** is read and reported only. reCMF does not write it, so there is no
+  preference for it to disagree with.
 
 ## Phase 2 — Weather *(done)*
 
@@ -161,14 +178,11 @@ watch — so it comes last and stays behind a warning.
 Bytes seen on a real watch that nothing here explains yet. Written down so the next capture
 can be compared against them rather than starting over.
 
-- **`ffff/0051`, one byte.** Arrives once per connection, in the middle of the settings
-  burst, unasked. The one capture of it reads `0x38` — 56. Not the battery: the watch read
-  96% at the time.
-- **Where the battery level actually comes from.** The app shows the right number, so
-  something answers — but a capture covering two full refreshes contains no inbound
-  `BATTERY` at all. Either it arrives outside a refresh, or the displayed value is simply
-  the last one and is quietly ageing. `BATTERY_GET` now goes out alongside the old request
-  to find out which.
+- **`ffff/0051`, one byte.** Reads `0x38` in both captures of it, and both times it
+  followed reCMF sending `BATTERY` — the answer opcode — as though it were a request. The
+  standing guess is that it is the watch saying it did not understand, with a code. That
+  request is gone now, so if the guess is right this frame stops appearing, and if it
+  keeps arriving it was never about the battery.
 - **`ffff/a055`, 28 bytes.** `01 05 06 07` and then five-byte groups: 274, 273, 275, 276,
   277, 280. A stable list of something the watch supports; the numbers do not move between
   connections.

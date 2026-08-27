@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
@@ -172,21 +173,63 @@ class SettingsStore(private val context: Context) {
      *   the watch. Settings never touched here stay the watch's own business.
      */
     /**
-     * Takes the alarms the watch reported, without treating that as the user asking for
-     * them.
+     * Takes what the watch reported, without treating that as the user asking for it.
      *
      * Reading a setting and choosing one are different things, and only the second earns a
      * place in [WatchPreferences.configured]. Adopting silently would turn the first
      * connection into a write-back of what was just read, which is how a read-back turns
      * into the overwriting it exists to prevent. A group the user has already configured
      * is left alone: their choice outranks the watch's current state.
+     *
+     * @return whether the value was taken, so the caller can say which of the two happened
+     *   rather than logging a change that did not occur.
      */
-    suspend fun adoptAlarmsFromWatch(alarms: List<CmfAlarm>) {
-        val current = watchPreferences.first()
-        if (WatchSetting.ALARMS in current.configured) return
+    suspend fun adoptFromWatch(
+        setting: WatchSetting,
+        write: (MutablePreferences) -> Unit,
+    ): Boolean {
+        if (setting in watchPreferences.first().configured) return false
 
-        context.dataStore.edit { it[KEY_ALARMS] = encodeAlarms(alarms) }
+        context.dataStore.edit(write)
+        return true
     }
+
+    suspend fun adoptAlarmsFromWatch(alarms: List<CmfAlarm>): Boolean =
+        adoptFromWatch(WatchSetting.ALARMS) { it[KEY_ALARMS] = encodeAlarms(alarms) }
+
+    suspend fun adoptRaiseToWakeFromWatch(enabled: Boolean): Boolean =
+        adoptFromWatch(WatchSetting.RAISE_TO_WAKE) { it[KEY_RAISE_TO_WAKE] = enabled }
+
+    suspend fun adoptTimeFormatFromWatch(use24Hour: Boolean): Boolean =
+        adoptFromWatch(WatchSetting.TIME_FORMAT) { it[KEY_24_HOUR] = use24Hour }
+
+    suspend fun adoptSportTypesFromWatch(types: List<CmfActivityType>): Boolean {
+        // An empty menu is not something the watch reports, and storing it would leave the
+        // list looking configured-but-blank. Nothing read, nothing taken.
+        if (types.isEmpty()) return false
+
+        return adoptFromWatch(WatchSetting.SPORTS) { prefs ->
+            prefs[KEY_SPORT_TYPES] = types.map { it.name }.toSet()
+        }
+    }
+
+    suspend fun adoptStepsGoalFromWatch(steps: Int): Boolean {
+        if (steps <= 0) return false
+
+        return adoptFromWatch(WatchSetting.GOALS) { it[KEY_STEPS_GOAL] = steps }
+    }
+
+    suspend fun adoptStandReminderFromWatch(enabled: Boolean, intervalMinutes: Int): Boolean =
+        adoptFromWatch(WatchSetting.STAND_REMINDER) { prefs ->
+            prefs[KEY_STAND_REMINDER] = enabled
+            if (intervalMinutes > 0) prefs[KEY_STAND_INTERVAL] = intervalMinutes
+        }
+
+    suspend fun adoptDrinkReminderFromWatch(enabled: Boolean, intervalMinutes: Int): Boolean =
+        adoptFromWatch(WatchSetting.DRINK_REMINDER) { prefs ->
+            prefs[KEY_DRINK_REMINDER] = enabled
+            if (intervalMinutes > 0) prefs[KEY_DRINK_INTERVAL] = intervalMinutes
+        }
 
     suspend fun updateWatchPreferences(
         setting: WatchSetting,

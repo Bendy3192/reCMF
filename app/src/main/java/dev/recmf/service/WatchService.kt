@@ -402,6 +402,33 @@ class WatchService : LifecycleService() {
         lastSentNowPlaying = playing
     }
 
+    /**
+     * Reports one setting the watch answered with, and takes it if it is ours to take.
+     *
+     * The log says which of the two happened. "Taken" and "the user has already chosen
+     * this, so it stands" look identical in the settings screen afterwards, and telling
+     * them apart is the difference between a read-back that works and one that silently
+     * does nothing.
+     *
+     * @param adopt returns whether the value was stored — false when the user has
+     *   configured that group themselves, or when there is no preference for it at all.
+     */
+    private suspend fun <T> readBack(
+        value: T?,
+        describe: (T) -> String,
+        adopt: suspend (T) -> Boolean,
+    ) {
+        if (value == null) {
+            ProtocolLog.note("Unreadable reply from the watch")
+            return
+        }
+
+        val taken = adopt(value)
+        ProtocolLog.note(describe(value) + if (taken) " (taken)" else "")
+    }
+
+    private fun onOff(enabled: Boolean): String = if (enabled) "on" else "off"
+
     /** Wall-clock time of a watch timestamp, for log lines a human has to check. */
     private fun clock(epochSeconds: Long): String =
         java.time.format.DateTimeFormatter.ofPattern("HH:mm")
@@ -586,13 +613,10 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.STANDING_REMINDER_GET)
         connection.send(CmfCommand.WATER_REMINDER_GET)
 
-        // The same question put to every other setting reCMF writes. These five are a
-        // prediction, not a reading: nothing documents them, but the `0x0002` half of a
-        // pair has answered under its `0x0001` every single time it has been tried here.
-        // Whatever comes back lands in the log with its bytes, which is how the four
-        // above were worked out, and is what the parsing in the next round will be
-        // written against. Nothing is stored from them yet — a reply read wrongly would
-        // overwrite goals the wearer set, and a guess is not worth that.
+        // The same question put to every other setting reCMF writes. All five were a
+        // prediction and all five answered: the `0x0002` half of a pair has been answered
+        // under its `0x0001` every time it has been tried on this watch. What comes back
+        // is parsed in the handler below.
         connection.send(CmfCommand.GOALS_GET)
         connection.send(CmfCommand.TIME_FORMAT_GET)
         connection.send(CmfCommand.WAKE_ON_WRIST_RAISE_GET)
@@ -817,30 +841,65 @@ class WatchService : LifecycleService() {
                 }
             }
 
-            // The reply to our GET, arriving under the SET opcode. Reported rather than
-            // adopted: reading a setting is one thing, and letting a read change what the
-            // phone will later write is another, which wants care about the difference
-            // between "the watch says so" and "the user asked for it".
-            // Answers to the probes above. Logged and not stored: the layouts are a
-            // guess until a capture says otherwise, and the bytes are already on the line
-            // above this note.
-            CmfCommand.GOALS_SET,
-            CmfCommand.TIME_FORMAT,
-            CmfCommand.WAKE_ON_WRIST_RAISE,
-            CmfCommand.SPORTS_SET,
-            CmfCommand.DO_NOT_DISTURB,
-            -> ProtocolLog.note("Read back from the watch: ${message.cmd.name}")
+            // The replies to the GETs, each arriving under its own SET opcode. Taken
+            // only where the user has not configured that group themselves — their
+            // choice outranks the watch's current state, and a read must never become
+            // the write-back it exists to prevent.
+            CmfCommand.WAKE_ON_WRIST_RAISE -> readBack(
+                value = CmfSettings.parseWakeOnWristRaise(message.payload),
+                describe = { "Raise to wake on the watch: " + onOff(it) },
+                adopt = { settings.adoptRaiseToWakeFromWatch(it) },
+            )
+
+            CmfCommand.TIME_FORMAT -> readBack(
+                value = CmfSettings.parseTimeFormat(message.payload),
+                describe = { "Clock on the watch: " + if (it) "24-hour" else "12-hour" },
+                adopt = { settings.adoptTimeFormatFromWatch(it) },
+            )
+
+            CmfCommand.SPORTS_SET -> readBack(
+                value = CmfSettings.parseSportTypes(message.payload),
+                describe = { "Sports on the watch: " + it.joinToString(", ") { type -> type.name } },
+                adopt = { settings.adoptSportTypesFromWatch(it) },
+            )
+
+            // Nothing here writes Do Not Disturb, so this is read and reported and that
+            // is all — there is no preference for it to disagree with.
+            CmfCommand.DO_NOT_DISTURB -> readBack(
+                value = CmfSettings.parseDoNotDisturb(message.payload),
+                describe = { "Do not disturb on the watch: " + onOff(it) },
+                adopt = { false },
+            )
+
+            // Only the step goal is taken. The other four numbers are read out but left
+            // unnamed: a capture read 4000, 400, 720 and 30 where reCMF had written 5000
+            // metres and 300 calories, so the layout is not the one this app writes, and
+            // guessing it would overwrite the wearer's own targets.
+            CmfCommand.GOALS_SET -> readBack(
+                value = CmfSettings.parseGoals(message.payload),
+                describe = {
+                    "Goals on the watch: ${it.steps} steps" +
+                        ", then " + it.unidentified.joinToString(", ") + " (unidentified)"
+                },
+                adopt = { settings.adoptStepsGoalFromWatch(it.steps) },
+            )
 
             CmfCommand.STANDING_REMINDER_SET, CmfCommand.WATER_REMINDER_SET -> {
-                val which = if (message.cmd == CmfCommand.STANDING_REMINDER_SET) "Stand" else "Drink"
-                val state = CmfSettings.parseReminder(message.payload)
-                ProtocolLog.note(
-                    if (state == null) {
-                        "$which reminder: unreadable reply"
-                    } else {
-                        "$which reminder on the watch: " +
-                            (if (state.enabled) "on" else "off") +
-                            ", every ${state.intervalMinutes} min"
+                val stand = message.cmd == CmfCommand.STANDING_REMINDER_SET
+                val which = if (stand) "Stand" else "Drink"
+
+                readBack(
+                    value = CmfSettings.parseReminder(message.payload),
+                    describe = {
+                        "$which reminder on the watch: ${onOff(it.enabled)}" +
+                            ", every ${it.intervalMinutes} min"
+                    },
+                    adopt = {
+                        if (stand) {
+                            settings.adoptStandReminderFromWatch(it.enabled, it.intervalMinutes)
+                        } else {
+                            settings.adoptDrinkReminderFromWatch(it.enabled, it.intervalMinutes)
+                        }
                     },
                 )
             }
@@ -966,17 +1025,11 @@ class WatchService : LifecycleService() {
             return
         }
 
-        // Both halves, on purpose, for one build.
-        //
-        // The level shown in the app is right, so something is answering — but a capture
-        // covering two whole refreshes contains no reply to this at all, which says the
-        // value arrives some other way and may simply be old. 0x005c/0x0002 is what the
-        // pattern predicts the question to be, so it goes out alongside the existing
-        // 0x0001 rather than instead of it: whichever produces an inbound BATTERY in the
-        // log is the real one, and asking twice costs one frame and cannot break a
-        // reading that already works.
+        // 0x005c/0x0002 is the question and BATTERY is the answer — confirmed: the watch
+        // replied `6000` to this, 96% and not charging, matching its own screen. The
+        // 0x0001 half was sent as a request for one build to settle which was which; it
+        // drew nothing, and is gone.
         connection.send(CmfCommand.BATTERY_GET)
-        connection.send(CmfCommand.BATTERY)
         connection.send(CmfCommand.ACTIVITY_FETCH_1, dev.recmf.protocol.CmfFrame.A5)
     }
 
