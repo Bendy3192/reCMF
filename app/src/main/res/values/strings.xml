@@ -111,6 +111,12 @@
     <string name="find_watch">Find the watch</string>
     <string name="find_watch_explainer">Makes the watch ring and vibrate, as long as it is in Bluetooth range.</string>
     <string name="action_find_watch">Ring the watch</string>
+
+    <string name="notification_channel_find_phone">Find the phone</string>
+    <string name="notification_channel_find_phone_description">Rings when you ask the watch to find your phone.</string>
+    <string name="find_phone_title">Your watch is looking for this phone</string>
+    <string name="find_phone_text">Tap to stop. It stops on its own after half a minute.</string>
+    <string name="find_phone_silence">Stop</string>
     <string name="protocol_log_title">Protocol log</string>
     <string name="alarms">Alarms</string>
     <string name="alarms_explainer">Shown as the watch reported them when it connected. The watch keeps exactly the list it is sent, so nothing goes to it until you change something here.</string>

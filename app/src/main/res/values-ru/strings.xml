@@ -112,6 +112,12 @@
     <string name="find_watch">Найти часы</string>
     <string name="find_watch_explainer">Часы зазвонят и завибрируют — если они в зоне действия Bluetooth.</string>
     <string name="action_find_watch">Позвонить на часы</string>
+
+    <string name="notification_channel_find_phone">Поиск телефона</string>
+    <string name="notification_channel_find_phone_description">Звонит, когда вы ищете телефон с часов.</string>
+    <string name="find_phone_title">Часы ищут этот телефон</string>
+    <string name="find_phone_text">Нажмите, чтобы выключить. Через полминуты замолчит сам.</string>
+    <string name="find_phone_silence">Хватит</string>
     <string name="protocol_log_title">Лог протокола</string>
     <string name="alarms">Будильники</string>
     <string name="alarms_explainer">Показаны так, как часы сообщили о них при подключении. Часы оставляют ровно тот список, который получили, поэтому на них ничего не уходит, пока вы здесь что-то не измените.</string>

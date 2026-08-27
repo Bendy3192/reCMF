@@ -16,6 +16,12 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!--
+        For find-phone. The tone plays on the alarm stream so a silent phone is still
+        findable, and the buzzing is for the case where even that is turned down.
+    -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!--
         Only for the weather forecast, and only for a place the user typed in. reCMF
         deliberately does not ask for location: a city name is enough for a watch face.
     -->

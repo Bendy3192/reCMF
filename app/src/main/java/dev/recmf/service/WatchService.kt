@@ -118,6 +118,7 @@ class WatchService : LifecycleService() {
     private var lastAppliedPreferences: WatchPreferences? = null
 
     private val media by lazy { MediaWatcher(this) }
+    private val ringer by lazy { PhoneRinger(this) }
 
     /** What the watch was last told is playing, so an unchanged track is not resent. */
     private var lastSentNowPlaying: NowPlaying? = null
@@ -171,6 +172,11 @@ class WatchService : LifecycleService() {
                 if (_status.value == ConnectionState.READY) connection.send(CmfCommand.FIND_WATCH)
             }
 
+            // From the notification the ringing itself posts. It has to come through the
+            // service rather than a receiver of its own because the ringer is the
+            // service's, and a second instance would silence nothing.
+            ACTION_STOP_RINGING -> ringer.stop()
+
             else -> lifecycleScope.launch { connectToPairedWatch() }
         }
 
@@ -195,6 +201,7 @@ class WatchService : LifecycleService() {
 
     override fun onDestroy() {
         media.stop()
+        ringer.stop()
         autoSyncJob?.cancel()
         connection.disconnect()
         bleScope.cancel()
@@ -815,9 +822,26 @@ class WatchService : LifecycleService() {
                 )
             }
 
-            // The watch answers our ring with one byte, and rings again when the wearer
-            // taps its own find-phone button. Nothing to do with it either way.
+            // The watch answering the ring we asked for, with one byte. Nothing to do
+            // with it — the wearer's own find-phone button arrives as FIND_PHONE below.
             CmfCommand.FIND_WATCH -> Unit
+
+            CmfCommand.FIND_PHONE -> {
+                // The layout is not documented anywhere and Gadgetbridge does not send
+                // this one, so it is read the way every other toggle in this protocol is
+                // shaped: one leading byte, zero for off. Anything else — including no
+                // payload at all — starts the ringing. The log line above this one
+                // carries the actual bytes, so a wrong guess is visible rather than
+                // mysterious, and being wrong costs a ring that the notification and the
+                // thirty-second timer both end.
+                if (message.payload.firstOrNull()?.toInt() == 0) {
+                    ProtocolLog.note("Watch ended the search")
+                    ringer.stop()
+                } else {
+                    ProtocolLog.note("Ringing this phone")
+                    ringer.start()
+                }
+            }
 
             CmfCommand.MUSIC_BUTTON -> {
                 val button = CmfMusic.parseButton(message.payload)
@@ -1008,6 +1032,7 @@ class WatchService : LifecycleService() {
         const val ACTION_STOP = "dev.recmf.action.STOP"
         const val ACTION_SYNC_NOW = "dev.recmf.action.SYNC_NOW"
         const val ACTION_FIND_WATCH = "dev.recmf.action.FIND_WATCH"
+        const val ACTION_STOP_RINGING = "dev.recmf.action.STOP_RINGING"
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, WatchService::class.java))
@@ -1018,6 +1043,10 @@ class WatchService : LifecycleService() {
                 Intent(context, WatchService::class.java).setAction(ACTION_SYNC_NOW),
             )
         }
+
+        /** What the find-phone notification fires to silence itself. */
+        fun stopRingingIntent(context: Context): Intent =
+            Intent(context, WatchService::class.java).setAction(ACTION_STOP_RINGING)
 
         /** Makes the watch ring, for the usual reason. */
         fun findWatch(context: Context) {

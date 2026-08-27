@@ -109,8 +109,15 @@ none set. The list is adopted on read but not marked as configured, so a connect
 writes back what it just read. Labels are not modelled: the watch does not display them
 and they cannot be read back.
 
-**Find watch** works. `FIND_PHONE` arrives *from* the watch and still needs the phone to
-ring — the first thing here that is a feature of the phone rather than of the watch.
+**Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
+watch and now rings the phone — the first thing here that is a feature of the phone rather
+than of the watch, and it shows: the tone plays on the alarm stream, because the phone
+being on silent is the case the feature exists for. The volume is left alone and Do Not
+Disturb is left to refuse; a find-phone that overrides both is a fright waiting for a
+mis-press. It stops after thirty seconds, on the notification, or when the watch says so.
+
+The payload is a guess — one leading byte, zero for off — because nothing documents this
+one and Gadgetbridge never sends it. The bytes are in the protocol log next to the guess.
 
 **Contacts** are untouched: `CONTACTS_GET` is in the table, Gadgetbridge never calls it,
 and the reply layout is unknown.
