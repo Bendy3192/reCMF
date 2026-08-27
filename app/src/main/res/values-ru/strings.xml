@@ -108,4 +108,6 @@
         <item quantity="other">Скопировано %d строки</item>
     </plurals>
     <string name="metric_resting_heart_rate">пульс покоя</string>
+    <string name="tab_health">Здоровье</string>
+    <string name="tab_device">Устройство</string>
 </resources>

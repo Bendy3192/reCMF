@@ -35,12 +35,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.TimeInput
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -64,6 +67,7 @@ import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfSettings
 import android.content.ClipData
 import android.os.Build
+import androidx.annotation.StringRes
 import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
@@ -99,9 +103,28 @@ fun HomeScreen(
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
+    // Only once there is a watch: while pairing there is one thing to do, and a tab bar
+    // over a device list would be two empty rooms and a corridor.
+    var tab by rememberSaveable { mutableStateOf(HomeTab.HEALTH) }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        topBar = {
+            Column {
+                TopAppBar(title = { Text(stringResource(R.string.app_name)) })
+                if (state.settings.isPaired) {
+                    PrimaryTabRow(selectedTabIndex = tab.ordinal) {
+                        HomeTab.entries.forEach { entry ->
+                            Tab(
+                                selected = tab == entry,
+                                onClick = { tab = entry },
+                                text = { Text(stringResource(entry.labelRes)) },
+                            )
+                        }
+                    }
+                }
+            }
+        },
     ) { insets ->
         LazyColumn(
             modifier = Modifier
@@ -110,24 +133,42 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // On both tabs: it is the answer to "is any of this current?", and neither
+            // tab means anything without it.
             item { ConnectionCard(state, onSyncNow, onForget) }
 
             if (state.settings.isPaired) {
-                item { TodayCard(state, onAutoSyncSeconds) }
-                item { WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences) }
-                item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
-                item { WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity) }
-                item {
-                    NotificationsCard(
-                        state = state,
-                        hasAccess = hasNotificationAccess,
-                        onEnabled = onNotificationsEnabled,
-                        onScreenOffOnly = onScreenOffOnlyEnabled,
-                        onGrantAccess = onGrantNotificationAccess,
-                    )
-                }
-                if (!isBatteryExempt) {
-                    item { BackgroundWorkCard(onAllowBackgroundWork) }
+                when (tab) {
+                    HomeTab.HEALTH -> {
+                        item { TodayCard(state, onAutoSyncSeconds) }
+                        item {
+                            HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled)
+                        }
+                        if (!isBatteryExempt) {
+                            item { BackgroundWorkCard(onAllowBackgroundWork) }
+                        }
+                    }
+
+                    HomeTab.DEVICE -> {
+                        item {
+                            WatchSettingsCard(
+                                watchPreferences,
+                                state.connection.isUsable,
+                                onWatchPreferences,
+                            )
+                        }
+                        item { WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity) }
+                        item {
+                            NotificationsCard(
+                                state = state,
+                                hasAccess = hasNotificationAccess,
+                                onEnabled = onNotificationsEnabled,
+                                onScreenOffOnly = onScreenOffOnlyEnabled,
+                                onGrantAccess = onGrantNotificationAccess,
+                            )
+                        }
+                        item { ProtocolLogCard(protocolLog, onClearLog) }
+                    }
                 }
             } else {
                 item { PairingHeader(scanError, onScan) }
@@ -151,9 +192,11 @@ fun HomeScreen(
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
                     )
                 }
-            }
 
-            item { ProtocolLogCard(protocolLog, onClearLog) }
+                // Kept here too: a pairing that fails leaves nothing else to look at, and
+                // this is the one place that says why.
+                item { ProtocolLogCard(protocolLog, onClearLog) }
+            }
 
             item { Spacer(Modifier.padding(8.dp)) }
         }
@@ -1027,6 +1070,18 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
             }
         }
     }
+}
+
+/**
+ * The two halves of the app.
+ *
+ * Health is what the watch measured; Device is everything about the watch itself. The
+ * split waited until there was more than one metric to put on the first — a tab holding a
+ * single card is a worse arrangement than no tabs at all.
+ */
+private enum class HomeTab(@StringRes val labelRes: Int) {
+    HEALTH(R.string.tab_health),
+    DEVICE(R.string.tab_device),
 }
 
 /** One log line, as both the screen and the clipboard render it. */

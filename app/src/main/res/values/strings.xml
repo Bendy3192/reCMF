@@ -107,4 +107,6 @@
         <item quantity="other">Copied %d lines</item>
     </plurals>
     <string name="metric_resting_heart_rate">resting</string>
+    <string name="tab_health">Health</string>
+    <string name="tab_device">Device</string>
 </resources>
