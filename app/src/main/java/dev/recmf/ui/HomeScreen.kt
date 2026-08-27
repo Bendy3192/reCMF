@@ -64,6 +64,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
+import dev.recmf.BuildConfig
 import dev.recmf.R
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
@@ -372,6 +373,11 @@ private fun ConnectionCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+
+            Text(
+                text = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
+                style = MaterialTheme.typography.bodySmall,
+            )
 
             // Only shown while something is genuinely in flight; a permanently
             // animating bar teaches people to ignore it.

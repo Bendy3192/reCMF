@@ -8,7 +8,10 @@ local.properties
 *.apk
 *.aab
 *.keystore
-!debug.keystore
+# The debug signing key is checked in on purpose — see the comment in app/build.gradle.kts.
+# Without a fixed key every CI build is signed differently and cannot be installed over
+# the last one, which is what made every update wipe the app's settings.
+!app/recmf-debug.keystore
 .cxx/
 
 # IDE

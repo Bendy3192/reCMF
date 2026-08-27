@@ -4,8 +4,26 @@ A third-party companion app for the **CMF Watch Pro 2**, built to do the two thi
 stock app does badly: stay connected without being killed, and put the watch's data into
 **Health Connect** where anything else on the phone can read it.
 
-> **Status: it builds and its tests pass, but it has never been run against a watch.**
-> See [What is verified](#what-is-verified) before trusting it with anything.
+> **Status: running daily against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
+> steps, heart rate, resting heart rate, blood oxygen, stress, weather, notifications,
+> incoming calls, alarms and find-watch are confirmed on hardware. Sleep is parsed but has
+> not yet met a real night, and is not stored until it has.
+> See [What is verified](#what-is-verified) for the line between the two.
+
+## Installing an update
+
+Builds are signed with a key checked into the repository (`app/recmf-debug.keystore`), so
+each APK installs over the last one and the app keeps its settings, its paired watch and
+its data. Without a fixed key every CI runner generates its own, Android refuses one build
+as an update to another, and the only way in is uninstall — which takes everything with it.
+
+The first build after this change is the exception: the signature moves from a random key
+to the fixed one, so that one install still needs the old app removed. Every update after
+it goes over the top.
+
+The version shown on the connection card is the build number the APK came from, so a phone
+can say which of a day's builds it is running.
+
 
 ## Why
 
@@ -147,12 +165,23 @@ including the post-2038 timestamp case, and the reconnect schedule.
 runs the app module's unit tests and passes lint with warnings as errors. The reconnect
 schedule is unit-tested there.
 
-**Not verified at all:** anything that depends on how a real watch behaves — whether the
-handshake completes end to end, what the unidentified 16 bytes in each activity record
-mean, whether `distance` is metres, and what `calories` is a unit of. These are marked in
-the code where they are assumed.
+**Confirmed against a real Watch Pro 2** (firmware 1.0.0.73), byte for byte from captured
+frames: the pairing handshake, activity records — 2085 steps against 1620 m and 116 kcal,
+mutually coherent — heart rate, resting heart rate (5 bytes, not the 8 the other paired
+records use), blood oxygen, stress, the reminder read-back, the alarm list including the
+empty case, weather, notifications, incoming calls with the caller's name, and find-watch.
+The `TIME` frame settles the clock question too: the watch takes its UTC offset in
+milliseconds and keeps correct time.
 
-If you have a Watch Pro 2, the first useful thing is to run it and read the logs.
+**Written but not yet verified:** sleep. The layout is ported from Gadgetbridge and the
+stage duration's unit is unconfirmed, so nothing is stored — the app states its reading in
+the log as clock times and stage letters, for someone who slept through the night to
+check. Workouts and their GPS tracks are not started.
+
+**Still unidentified:** the 16 bytes at the tail of each activity record; the eight bytes
+`HEART_MONITORING_ENABLED_GET` answers with, which differ on every connection and so are
+not the monitoring state; and `ffff/a055`, a stable list of six identifiers the watch
+volunteers at connection time.
 
 ## Credit
 

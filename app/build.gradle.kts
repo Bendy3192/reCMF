@@ -1,3 +1,16 @@
+/**
+ * The build's own number, which has to rise for Android to treat one APK as an update to
+ * another. GitHub Actions counts runs; a local build is always 1, which is fine because a
+ * local build is never something a phone is asked to upgrade to.
+ *
+ * Deliberately not the commit count: CI clones with fetch-depth 1, so a commit count read
+ * there would be 1 on every build.
+ */
+val buildNumber: Int = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull() ?: 1
+
+/** Bumped by hand when something is worth calling a new version. */
+val RELEASE_NAME = "0.2"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,10 +29,28 @@ android {
         applicationId = "dev.recmf"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = buildNumber
+        versionName = "$RELEASE_NAME.$buildNumber"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    signingConfigs {
+        // Checked into the repository on purpose. Without a fixed key, every CI runner
+        // generates its own debug keystore, every build is signed by a different one, and
+        // Android refuses to install one over another — so updating meant uninstalling,
+        // and uninstalling took the goals, the paired watch and every setting with it.
+        //
+        // What it costs: anyone with this file can build an APK Android will accept as an
+        // update to reCMF. For a sideloaded personal app installed only from its own CI
+        // that is a fair trade for being able to update at all. Moving the keystore into
+        // an Actions secret is a small change if that stops being true.
+        getByName("debug") {
+            storeFile = file("recmf-debug.keystore")
+            storePassword = "recmfdebug"
+            keyAlias = "recmf"
+            keyPassword = "recmfdebug"
+        }
     }
 
     buildTypes {
@@ -30,6 +61,7 @@ android {
         }
         debug {
             applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
@@ -40,6 +72,9 @@ android {
 
     buildFeatures {
         compose = true
+        // So the app can say which build it is. With a dozen sideloaded APKs in a day,
+        // "which one is installed?" is otherwise unanswerable from the phone.
+        buildConfig = true
     }
 
     packaging {

@@ -125,4 +125,5 @@
     <string name="day_fri">Пт</string>
     <string name="day_sat">Сб</string>
     <string name="day_sun">Вс</string>
+    <string name="app_version">reCMF %1$s</string>
 </resources>
