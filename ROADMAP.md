@@ -182,6 +182,23 @@ Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and fir
 chunked upload protocol, and firmware flashing is the one operation here that can brick a
 watch — so it comes last and stays behind a warning.
 
+## Known and fixed, worth not repeating
+
+**Steps landing on the wrong day.** The watch counts cumulatively and zeroes at local
+midnight, so reCMF stores the difference between readings. The interval for the first
+reading after a reset used to start at the *previous* reading — which is the night
+before — and Health Connect splits a record across the hours it spans, so a morning's
+steps were divided between two days and a stretch of sleep. A day showing 1421 of the
+watch's 3517 is what that looks like. The interval now starts at the reset, and at the
+previous reading when the counter dropped for some other reason, because a reboot at two
+in the afternoon does not mean the morning is up for grabs.
+
+**The first reading after a fresh install is still dropped.** Its total covers a period
+reCMF may already have written from an earlier install, and Health Connect keeps those
+records across a reinstall even though the app's own staging table does not. Reading back
+what is already there would settle it; until then the loss is one morning, once, and only
+on a wipe rather than an update.
+
 ## Unidentified
 
 Bytes seen on a real watch that nothing here explains yet. Written down so the next capture

@@ -3,9 +3,15 @@ package dev.recmf.health
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import java.time.ZoneId
 
 class StepDeltasTest {
+    private val utc = ZoneId.of("UTC")
+
     private fun reading(ts: Long, steps: Int) = CumulativeReading(ts, steps, steps / 2, steps / 10)
+
+    /** An hour on a numbered day, as an epoch second. Day 1 is the epoch itself. */
+    private fun at(day: Int, hour: Int): Long = (day - 1) * 86_400L + hour * 3_600L
 
     @Test
     fun `repeated polls of an unchanged counter produce nothing`() {
@@ -46,9 +52,59 @@ class StepDeltasTest {
         val deltas = stepDeltas(
             listOf(reading(1_000, 9000), reading(2_000, 40)),
             previous = reading(500, 8000),
+            zone = utc,
         )
 
+        // The second interval starts where the counter did, not where the previous
+        // reading was: both fall on the same UTC day here, so midnight is behind them and
+        // the previous reading is the honest start.
         assertEquals(listOf(IntervalDelta(500, 1_000, 1000), IntervalDelta(1_000, 2_000, 40)), deltas)
+    }
+
+    @Test
+    fun `a morning's steps belong to the morning, not to last night`() {
+        // The real shape of a day: the last reading before bed, then the first one after
+        // getting up. Spanning them puts the whole morning in a window that begins
+        // yesterday evening, and Health Connect splits a record across the hours it
+        // covers — so most of those steps land on the wrong day.
+        val lastNight = reading(at(day = 1, hour = 22), 8_000)
+        val thisMorning = reading(at(day = 2, hour = 9), 2_100)
+
+        val deltas = stepDeltas(listOf(thisMorning), previous = lastNight, zone = utc)
+
+        assertEquals(
+            listOf(IntervalDelta(at(day = 2, hour = 0), at(day = 2, hour = 9), 2_100)),
+            deltas,
+        )
+    }
+
+    @Test
+    fun `a counter that drops for some other reason starts where the last reading was`() {
+        // A reboot or a factory reset mid-afternoon. Midnight is hours behind the reading
+        // it follows, and claiming that window would be claiming steps already recorded.
+        val before = reading(at(day = 2, hour = 14), 5_000)
+        val after = reading(at(day = 2, hour = 15), 120)
+
+        val deltas = stepDeltas(listOf(after), previous = before, zone = utc)
+
+        assertEquals(
+            listOf(IntervalDelta(at(day = 2, hour = 14), at(day = 2, hour = 15), 120)),
+            deltas,
+        )
+    }
+
+    @Test
+    fun `a reset landing exactly on midnight is not a zero-length interval`() {
+        // Health Connect will not take one, and nothing moved in no time anyway.
+        val midnight = at(day = 2, hour = 0)
+
+        val deltas = stepDeltas(
+            listOf(reading(midnight, 500)),
+            previous = reading(at(day = 1, hour = 23), 9_000),
+            zone = utc,
+        )
+
+        assertTrue(deltas.isEmpty())
     }
 
     @Test

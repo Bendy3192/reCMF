@@ -3,6 +3,9 @@
  */
 package dev.recmf.health
 
+import java.time.Instant
+import java.time.ZoneId
+
 /**
  * One `ACTIVITY_DATA` record: the watch's running totals at a moment in time.
  *
@@ -29,8 +32,15 @@ data class IntervalDelta(
  * Turns a run of cumulative readings into the intervals between them.
  *
  * A drop in the counter means it was reset — the watch zeroes at midnight — so the new
- * value is itself the movement since the reset rather than a negative delta.
+ * value is itself the movement since the reset rather than a negative delta. **When that
+ * happens the interval has to start at the reset, not at the previous reading.** The last
+ * reading of a day is typically late in the evening and the first of the next is hours
+ * later, so spanning them puts a whole morning's steps in a window that begins yesterday.
+ * Health Connect splits a record across the hours it covers, so most of those steps land
+ * on the wrong day and the rest on the wrong hours — which is exactly what a day showing
+ * 1421 of the watch's 3517 looks like.
  *
+ * @param zone the wearer's own zone, because the reset is local midnight and nothing else.
  * @param previous the last reading before this run, if one is known. Without it the first
  *   reading cannot be turned into an interval and is used only as the baseline for the
  *   second, since its own total covers a period we may already have recorded.
@@ -38,6 +48,7 @@ data class IntervalDelta(
 fun stepDeltas(
     readings: List<CumulativeReading>,
     previous: CumulativeReading? = null,
+    zone: ZoneId = ZoneId.systemDefault(),
 ): List<IntervalDelta> {
     val ordered = readings.sortedBy { it.timestamp }
     if (ordered.isEmpty()) return emptyList()
@@ -52,17 +63,32 @@ fun stepDeltas(
         if (from == null) continue
         if (reading.timestamp <= from.timestamp) continue
 
-        val moved = if (reading.steps >= from.steps) {
-            reading.steps - from.steps
-        } else {
-            // The counter reset between the two readings.
-            reading.steps
-        }
+        val reset = reading.steps < from.steps
 
+        // A reset makes the reading its own total: it counts from the zero, not from a
+        // number that no longer exists.
+        val moved = if (reset) reading.steps else reading.steps - from.steps
         if (moved <= 0) continue
 
-        out.add(IntervalDelta(startSeconds = from.timestamp, endSeconds = reading.timestamp, steps = moved))
+        val start = if (reset) {
+            // Local midnight, but never earlier than the reading it follows. A counter
+            // can drop for reasons other than the date — a reboot, a factory reset — and
+            // in those the previous reading is the honest start.
+            maxOf(from.timestamp, startOfDay(reading.timestamp, zone))
+        } else {
+            from.timestamp
+        }
+
+        // Belt and braces: a zero-length interval is not a period anything moved in, and
+        // Health Connect will not take one.
+        if (start >= reading.timestamp) continue
+
+        out.add(IntervalDelta(startSeconds = start, endSeconds = reading.timestamp, steps = moved))
     }
 
     return out
 }
+
+/** Midnight of the day [epochSeconds] falls in, as the wearer's own clock reads it. */
+private fun startOfDay(epochSeconds: Long, zone: ZoneId): Long =
+    Instant.ofEpochSecond(epochSeconds).atZone(zone).toLocalDate().atStartOfDay(zone).toEpochSecond()

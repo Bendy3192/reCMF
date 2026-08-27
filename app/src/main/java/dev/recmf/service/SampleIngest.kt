@@ -5,6 +5,7 @@ package dev.recmf.service
 
 import android.content.Context
 import android.util.Log
+import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.ActivitySampleEntity
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RestingHeartRateSampleEntity
@@ -18,6 +19,8 @@ import dev.recmf.protocol.ActivitySample
 import dev.recmf.protocol.HeartRateSample
 import dev.recmf.protocol.Spo2Sample
 import java.time.Instant
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * Lands samples in the local database and moves them on to Health Connect.
@@ -104,6 +107,17 @@ class SampleIngest(
 
             val deltas = stepDeltas(activity.map { it.toReading() }, baseline)
 
+            // Written down where the wearer can see it. What reaches Health Connect is a
+            // sum of differences, and the only way to tell it apart from the watch's own
+            // total — which is what the app shows — is to be able to add these up.
+            if (deltas.isNotEmpty()) {
+                ProtocolLog.note(
+                    "Health Connect: ${deltas.sumOf { it.steps }} steps in " +
+                        "${deltas.size} interval(s), " +
+                        "${clock(deltas.first().startSeconds)}–${clock(deltas.last().endSeconds)}",
+                )
+            }
+
             val result = healthConnect.write(deltas, heartRate, spo2, resting)
             if (result.acceptedNothing) {
                 Log.w(TAG, "Health Connect accepted nothing; will retry on the next sync")
@@ -146,6 +160,11 @@ class SampleIngest(
     )
 
     /** Drops samples that have reached Health Connect and are older than the retention window. */
+    /** Wall-clock time of a sample, for a log line a human has to check. */
+    private fun clock(epochSeconds: Long): String =
+        DateTimeFormatter.ofPattern("HH:mm")
+            .format(Instant.ofEpochSecond(epochSeconds).atZone(ZoneId.systemDefault()))
+
     suspend fun prune() {
         val cutoff = Instant.now().minusSeconds(RETENTION_SECONDS).epochSecond
         val removed = dao.pruneActivity(cutoff) + dao.pruneHeartRate(cutoff) +
