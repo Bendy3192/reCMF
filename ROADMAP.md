@@ -79,50 +79,61 @@ register the same receiver to accept BreezyWeather's. Not built: it is a second 
 a problem the first one solves, and the failure it was proposed to work around turned out
 to be scheduling, not parsing.
 
-## Phase 3 — The rest of the health data *(next)*
+## Phase 3 — The rest of the health data *(mostly done)*
 
-Steps and heart rate reach Health Connect today. Gadgetbridge parses the rest and reCMF
-does not yet: `SLEEP_DATA` with its stages, `SPO2`, `STRESS`, `HEART_RATE_RESTING`,
-`WORKOUT_SUMMARY` and `WORKOUT_GPS`.
+The data was arriving all along. `ACTIVITY_FETCH_2` means "everything you recorded", and
+every one of these came with it — reCMF had the opcodes but no branch for them, so they
+fell through `else -> Unit` and, because the opcode *was* known, never even appeared in
+the log as unknown.
 
-These almost certainly arrive already. `ACTIVITY_FETCH_2` means "everything you recorded",
-and Gadgetbridge parses all of the above from that same fetch. reCMF has the opcodes in its
-table but no branch for them in `onMessage`, so they fall through to `else -> Unit` — and
-because the opcode *is* known, they do not even appear in the log as unknown. The first
-step is therefore to log a known command that nothing handles, which costs nothing and
-settles whether the data is there.
+Done and confirmed against a real watch, byte for byte:
 
-Order, easiest and most certain first:
+- **SpO₂** and **stress** — 8-byte records, `timestamp:int` then `value:int`. SpO₂ reaches
+  Health Connect; stress stays on screen, because Health Connect has no record type for it.
+- **Resting heart rate** — 5 bytes, not 8: a timestamp and a *single byte* of bpm. Not
+  ported, because Gadgetbridge leaves this payload as a TODO. Read out of a capture.
 
-1. **SpO₂** and **stress** — records of 8 bytes, little-endian, `timestamp:int` then
-   `value:int`. The size is self-checking and the layout is unit-testable without a watch.
-2. **Sleep** — a session header (`start:int`, `wakeup:int`, 10 metadata bytes nobody has
-   identified) followed by stages of 8 bytes (`timestamp:int`, `duration:short`,
-   `stage:short`). Worth doing early: it is the reason most people open a watch app in the
-   morning, and Gadgetbridge's own Health Connect export does not cover it.
-3. **Resting heart rate**.
-4. **Workouts and their GPS tracks** — last, and the one place where a captured
-   Gadgetbridge log of real bytes is genuinely needed rather than a precaution.
+**Sleep** is written but unverified: a session header (`start:int`, `wakeup:int`, 10
+unidentified bytes) then 8-byte stages. The stage duration's unit is not confirmed, so
+nothing is stored — the log states reCMF's reading in clock times and stage letters, which
+someone who slept through the night can check at a glance. Storage follows confirmation.
 
-Health Connect has record types for sleep, SpO₂ and resting heart rate, so all three go
-there as well as into the app.
+**Workouts and their GPS tracks** are the one thing left here, and the one place where a
+captured log of real bytes is needed rather than a precaution.
 
-**The two tabs land here**, not after: Health for the metrics, Device for connection,
-watch settings, weather and the log. Splitting earlier would mean splitting one card away
-from six; splitting once sleep and SpO₂ arrive is what makes the single scroll stop
-working.
+## Phase 4 — Alarms, contacts, find *(alarms and find done)*
 
-## Phase 4 — Alarms, contacts, find
+**Alarms** read and write. `ALARMS_GET` answers under the `ALARMS_SET` opcode, and an
+empty reply means no alarms rather than a failed read — confirmed against a watch with
+none set. The list is adopted on read but not marked as configured, so a connection never
+writes back what it just read. Labels are not modelled: the watch does not display them
+and they cannot be read back.
 
-`ALARMS_SET` / `ALARMS_GET`, `CONTACTS_SET` / `CONTACTS_GET`, `FIND_WATCH`, `FIND_PHONE`.
-`FIND_PHONE` arrives *from* the watch and needs the phone to ring — the first thing here
-that is a feature of the phone rather than of the watch.
+**Find watch** works. `FIND_PHONE` arrives *from* the watch and still needs the phone to
+ring — the first thing here that is a feature of the phone rather than of the watch.
+
+**Contacts** are untouched: `CONTACTS_GET` is in the table, Gadgetbridge never calls it,
+and the reply layout is unknown.
 
 ## Phase 5 — Calls and music
 
-`CALL_REMINDER` for incoming calls, and `MUSIC_INFO_SET` / `MUSIC_BUTTON` /
-`MUSIC_INFO_ACK` for now-playing and wrist controls. Needs a media session listener, which
-is a chunk of Android work rather than protocol work.
+**Music is the better-understood half, and is next.** Gadgetbridge implements both
+directions and reCMF can port them:
+
+- `MUSIC_INFO_SET` — 131 bytes: state, volume, maximum volume, then the track and the
+  artist in 64 bytes each.
+- `MUSIC_BUTTON` — a `uint16` from the watch: `0x0101` play, `0x0001` pause, `0x0102`
+  next, `0x0103` volume up, `0x0003` volume down.
+
+It needs `MediaSessionManager`, which is gated on notification-listener access — the
+permission reCMF already holds for forwarding notifications. No new permission.
+
+**Calls are the worse-understood half.** `CALL_REMINDER` has an opcode and nothing else;
+Gadgetbridge's handler for it is an empty override. Meanwhile the *useful* part is already
+done without it: an incoming call reaches the watch as a notification with the caller's
+name, because Android has resolved the number against the address book before the dialer
+posts it. A call screen with answer and reject buttons is what remains, and it needs the
+payload discovered from scratch.
 
 ## Phase 6 — Transfers
 
