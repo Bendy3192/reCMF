@@ -45,44 +45,6 @@ object CmfSettings {
      * `GOALS_SET`: the three daily targets, big-endian, each behind two bytes we have not
      * identified.
      */
-    /**
-     * `GOALS_SET`: the watch's own goal block with three fields replaced.
-     *
-     * This is not built from nothing, and that is the point. The ten big-endian bytes
-     * Gadgetbridge sends were acknowledged by this watch and changed nothing: a capture
-     * has reCMF writing 5000 metres and 300 calories, the watch answering `applied`, and
-     * the very next read reporting the 4000 and 400 it held before. An acknowledgement
-     * here means the frame arrived, not that anything was stored.
-     *
-     * What the watch does speak is the twenty-eight byte block it reports — five
-     * little-endian numbers, a climb byte and seven flags. So a write starts from the
-     * block it last sent and overwrites only the three fields reCMF actually holds.
-     * Everything else, identified or not, goes back exactly as it came: the fourth number
-     * nobody has explained, the climb goal this app has no screen for, the seven flag
-     * bytes. A goal reCMF cannot show is still a goal the wearer set.
-     *
-     * @param reported the payload from the watch's own `GOALS_SET` reply.
-     * @return null when [reported] is too short to be that block — there is nothing safe
-     *   to patch, and writing a guess costs the wearer their targets.
-     */
-    fun goals(
-        reported: ByteArray,
-        steps: Int,
-        distanceMeters: Int,
-        calories: Int,
-    ): ByteArray? {
-        if (reported.size < GOAL_BYTES) return null
-
-        val payload = reported.copyOf()
-        val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
-
-        buffer.putInt(0, steps.coerceAtLeast(0))
-        buffer.putInt(4, distanceMeters.coerceAtLeast(0))
-        buffer.putInt(8, calories.coerceAtLeast(0))
-
-        return payload
-    }
-
     /** `WAKE_ON_WRIST_RAISE`: light the screen when the wrist is turned. */
     fun wakeOnWristRaise(enabled: Boolean): ByteArray = byteArrayOf(if (enabled) 1 else 0)
 

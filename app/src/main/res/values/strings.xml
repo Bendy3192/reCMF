@@ -55,6 +55,7 @@
     <string name="setting_24_hour">24-hour clock</string>
     <string name="setting_metric">Metric units</string>
     <string name="daily_goals">Daily goals</string>
+    <string name="daily_goals_read_only">As the watch reports them. Goal changes have to be made on the watch: it accepts them from here and then keeps what it had.</string>
     <string name="goal_steps">Steps</string>
     <string name="goal_distance">Distance, m</string>
     <string name="goal_calories">Calories</string>

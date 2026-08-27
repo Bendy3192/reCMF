@@ -215,17 +215,25 @@ class SettingsStore(private val context: Context) {
     }
 
     /**
-     * Takes the three goals reCMF holds. The watch keeps two more — active minutes and
-     * climbs — which this app has nowhere to put and does not write.
+     * Takes the three goals reCMF shows, always.
+     *
+     * No [adoptFromWatch] guard here, because there is nothing to guard: reCMF does not
+     * write goals — the watch acknowledges a goal write and keeps what it had — so a
+     * stored goal is a reading, never a choice, and a newer reading always wins.
+     *
+     * The watch keeps two more, active minutes and climbs, which this app has nowhere to
+     * put.
      */
     suspend fun adoptGoalsFromWatch(goals: WatchGoals): Boolean {
         if (goals.steps <= 0) return false
 
-        return adoptFromWatch(WatchSetting.GOALS) { prefs ->
+        context.dataStore.edit { prefs ->
             prefs[KEY_STEPS_GOAL] = goals.steps
             if (goals.distanceMeters > 0) prefs[KEY_DISTANCE_GOAL] = goals.distanceMeters
             if (goals.calories > 0) prefs[KEY_CALORIES_GOAL] = goals.calories
         }
+
+        return true
     }
 
     suspend fun adoptStandReminderFromWatch(enabled: Boolean, intervalMinutes: Int): Boolean =

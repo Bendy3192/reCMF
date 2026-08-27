@@ -95,7 +95,8 @@ exists because of it.
 | Pairing | Negotiates its own key over the watch's shell characteristic — no auth key to find |
 | Health | Steps, distance, calories, heart rate, resting heart rate, blood oxygen, stress, battery |
 | Health Connect | Steps, heart rate, resting rate and blood oxygen, deduplicated by client record id |
-| Watch settings | 24/7 heart rate, all-day SpO₂, stress, raise-to-wake, clock format, units, daily goals, alert thresholds, stand and drink reminders with quiet hours, the visible sport list |
+| Watch settings | 24/7 heart rate, all-day SpO₂, stress, raise-to-wake, clock format, units, alert thresholds, stand and drink reminders with quiet hours, the visible sport list. Read back from the watch, so the app shows what it actually holds |
+| Daily goals | Shown as the watch reports them. Changing them has to be done on the watch — it accepts a write and keeps what it had |
 | Alarms | Read from the watch and edited here, with repeat days |
 | Notifications | Forwarded with icons, optionally only while the phone's screen is off; SMS included; incoming calls show the caller's name |
 | Weather | Fetched from Open-Meteo for a typed city and pushed to the watch face |

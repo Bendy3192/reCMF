@@ -16,45 +16,6 @@ class CmfSettingsTest {
         assertArrayEquals(byteArrayOf(0x01, 0), CmfSettings.monitoring(MonitoringChannel.HEART_RATE, false))
     }
 
-    /** The block a real watch reported: 10000 steps, 4000 m, 400 kcal, 720, 30 min, 12 climbs. */
-    private val reportedGoals = ("10270000a00f000090010000d00200001e0000000c01010101010101")
-        .chunked(2).map { it.toInt(16).toByte() }.toByteArray()
-
-    @Test
-    fun `a goal write is the watch's own block with three fields replaced`() {
-        val payload = CmfSettings.goals(
-            reported = reportedGoals,
-            steps = 12_000,
-            distanceMeters = 6_000,
-            calories = 555,
-        )
-
-        assertEquals(28, payload?.size)
-        assertEquals(
-            "e02e0000701700002b0200" + "00" + "d00200001e0000000c01010101010101",
-            payload?.joinToString("") { "%02x".format(it) },
-        )
-    }
-
-    @Test
-    fun `everything the watch reported and reCMF cannot show survives the write`() {
-        // The fourth number nobody has explained, the climb goal there is no screen for,
-        // and the seven flag bytes. Losing any of them would be losing a goal the wearer
-        // set, in a write meant to change three other things.
-        val payload = CmfSettings.goals(reportedGoals, steps = 1, distanceMeters = 2, calories = 3)
-
-        assertArrayEquals(
-            reportedGoals.copyOfRange(12, reportedGoals.size),
-            payload?.copyOfRange(12, reportedGoals.size),
-        )
-    }
-
-    @Test
-    fun `a goal block too short to patch is refused rather than guessed at`() {
-        // Nothing safe to patch, and inventing the rest costs the wearer their targets.
-        assertNull(CmfSettings.goals(ByteArray(8), steps = 1, distanceMeters = 2, calories = 3))
-    }
-
     @Test
     fun `zero is the 24-hour clock, not the 12-hour one`() {
         assertArrayEquals(byteArrayOf(0), CmfSettings.timeFormat(use24Hour = true))

@@ -64,22 +64,21 @@ afterwards.
 
 Two exceptions:
 
-- **Goals** are read in full and written back as the watch's own block. Four of the six
-  fields were confirmed against the watch's screen: 10000 steps, 400 calories, 30 active
-  minutes and — the byte after the numbers — 12 climbs. The fourth number, 720, is still
-  unnamed.
+- **Goals are read, not written.** Four of the six fields were confirmed against the
+  watch's own screen: 10000 steps, 400 calories, 30 active minutes and — the byte after
+  the numbers — 12 climbs. The fourth number, 720, is still unnamed.
 
-  The old write did nothing. A capture has reCMF sending 5000 metres and 300 calories, the
-  watch answering `applied`, and the very next read reporting the 4000 and 400 it held
-  before: the ten big-endian bytes Gadgetbridge sends are acknowledged and dropped by this
-  firmware. An acknowledgement means the frame arrived, not that anything was stored.
+  Writing them does not work on this firmware, in either shape tried. The ten big-endian
+  bytes ported from Gadgetbridge were acknowledged and ignored; so was the watch's own
+  twenty-eight byte block with three fields patched in place. Both times the very next
+  read reported the values the watch already held. `applied` on this command means the
+  frame arrived and nothing more.
 
-  So a write is now the twenty-eight byte block the watch itself reported, with the three
-  fields reCMF holds overwritten in place. Everything else goes back byte for byte — the
-  unexplained number, the climb goal there is no screen for, the seven flag bytes. Which
-  means the write has to wait for the read: on a fresh connection the settings go out
-  before the reply arrives, so the goal write happens when the block lands, once per
-  connection, followed by one more read to say whether it stuck.
+  So the app shows the goals and says where to change them. An editable field that
+  silently does nothing is worse than a number with an explanation. What would settle it
+  is a capture of the official app setting a goal; short of that, anything else is
+  guessing at an encoding, and the wearer pays for a wrong guess with their own targets.
+
 - **Do Not Disturb** is read and reported only. reCMF does not write it, so there is no
   preference for it to disagree with.
 

@@ -699,16 +699,19 @@ private fun WatchSettingsCard(
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
             Text(stringResource(R.string.daily_goals), style = MaterialTheme.typography.titleSmall)
+            Text(
+                stringResource(R.string.daily_goals_read_only),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
-            GoalField(stringResource(R.string.goal_steps), preferences.stepsGoal) {
-                onChange(WatchSetting.GOALS) { current -> current.copy(stepsGoal = it) }
-            }
-            GoalField(stringResource(R.string.goal_distance), preferences.distanceGoalMeters) {
-                onChange(WatchSetting.GOALS) { current -> current.copy(distanceGoalMeters = it) }
-            }
-            GoalField(stringResource(R.string.goal_calories), preferences.caloriesGoal) {
-                onChange(WatchSetting.GOALS) { current -> current.copy(caloriesGoal = it) }
-            }
+            // Shown, not edited. The watch acknowledges a goal write and then keeps what
+            // it had — proven twice, in two different payload shapes — so an editable
+            // field here would be a control that does nothing, which is worse than a
+            // number and an explanation.
+            GoalReading(stringResource(R.string.goal_steps), preferences.stepsGoal)
+            GoalReading(stringResource(R.string.goal_distance), preferences.distanceGoalMeters)
+            GoalReading(stringResource(R.string.goal_calories), preferences.caloriesGoal)
 
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
@@ -718,7 +721,7 @@ private fun WatchSettingsCard(
                 onChange(WatchSetting.STAND_REMINDER) { current -> current.copy(standReminder = it) }
             }
             if (preferences.standReminder) {
-                GoalField(stringResource(R.string.reminder_interval), preferences.standIntervalMinutes) {
+                NumberField(stringResource(R.string.reminder_interval), preferences.standIntervalMinutes) {
                     onChange(WatchSetting.STAND_REMINDER) { current -> current.copy(standIntervalMinutes = it) }
                 }
                 QuietHoursRow(
@@ -735,7 +738,7 @@ private fun WatchSettingsCard(
                 onChange(WatchSetting.DRINK_REMINDER) { current -> current.copy(drinkReminder = it) }
             }
             if (preferences.drinkReminder) {
-                GoalField(stringResource(R.string.reminder_interval), preferences.drinkIntervalMinutes) {
+                NumberField(stringResource(R.string.reminder_interval), preferences.drinkIntervalMinutes) {
                     onChange(WatchSetting.DRINK_REMINDER) { current -> current.copy(drinkIntervalMinutes = it) }
                 }
                 QuietHoursRow(
@@ -756,16 +759,16 @@ private fun WatchSettingsCard(
                 style = MaterialTheme.typography.bodySmall,
             )
 
-            GoalField(stringResource(R.string.alert_hr_low), preferences.heartRateAlertLow) {
+            NumberField(stringResource(R.string.alert_hr_low), preferences.heartRateAlertLow) {
                 onChange(WatchSetting.ALERTS) { current -> current.copy(heartRateAlertLow = it) }
             }
-            GoalField(stringResource(R.string.alert_hr_resting_high), preferences.heartRateAlertRestingHigh) {
+            NumberField(stringResource(R.string.alert_hr_resting_high), preferences.heartRateAlertRestingHigh) {
                 onChange(WatchSetting.ALERTS) { current -> current.copy(heartRateAlertRestingHigh = it) }
             }
-            GoalField(stringResource(R.string.alert_hr_active_high), preferences.heartRateAlertActiveHigh) {
+            NumberField(stringResource(R.string.alert_hr_active_high), preferences.heartRateAlertActiveHigh) {
                 onChange(WatchSetting.ALERTS) { current -> current.copy(heartRateAlertActiveHigh = it) }
             }
-            GoalField(stringResource(R.string.alert_spo2_low), preferences.spo2AlertLow) {
+            NumberField(stringResource(R.string.alert_spo2_low), preferences.spo2AlertLow) {
                 onChange(WatchSetting.ALERTS) { current -> current.copy(spo2AlertLow = it) }
             }
 
@@ -895,9 +898,9 @@ private fun SettingSwitch(label: String, checked: Boolean, onCheckedChange: (Boo
 }
 
 @Composable
-private fun GoalField(label: String, value: Int, onValue: (Int) -> Unit) {
-    // Edited as text so a half-typed number does not momentarily become a goal of 8 —
-    // only a parsable value is committed.
+private fun NumberField(label: String, value: Int, onValue: (Int) -> Unit) {
+    // Edited as text so a half-typed number does not momentarily become a threshold of
+    // 8 — only a parsable value is committed.
     var text by remember(value) { mutableStateOf(value.toString()) }
 
     OutlinedTextField(
@@ -911,6 +914,22 @@ private fun GoalField(label: String, value: Int, onValue: (Int) -> Unit) {
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** One goal as the watch reports it. */
+@Composable
+private fun GoalReading(label: String, value: Int) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium)
+        Text(
+            value.toString(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
 }
 
 /**
