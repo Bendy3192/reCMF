@@ -45,11 +45,13 @@
     <string name="notifications_explainer">Messages and alerts from your phone are forwarded to the watch.</string>
     <string name="notifications_need_access">Android grants notification access in system settings, not here.</string>
     <string name="notification_apps">Which apps reach the watch</string>
-    <string name="notification_apps_none">Nothing has arrived yet. Apps appear here as they send notifications.</string>
-    <plurals name="notification_apps_all">
-        <item quantity="one">%d app has sent something. All of them reach the watch.</item>
-        <item quantity="other">%d apps have sent something. All of them reach the watch.</item>
-    </plurals>
+    <string name="notification_apps_loading">Reading the list of installed apps…</string>
+    <string name="notification_apps_all">Every app reaches the watch.</string>
+    <string name="notification_apps_search">Search</string>
+    <string name="action_choose">Choose</string>
+    <string name="action_done">Done</string>
+    <string name="action_allow_all">Allow all</string>
+    <string name="action_block_all">Block all</string>
     <plurals name="notification_apps_silenced">
         <item quantity="one">%d app silenced</item>
         <item quantity="other">%d apps silenced</item>

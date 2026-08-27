@@ -57,6 +57,17 @@
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
+
+        <!--
+            Every app with a launcher icon, so the notification filter can list what is
+            installed rather than only what has already notified. This is the narrow
+            declaration Android asks for; QUERY_ALL_PACKAGES would also work and is both
+            broader than the feature needs and restricted on the Play Store.
+        -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
     </queries>
 
     <application

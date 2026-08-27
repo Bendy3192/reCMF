@@ -98,7 +98,7 @@ exists because of it.
 | Watch settings | 24/7 heart rate, all-day SpO₂, stress, raise-to-wake, clock format, units, alert thresholds, stand and drink reminders with quiet hours, the visible sport list. Read back from the watch, so the app shows what it actually holds |
 | Daily goals | Shown as the watch reports them. Changing them has to be done on the watch — it accepts a write and keeps what it had |
 | Alarms | Read from the watch and edited here, with repeat days |
-| Notifications | Forwarded with icons, optionally only while the phone's screen is off; SMS included; incoming calls show the caller's name. Any app can be silenced individually |
+| Notifications | Forwarded with icons, optionally only while the phone's screen is off; SMS included; incoming calls show the caller's name. every installed app is listed, with a switch each |
 | Weather | Fetched from Open-Meteo for a typed city and pushed to the watch face |
 | Music | Now playing on the watch face, and play, pause, track and volume from the wrist |
 | Find watch | Makes it ring |

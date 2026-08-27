@@ -4,6 +4,17 @@
 package dev.recmf.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.core.graphics.drawable.toBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -104,6 +115,7 @@ fun HomeScreen(
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
+    onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
@@ -146,6 +158,7 @@ fun HomeScreen(
                         hasNotificationAccess = hasNotificationAccess,
                         notificationApps = notificationApps,
                         onNotificationAppBlocked = onNotificationAppBlocked,
+                        onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
                         onNotificationsEnabled = onNotificationsEnabled,
                         onScreenOffOnlyEnabled = onScreenOffOnlyEnabled,
@@ -190,6 +203,7 @@ private fun TabContent(
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
+    onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
@@ -240,6 +254,7 @@ private fun TabContent(
                         apps = notificationApps,
                         onEnabled = onNotificationsEnabled,
                         onAppBlocked = onNotificationAppBlocked,
+                        onAllBlocked = onNotificationAppsBlocked,
                         onScreenOffOnly = onScreenOffOnlyEnabled,
                         onGrantAccess = onGrantNotificationAccess,
                     )
@@ -1103,6 +1118,7 @@ private fun NotificationsCard(
     onEnabled: (Boolean) -> Unit,
     onScreenOffOnly: (Boolean) -> Unit,
     onAppBlocked: (String, Boolean) -> Unit,
+    onAllBlocked: (List<String>, Boolean) -> Unit,
     onGrantAccess: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
@@ -1149,16 +1165,13 @@ private fun NotificationsCard(
 
                 HorizontalDivider(Modifier.padding(vertical = 8.dp))
 
-                // Shown even with nothing in it. The list fills as apps notify, so on the
-                // first run it is empty — and a feature that hides until it has something
-                // to show is a feature nobody can find. It says so instead.
-                var expanded by rememberSaveable { mutableStateOf(false) }
+                var picking by rememberSaveable { mutableStateOf(false) }
                 val silenced = apps.count { it.blocked }
 
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .then(if (apps.isEmpty()) Modifier else Modifier.clickable { expanded = !expanded }),
+                        .clickable(enabled = apps.isNotEmpty()) { picking = true },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1169,14 +1182,8 @@ private fun NotificationsCard(
                         )
                         Text(
                             when {
-                                apps.isEmpty() -> stringResource(R.string.notification_apps_none)
-
-                                silenced == 0 -> pluralStringResource(
-                                    R.plurals.notification_apps_all,
-                                    apps.size,
-                                    apps.size,
-                                )
-
+                                apps.isEmpty() -> stringResource(R.string.notification_apps_loading)
+                                silenced == 0 -> stringResource(R.string.notification_apps_all)
                                 else -> pluralStringResource(
                                     R.plurals.notification_apps_silenced,
                                     silenced,
@@ -1190,39 +1197,20 @@ private fun NotificationsCard(
 
                     if (apps.isNotEmpty()) {
                         Text(
-                            stringResource(
-                                if (expanded) R.string.action_hide else R.string.action_show,
-                            ),
+                            stringResource(R.string.action_choose),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
                 }
 
-                if (expanded) {
-                    // A plain column, not a lazy list: this is already inside a scrolling
-                    // page, and nesting one scroller in another is how a list ends up
-                    // unscrollable. The set is bounded and short.
-                    apps.forEach { app ->
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                app.label,
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.weight(1f),
-                            )
-                            Switch(
-                                checked = !app.blocked,
-                                onCheckedChange = { allowed ->
-                                    onAppBlocked(app.packageName, !allowed)
-                                },
-                                enabled = state.settings.notificationsEnabled,
-                            )
-                        }
-                    }
+                if (picking) {
+                    NotificationAppPicker(
+                        apps = apps,
+                        onBlocked = onAppBlocked,
+                        onAllBlocked = onAllBlocked,
+                        onDismiss = { picking = false },
+                    )
                 }
             } else {
                 Text(
@@ -1236,6 +1224,125 @@ private fun NotificationsCard(
         }
     }
 }
+
+/**
+ * Every app on the phone, with a switch each.
+ *
+ * Its own screen rather than a section of the card, because there are hundreds of them: a
+ * list that long inside a page that already scrolls is both slow to lay out and awkward to
+ * use, and a search box is the only thing that makes such a list usable at all.
+ */
+@Composable
+private fun NotificationAppPicker(
+    apps: List<NotificationApp>,
+    onBlocked: (String, Boolean) -> Unit,
+    onAllBlocked: (List<String>, Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
+            Column(Modifier.fillMaxSize().systemBarsPadding()) {
+                var query by rememberSaveable { mutableStateOf("") }
+
+                val shown = remember(apps, query) {
+                    if (query.isBlank()) apps else apps.filter { it.label.contains(query, ignoreCase = true) }
+                }
+
+                Row(
+                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        stringResource(R.string.notification_apps),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_done)) }
+                }
+
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text(stringResource(R.string.notification_apps_search)) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                )
+
+                // Both directions, because the sensible starting point differs by person:
+                // some want everything except a handful, some want nothing except a
+                // handful, and neither should mean a hundred taps.
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = { onAllBlocked(apps.map { it.packageName }, false) }) {
+                        Text(stringResource(R.string.action_allow_all))
+                    }
+                    TextButton(onClick = { onAllBlocked(apps.map { it.packageName }, true) }) {
+                        Text(stringResource(R.string.action_block_all))
+                    }
+                }
+
+                HorizontalDivider()
+
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(shown, key = { it.packageName }) { app ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onBlocked(app.packageName, !app.blocked) }
+                                .padding(horizontal = 20.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            AppIcon(app.packageName)
+                            Text(
+                                app.label,
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Switch(
+                                checked = !app.blocked,
+                                onCheckedChange = { allowed -> onBlocked(app.packageName, !allowed) },
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One app's icon, fetched off the main thread.
+ *
+ * Loading a few hundred icons at once would be a stall; the list only ever asks for the
+ * rows it is showing, and each row asks in the background and appears when it has one.
+ */
+@Composable
+private fun AppIcon(packageName: String) {
+    val context = LocalContext.current
+
+    val icon by produceState<ImageBitmap?>(initialValue = null, key1 = packageName) {
+        value = withContext(Dispatchers.IO) {
+            runCatching {
+                context.packageManager.getApplicationIcon(packageName).toBitmap(ICON_PX, ICON_PX)
+            }.getOrNull()?.asImageBitmap()
+        }
+    }
+
+    val size = Modifier.size(40.dp)
+
+    // The space is held whether or not the icon arrives, so a row does not jump sideways
+    // when it does, and an app whose icon cannot be read still lines up with the rest.
+    if (icon == null) {
+        Box(size)
+    } else {
+        Image(bitmap = icon!!, contentDescription = null, modifier = size)
+    }
+}
+
+private const val ICON_PX = 96
 
 /**
  * The recent protocol exchange.

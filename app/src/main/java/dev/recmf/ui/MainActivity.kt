@@ -121,6 +121,7 @@ class MainActivity : ComponentActivity() {
                     hasNotificationAccess = hasNotificationAccess,
                     notificationApps = notificationApps,
                     onNotificationAppBlocked = model::setNotificationBlocked,
+                    onNotificationAppsBlocked = model::setNotificationBlocked,
                     isBatteryExempt = isBatteryExempt,
                     onNotificationsEnabled = model::setNotificationsEnabled,
                     onScreenOffOnlyEnabled = model::setNotifyOnlyWhenScreenOff,

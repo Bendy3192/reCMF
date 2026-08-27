@@ -3,6 +3,7 @@
  */
 package dev.recmf.ui
 
+import android.content.Intent
 import android.app.Application
 import android.content.Context
 import android.os.PowerManager
@@ -37,6 +38,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
@@ -285,31 +290,59 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * The apps that have sent something, and whether each is silenced.
+     * Every app with a launcher icon, and whether each is silenced.
      *
-     * Names come from the package manager, and a package with no name — uninstalled since
-     * it last notified, or a system component with no label — falls back to its own
-     * identifier rather than vanishing from a list the wearer is trying to prune.
+     * Launchable apps rather than every installed package: the second is a list of
+     * hundreds of components with no user-facing existence, and picking out of it is
+     * worse than not having the list. This is the same set any launcher shows, which is
+     * the set a person recognises.
+     *
+     * Read once, off the main thread. A phone holds a few hundred of these and each label
+     * is a call into the package manager, which is not something to do while a frame is
+     * waiting.
      */
-    val notificationApps: StateFlow<List<NotificationApp>> = combine(
-        settingsStore.notificationSeenPackages,
-        settingsStore.notificationBlockedPackages,
-    ) { seen, blocked ->
-        val packages = application.packageManager
+    private val installedApps: Flow<List<NotificationApp>> = flow {
+        emit(loadInstalledApps())
+    }.flowOn(Dispatchers.IO)
 
-        seen.map { name ->
-            NotificationApp(
-                packageName = name,
-                label = runCatching {
-                    packages.getApplicationLabel(packages.getApplicationInfo(name, 0)).toString()
-                }.getOrNull().orEmpty().ifBlank { name },
-                blocked = name in blocked,
-            )
-        }.sortedBy { it.label.lowercase() }
+    val notificationApps: StateFlow<List<NotificationApp>> = combine(
+        installedApps,
+        settingsStore.notificationBlockedPackages,
+    ) { apps, blocked ->
+        apps.map { it.copy(blocked = it.packageName in blocked) }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    private fun loadInstalledApps(): List<NotificationApp> {
+        val packages = getApplication<Application>().packageManager
+
+        val launchable = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+
+        return packages.queryIntentActivities(launchable, 0)
+            .asSequence()
+            .map { it.activityInfo.applicationInfo }
+            .distinctBy { it.packageName }
+            .map { info ->
+                NotificationApp(
+                    packageName = info.packageName,
+                    // An app with no label is unusual; showing its identifier beats
+                    // showing a blank row nobody can act on.
+                    label = packages.getApplicationLabel(info).toString()
+                        .ifBlank { info.packageName },
+                    blocked = false,
+                )
+            }
+            // Case-insensitive, so "VK" does not sort miles from "Viber".
+            .sortedBy { it.label.lowercase() }
+            .toList()
+    }
 
     fun setNotificationBlocked(packageName: String, blocked: Boolean) {
         viewModelScope.launch { settingsStore.setNotificationBlocked(packageName, blocked) }
+    }
+
+    /** Everything at once, for the two buttons that save a hundred taps. */
+    fun setNotificationBlocked(packageNames: List<String>, blocked: Boolean) {
+        viewModelScope.launch { settingsStore.setNotificationBlocked(packageNames, blocked) }
     }
 
     private val updater = Updater(application)
