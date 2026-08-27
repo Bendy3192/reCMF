@@ -102,6 +102,10 @@ jobs:
       RECMF_KEYSTORE_BASE64: ${{ secrets.RECMF_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The whole history and every tag: the release notes below are the commits
+          # since the last release, and a shallow clone knows neither.
+          fetch-depth: 0
 
       - uses: actions/setup-java@v4
         with:
@@ -215,7 +219,32 @@ jobs:
           test -n "$version"
           echo "publishing version code $version"
 
+          # The changelog is the commit subjects since the last release. Bodies are
+          # left out on purpose — they are written for someone reading the diff, and
+          # the diff is linked underneath.
+          prev=$(git tag --list 'build-*' \
+            | sed 's/^build-//' \
+            | grep -E '^[0-9]+$' \
+            | sort -n \
+            | awk -v v="$version" '$1 < v' \
+            | tail -1)
+
+          {
+            if [ -n "$prev" ] && git rev-parse -q --verify "refs/tags/build-$prev" > /dev/null
+            then
+              git log --no-merges --pretty='- %s' "build-$prev..HEAD" | head -50
+              echo
+              echo "[Everything that changed](https://github.com/$GITHUB_REPOSITORY/compare/build-$prev...build-$version)"
+            else
+              # No earlier release to compare against, which is true exactly once.
+              echo "- The first release built from this repository."
+            fi
+
+            echo
+            echo "Built from \`$GITHUB_SHA\`."
+          } > notes.md
+
           gh release create "build-$version" recmf.apk \
             --title "build $version" \
-            --notes "Automatic build of ${{ github.sha }}." \
+            --notes-file notes.md \
             --latest
