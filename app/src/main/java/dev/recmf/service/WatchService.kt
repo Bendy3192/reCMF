@@ -43,6 +43,7 @@ import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.protocol.CmfWeather
 import dev.recmf.protocol.MonitoringChannel
+import dev.recmf.protocol.WatchGoals
 import dev.recmf.protocol.ActivityFetchState
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -119,6 +120,19 @@ class WatchService : LifecycleService() {
 
     private val media by lazy { MediaWatcher(this) }
     private val ringer by lazy { PhoneRinger(this) }
+
+    /**
+     * The goal block exactly as the watch last reported it.
+     *
+     * A goal write is that block with three fields replaced, so without one there is
+     * nothing to write — see [CmfSettings.goals]. Cleared with the connection, because a
+     * block from a watch that has since been reset, or from a different watch entirely,
+     * is not something to patch and send back.
+     */
+    private var reportedGoals: ByteArray? = null
+
+    /** One goal write per connection; see [onGoalsReported] for why it is not two. */
+    private var goalsWritten = false
 
     /** What the watch was last told is playing, so an unchanged track is not resent. */
     private var lastSentNowPlaying: NowPlaying? = null
@@ -403,6 +417,66 @@ class WatchService : LifecycleService() {
     }
 
     /**
+     * Writes the goals, if the watch has said what its own block looks like.
+     *
+     * Nothing is sent otherwise. The alternative is writing the ten big-endian bytes that
+     * were acknowledged and ignored, which is worse than not writing: it looks like it
+     * worked. The block arrives moments later on every connection, and [onGoalsReported]
+     * sends the write then.
+     */
+    private suspend fun sendGoals(preferences: WatchPreferences) {
+        val reported = reportedGoals
+        if (reported == null) {
+            ProtocolLog.note("Goals not sent yet: waiting for the watch to report its own")
+            return
+        }
+
+        val payload = CmfSettings.goals(
+            reported = reported,
+            steps = preferences.stepsGoal,
+            distanceMeters = preferences.distanceGoalMeters,
+            calories = preferences.caloriesGoal,
+        )
+
+        if (payload == null) {
+            ProtocolLog.note("Goals not sent: the watch's own block was too short to patch")
+            return
+        }
+
+        connection.send(CmfCommand.GOALS_SET, payload)
+    }
+
+    /**
+     * Takes the block the watch reported, and writes back if the user's goals differ.
+     *
+     * This is where a goal write actually happens on a fresh connection. The settings go
+     * out before this reply arrives — the block is asked for first, but a reply is not a
+     * return value — so a write attempted then has nothing to patch.
+     */
+    private suspend fun onGoalsReported(payload: ByteArray, goals: WatchGoals) {
+        reportedGoals = payload
+
+        val preferences = settings.watchPreferences.first()
+        if (WatchSetting.GOALS !in preferences.configured) return
+
+        val same = goals.steps == preferences.stepsGoal &&
+            goals.distanceMeters == preferences.distanceGoalMeters &&
+            goals.calories == preferences.caloriesGoal
+
+        if (same || goalsWritten) return
+
+        // Once per connection, and the flag is set before the write rather than after.
+        // The read below is what says whether the write landed — and if it did not, this
+        // is reached again with the same difference, which without the flag would be a
+        // write-read-write loop for as long as the watch stayed connected.
+        goalsWritten = true
+
+        ProtocolLog.note("Goals differ from yours; writing them")
+        sendGoals(preferences)
+        connection.send(CmfCommand.GOALS_GET)
+    }
+
+    /**
      * Reports one setting the watch answered with, and takes it if it is ours to take.
      *
      * The log says which of the two happened. "Taken" and "the user has already chosen
@@ -417,6 +491,7 @@ class WatchService : LifecycleService() {
         value: T?,
         describe: (T) -> String,
         adopt: suspend (T) -> Boolean,
+        then: suspend (T) -> Unit = {},
     ) {
         if (value == null) {
             ProtocolLog.note("Unreadable reply from the watch")
@@ -425,6 +500,7 @@ class WatchService : LifecycleService() {
 
         val taken = adopt(value)
         ProtocolLog.note(describe(value) + if (taken) " (taken)" else "")
+        then(value)
     }
 
     private fun onOff(enabled: Boolean): String = if (enabled) "on" else "off"
@@ -591,6 +667,12 @@ class WatchService : LifecycleService() {
     private suspend fun initializeWatch() {
         val nowMillis = System.currentTimeMillis()
 
+        // Cleared before anything is asked for. The watch may have been reset, used with
+        // another app, or be a different watch entirely, and a goal block from the last
+        // one is not something to patch and send back.
+        reportedGoals = null
+        goalsWritten = false
+
         connection.send(
             CmfCommand.TIME,
             CmfParsers.buildTimePayload(
@@ -633,15 +715,6 @@ class WatchService : LifecycleService() {
         val preferences = settings.watchPreferences.first()
         applyWatchPreferences(preferences)
         lastAppliedPreferences = preferences
-
-        // Asked a second time, now that the writes have gone out. The read at the top of
-        // this connection was the watch before reCMF said anything; this one is the watch
-        // having heard it, and the difference between the two log lines says whether a
-        // write landed. The goals write is the one under suspicion: it sends 5000 metres
-        // and 300 calories, and the watch reported 4000 and 400.
-        if (WatchSetting.GOALS in preferences.configured) {
-            connection.send(CmfCommand.GOALS_GET)
-        }
 
         requestSync()
 
@@ -708,16 +781,7 @@ class WatchService : LifecycleService() {
             connection.send(CmfCommand.UNIT_TEMPERATURE, units)
         }
 
-        ifSet(WatchSetting.GOALS) {
-            connection.send(
-                CmfCommand.GOALS_SET,
-                CmfSettings.goals(
-                    steps = preferences.stepsGoal,
-                    distanceMeters = preferences.distanceGoalMeters,
-                    calories = preferences.caloriesGoal,
-                ),
-            )
-        }
+        ifSet(WatchSetting.GOALS) { sendGoals(preferences) }
 
         ifSet(WatchSetting.ALERTS) {
             connection.send(
@@ -892,6 +956,7 @@ class WatchService : LifecycleService() {
                         "${it.climbs} climbs (and ${it.unidentified}, unidentified)"
                 },
                 adopt = { settings.adoptGoalsFromWatch(it) },
+                then = { onGoalsReported(message.payload, it) },
             )
 
             CmfCommand.STANDING_REMINDER_SET, CmfCommand.WATER_REMINDER_SET -> {

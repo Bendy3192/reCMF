@@ -64,12 +64,22 @@ afterwards.
 
 Two exceptions:
 
-- **Goals.** Only the step goal is taken. The reply is five little-endian numbers, and one
-  capture read 10000, 4000, 400, 720, 30 where reCMF had written 10000 steps, 5000 metres
-  and 300 calories. The steps match exactly; nothing else does, so the remaining four are
-  logged unnamed rather than guessed at. The write is a different shape again — ten
-  big-endian bytes the watch accepts — so this is the one command whose two directions are
-  not symmetric.
+- **Goals** are read in full and written back as the watch's own block. Four of the six
+  fields were confirmed against the watch's screen: 10000 steps, 400 calories, 30 active
+  minutes and — the byte after the numbers — 12 climbs. The fourth number, 720, is still
+  unnamed.
+
+  The old write did nothing. A capture has reCMF sending 5000 metres and 300 calories, the
+  watch answering `applied`, and the very next read reporting the 4000 and 400 it held
+  before: the ten big-endian bytes Gadgetbridge sends are acknowledged and dropped by this
+  firmware. An acknowledgement means the frame arrived, not that anything was stored.
+
+  So a write is now the twenty-eight byte block the watch itself reported, with the three
+  fields reCMF holds overwritten in place. Everything else goes back byte for byte — the
+  unexplained number, the climb goal there is no screen for, the seven flag bytes. Which
+  means the write has to wait for the read: on a fresh connection the settings go out
+  before the reply arrives, so the goal write happens when the block lands, once per
+  connection, followed by one more read to say whether it stuck.
 - **Do Not Disturb** is read and reported only. reCMF does not write it, so there is no
   preference for it to disagree with.
 
