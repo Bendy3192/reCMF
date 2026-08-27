@@ -102,6 +102,18 @@ class WatchService : LifecycleService() {
     /** The last forecast fetched, kept so a reconnect does not leave the watch blank. */
     private var weatherSnapshot: WeatherSnapshot? = null
 
+    /**
+     * What the watch was last given, so a refresh does not re-send an unchanged forecast.
+     *
+     * Separating the fetch from the send fixed a watch left blank after a reconnect, and
+     * went too far the other way: 199 bytes of identical forecast went out on every tick,
+     * which at a thirty-second interval is radio time on both sides for nothing.
+     */
+    private var weatherSentSnapshot: WeatherSnapshot? = null
+
+    /** What was last pushed, so only the groups that moved are sent again. */
+    private var lastAppliedPreferences: WatchPreferences? = null
+
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
 
@@ -272,6 +284,11 @@ class WatchService : LifecycleService() {
         // an hour-old temperature is a better watch face than a blank one.
         val snapshot = weatherSnapshot ?: return
 
+        // But only once. The watch keeps what it is given, so re-sending an unchanged
+        // forecast every tick is 199 bytes of radio on both sides for no change on the
+        // watch face. Cleared on connect, where the watch may have lost it.
+        if (snapshot == weatherSentSnapshot) return
+
         connection.send(
             CmfCommand.WEATHER_SET_1,
             CmfWeather.payload(
@@ -283,8 +300,57 @@ class WatchService : LifecycleService() {
             ),
         )
 
+        weatherSentSnapshot = snapshot
         WatchStatus.weatherSentAtMillis.value = now
         WatchStatus.weatherTemperatureC.value = snapshot.today.temperatureC
+    }
+
+    /**
+     * Whether a settings group differs between two snapshots.
+     *
+     * Written out per group rather than derived, because the alternative — comparing whole
+     * objects — would send everything whenever anything moved, which is the behaviour this
+     * replaces.
+     */
+    private fun changed(
+        setting: WatchSetting,
+        before: WatchPreferences,
+        after: WatchPreferences,
+    ): Boolean = when (setting) {
+        WatchSetting.MONITORING ->
+            before.heartRateMonitoring != after.heartRateMonitoring ||
+                before.spo2Monitoring != after.spo2Monitoring ||
+                before.stressMonitoring != after.stressMonitoring
+
+        WatchSetting.RAISE_TO_WAKE -> before.raiseToWake != after.raiseToWake
+        WatchSetting.TIME_FORMAT -> before.use24Hour != after.use24Hour
+        WatchSetting.UNITS -> before.metric != after.metric
+
+        WatchSetting.GOALS ->
+            before.stepsGoal != after.stepsGoal ||
+                before.distanceGoalMeters != after.distanceGoalMeters ||
+                before.caloriesGoal != after.caloriesGoal
+
+        WatchSetting.ALERTS ->
+            before.heartRateAlertLow != after.heartRateAlertLow ||
+                before.heartRateAlertRestingHigh != after.heartRateAlertRestingHigh ||
+                before.heartRateAlertActiveHigh != after.heartRateAlertActiveHigh ||
+                before.spo2AlertLow != after.spo2AlertLow
+
+        WatchSetting.STAND_REMINDER ->
+            before.standReminder != after.standReminder ||
+                before.standIntervalMinutes != after.standIntervalMinutes ||
+                before.standQuietStartMinutes != after.standQuietStartMinutes ||
+                before.standQuietEndMinutes != after.standQuietEndMinutes
+
+        WatchSetting.DRINK_REMINDER ->
+            before.drinkReminder != after.drinkReminder ||
+                before.drinkIntervalMinutes != after.drinkIntervalMinutes ||
+                before.drinkQuietStartMinutes != after.drinkQuietStartMinutes ||
+                before.drinkQuietEndMinutes != after.drinkQuietEndMinutes
+
+        WatchSetting.SPORTS -> before.sportTypes != after.sportTypes
+        WatchSetting.ALARMS -> before.alarms != after.alarms
     }
 
     /** Wall-clock time of a watch timestamp, for log lines a human has to check. */
@@ -364,7 +430,11 @@ class WatchService : LifecycleService() {
                 .distinctUntilChanged()
                 .debounce(SETTINGS_DEBOUNCE_MILLIS)
                 .collect { preferences ->
-                    if (_status.value == ConnectionState.READY) applyWatchPreferences(preferences)
+                    val previous = lastAppliedPreferences
+                    if (_status.value == ConnectionState.READY) {
+                        applyWatchPreferences(preferences, previous)
+                        lastAppliedPreferences = preferences
+                    }
                 }
         }
 
@@ -389,6 +459,7 @@ class WatchService : LifecycleService() {
                         // The place changed, so what we are holding is for somewhere else.
                         weatherFetchedAtMillis = 0L
                         weatherSnapshot = null
+                        weatherSentSnapshot = null
                         sendWeather()
                     }
                 }
@@ -471,9 +542,17 @@ class WatchService : LifecycleService() {
         // otherwise the first save deletes whatever the wearer set up in the stock app.
         connection.send(CmfCommand.ALARMS_GET)
 
-        applyWatchPreferences(settings.watchPreferences.first())
+        // No previous on a fresh connection: the watch may have been reset, used with
+        // another app, or simply be a different watch, so everything configured goes out.
+        val preferences = settings.watchPreferences.first()
+        applyWatchPreferences(preferences)
+        lastAppliedPreferences = preferences
 
         requestSync()
+
+        // The watch may have been reset or used with another app since we last spoke, so
+        // what it holds is not knowable from here.
+        weatherSentSnapshot = null
         sendWeather()
     }
 
@@ -483,10 +562,20 @@ class WatchService : LifecycleService() {
      * Most of these have no read-back command, so reCMF does not know what the watch
      * already holds. Sending its own defaults would silently replace a configuration the
      * user made in the official app — which is what it used to do.
+     *
+     * @param previous what was last sent, or null on a fresh connection where the watch
+     *   needs the whole configured set. Given one, only the groups that actually differ
+     *   go out: editing an alarm used to re-send the monitoring switches, the goals, the
+     *   reminders and the sport list along with it, every time.
      */
-    private suspend fun applyWatchPreferences(preferences: WatchPreferences) {
+    private suspend fun applyWatchPreferences(
+        preferences: WatchPreferences,
+        previous: WatchPreferences? = null,
+    ) {
         suspend fun ifSet(setting: WatchSetting, send: suspend () -> Unit) {
-            if (setting in preferences.configured) send()
+            if (setting !in preferences.configured) return
+            if (previous != null && !changed(setting, previous, preferences)) return
+            send()
         }
 
         ifSet(WatchSetting.MONITORING) {
