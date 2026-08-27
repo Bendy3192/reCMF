@@ -203,9 +203,19 @@ jobs:
           # Copied rather than passed with gh's "#label" syntax, which sets a display
           # label and leaves the asset named app-debug.apk.
           cp "$(ls app/build/outputs/apk/debug/*.apk | head -1)" recmf.apk
-          # The version code is the run number, so the tag is the version and the app can
-          # compare without downloading anything.
-          gh release create "build-${{ github.run_number }}" recmf.apk \
-            --title "build ${{ github.run_number }}" \
+
+          # The tag is the version, so the app can compare without downloading anything —
+          # which means it has to be the version code of the APK being attached, not
+          # something computed alongside it. Taken from the metadata the build itself
+          # wrote, so the two cannot drift: they did, the moment an offset was added to
+          # the version code and not to the tag, and the app then read every release as
+          # older than what was installed.
+          meta=app/build/outputs/apk/debug/output-metadata.json
+          version=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['elements'][0]['versionCode'])" "$meta")
+          test -n "$version"
+          echo "publishing version code $version"
+
+          gh release create "build-$version" recmf.apk \
+            --title "build $version" \
             --notes "Automatic build of ${{ github.sha }}." \
             --latest
