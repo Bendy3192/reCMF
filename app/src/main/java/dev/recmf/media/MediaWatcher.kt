@@ -5,11 +5,16 @@ package dev.recmf.media
 
 import android.content.ComponentName
 import android.content.Context
+import android.database.ContentObserver
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.VolumeProvider
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.util.Log
 import androidx.core.content.getSystemService
 import dev.recmf.notifications.NotificationRelay
@@ -66,9 +71,42 @@ class MediaWatcher(private val context: Context) {
         override fun onMetadataChanged(metadata: MediaMetadata?) = notifyChanged()
         override fun onPlaybackStateChanged(state: PlaybackState?) = notifyChanged()
 
+        // A session playing to a cast target carries its own volume, and this is how a
+        // change to it arrives.
+        override fun onAudioInfoChanged(info: MediaController.PlaybackInfo) = notifyChanged()
+
         // The session going away leaves the watch showing a track that is no longer
         // playing, so it counts as a change like any other.
         override fun onSessionDestroyed() = notifyChanged()
+    }
+
+    /**
+     * How loud the phone's own music stream is, or null when there is no audio service.
+     *
+     * Read often enough — on every settings change — that it is worth keeping short.
+     */
+    private fun streamVolume(): Int? = audio?.getStreamVolume(AudioManager.STREAM_MUSIC)
+
+    private var lastSeenStreamVolume: Int? = null
+
+    /**
+     * Notices the phone's volume moving.
+     *
+     * Android has no callback for the local stream below API 34, and the one it gained
+     * there is for system apps. What it does have is the audio service writing every level
+     * it settles on into [Settings.System], under a key that depends on where the sound is
+     * routed — `volume_music_speaker`, `volume_music_bt_a2dp`, and so on. Watching one key
+     * would work until the wearer plugged in headphones, so this watches the table and
+     * asks what changed; unrelated settings churn is filtered by the comparison, not by
+     * the URI.
+     */
+    private val volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) {
+            val now = streamVolume() ?: return
+            if (now == lastSeenStreamVolume) return
+            lastSeenStreamVolume = now
+            notifyChanged()
+        }
     }
 
     /**
@@ -77,19 +115,22 @@ class MediaWatcher(private val context: Context) {
      * Polling would not do: a track lasts minutes and the refresh timer is five, so half
      * of what the watch showed would be the song before. The callbacks fire on the change
      * itself.
-     *
-     * Volume is the exception — Android offers no callback for it that works below API 34,
-     * so a level changed on the phone reaches the watch on the next track change or
-     * refresh. A level changed *from* the watch is sent back immediately by the caller,
-     * which is the case that matters.
      */
     fun start(onChange: () -> Unit) {
         this.onChange = onChange
+        lastSeenStreamVolume = streamVolume()
 
         val listener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
             rebind(controllers?.firstOrNull())
             notifyChanged()
         }
+
+        context.contentResolver.registerContentObserver(
+            Settings.System.CONTENT_URI,
+            // Descendants too: the level lives under a per-route key, not at the root.
+            true,
+            volumeObserver,
+        )
 
         try {
             sessions?.addOnActiveSessionsChangedListener(listener, listenerComponent)
@@ -101,6 +142,7 @@ class MediaWatcher(private val context: Context) {
     }
 
     fun stop() {
+        context.contentResolver.unregisterContentObserver(volumeObserver)
         activeSessionsListener?.let { sessions?.removeOnActiveSessionsChangedListener(it) }
         activeSessionsListener = null
         rebind(null)
@@ -123,47 +165,82 @@ class MediaWatcher(private val context: Context) {
     fun nowPlaying(): NowPlaying {
         val controller = controller()
         val metadata = controller?.metadata
+        val volume = volumeOf(controller)
 
         return NowPlaying(
             state = controller?.playbackState.toMusicState(metadata != null),
             track = metadata?.text(MediaMetadata.METADATA_KEY_TITLE).orEmpty(),
             artist = metadata?.text(MediaMetadata.METADATA_KEY_ARTIST)
                 ?: metadata?.text(MediaMetadata.METADATA_KEY_ALBUM_ARTIST).orEmpty(),
-            volume = audio?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0,
-            maxVolume = audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 0,
+            volume = volume.first,
+            maxVolume = volume.second,
         )
     }
 
     /** @return true when the press reached something. */
-    fun press(button: MusicButton): Boolean {
-        if (button == MusicButton.VOLUME_UP || button == MusicButton.VOLUME_DOWN) {
-            val direction = if (button == MusicButton.VOLUME_UP) {
-                AudioManager.ADJUST_RAISE
-            } else {
-                AudioManager.ADJUST_LOWER
-            }
+    fun press(button: MusicButton): Boolean = when (button) {
+        MusicButton.PLAY -> transport { it.play() }
+        MusicButton.PAUSE -> transport { it.pause() }
+        MusicButton.NEXT -> transport { it.skipToNext() }
+        MusicButton.PREVIOUS -> transport { it.skipToPrevious() }
+        MusicButton.VOLUME_UP -> adjustVolume(up = true)
+        MusicButton.VOLUME_DOWN -> adjustVolume(up = false)
+    }
 
-            // No flags: the watch is already showing the level, and a volume overlay on a
-            // phone in a pocket is for nobody.
-            audio?.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0) ?: return false
+    private fun transport(press: (MediaController.TransportControls) -> Unit): Boolean {
+        val controls = controller()?.transportControls ?: return false
+        press(controls)
+        return true
+    }
+
+    /**
+     * The level the wearer is actually hearing, as `current to max`.
+     *
+     * A session casting to a speaker keeps its own volume and ignores the phone's music
+     * stream, so showing the phone's level there would be showing a number the watch's
+     * buttons cannot move.
+     */
+    private fun volumeOf(controller: MediaController?): Pair<Int, Int> {
+        val remote = controller?.playbackInfo?.takeIf { it.isRemote() }
+        if (remote != null) return remote.currentVolume to remote.maxVolume
+
+        return (streamVolume() ?: 0) to (audio?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 0)
+    }
+
+    /** @return true when something moved; false when there was nothing to move. */
+    private fun adjustVolume(up: Boolean): Boolean {
+        val direction = if (up) AudioManager.ADJUST_RAISE else AudioManager.ADJUST_LOWER
+        val controller = controller()
+        val remote = controller?.playbackInfo?.takeIf { it.isRemote() }
+
+        if (controller != null && remote != null) {
+            // A cast target that fixes its own volume — a TV on its remote, say. Telling
+            // it to change would be ignored; saying so puts a line in the protocol log
+            // instead of leaving the wearer pressing a dead button in silence.
+            if (remote.volumeControl == VolumeProvider.VOLUME_CONTROL_FIXED) return false
+
+            controller.adjustVolume(direction, 0)
             return true
         }
 
-        val transport = controller()?.transportControls ?: return false
+        val audio = audio ?: return false
 
-        // Every button named, and no else. The volume pair cannot reach here — it
-        // returned above — but writing them out rather than leaning on an else means a
-        // button added later fails to compile instead of silently doing nothing.
-        when (button) {
-            MusicButton.PLAY -> transport.play()
-            MusicButton.PAUSE -> transport.pause()
-            MusicButton.NEXT -> transport.skipToNext()
-            MusicButton.PREVIOUS -> transport.skipToPrevious()
-            MusicButton.VOLUME_UP, MusicButton.VOLUME_DOWN -> return false
+        return try {
+            // No flags: the watch is already showing the level, and a volume overlay on a
+            // phone in a pocket is for nobody.
+            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
+            true
+        } catch (e: SecurityException) {
+            // Do Not Disturb refuses volume changes to apps without notification-policy
+            // access, which reCMF has no reason to hold. Refusing quietly beats crashing
+            // the service over a button press.
+            Log.i(TAG, "Volume refused: ${e.message}")
+            false
         }
-
-        return true
     }
+
+    private fun MediaController.PlaybackInfo.isRemote(): Boolean =
+        playbackType == MediaController.PlaybackInfo.PLAYBACK_TYPE_REMOTE
 
     private fun MediaMetadata.text(key: String): String? =
         getText(key)?.toString()?.takeIf { it.isNotBlank() }

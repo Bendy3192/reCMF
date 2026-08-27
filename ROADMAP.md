@@ -126,6 +126,15 @@ It needed `MediaSessionManager`, which is gated on notification-listener access,
 cost no new permission. Changes are pushed on the callback rather than polled: a track
 lasts minutes and the refresh timer is five.
 
+**Volume** goes to whichever thing is actually making the sound: a session casting to a
+speaker carries its own level and ignores the phone's music stream, so it is moved and
+read through the session; anything else moves the stream. Android has no callback for the
+local stream below API 34 — and the one it gained there is for system apps — so a level
+changed on the phone is noticed by watching `Settings.System`, where the audio service
+writes it under a per-route key. Do Not Disturb refuses volume changes to apps without
+notification-policy access, which reCMF does not ask for; the press is dropped rather than
+taking the service down with it.
+
 **Calls are the worse-understood half.** `CALL_REMINDER` has an opcode and nothing else;
 Gadgetbridge's handler for it is an empty override. Meanwhile the *useful* part is already
 done without it: an incoming call reaches the watch as a notification with the caller's
