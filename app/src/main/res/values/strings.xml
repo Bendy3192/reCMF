@@ -97,6 +97,6 @@
     <string name="weather_status_unreachable">The weather service could not be reached. reCMF will try again on the next refresh; the watch keeps the last forecast it was given.</string>
     <string name="watch_last_exchange">Watch last answered at %1$s</string>
     <string name="background_work">Background updates are restricted</string>
-    <string name="background_work_explainer">Android is allowed to defer reCMF's scheduled work while the phone is idle, which is why the forecast and the step count can go hours without refreshing. Allowing unrestricted background use fixes that; reCMF still only wakes on its refresh interval.</string>
+    <string name="background_work_explainer">Android is allowed to defer reCMF\'s scheduled work while the phone is idle, which is why the forecast and the step count can go hours without refreshing. Allowing unrestricted background use fixes that; reCMF still only wakes on its refresh interval.</string>
     <string name="action_allow_background">Allow background use</string>
 </resources>
