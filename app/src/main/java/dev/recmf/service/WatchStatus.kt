@@ -44,6 +44,17 @@ object WatchStatus {
 
     /** Why there is no forecast on the watch, when there is not one. */
     val weatherProblem = MutableStateFlow<WeatherProblem?>(null)
+
+    /**
+     * When the watch last finished answering a fetch, whether or not it had anything new.
+     *
+     * Distinct from [lastRecordEpochSeconds], which is the date on the data, and from
+     * [lastSyncEpochSeconds], which is the last Health Connect write. A watch that has
+     * nothing new to report is a successful sync, and this is the only one of the three
+     * that moves when that happens — without it, a working Sync button and a dead one
+     * look exactly the same.
+     */
+    val lastExchangeAtMillis = MutableStateFlow<Long?>(null)
 }
 
 /**

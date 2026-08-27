@@ -266,6 +266,21 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
  */
 @Composable
 private fun WatchClockNote(watch: WatchInfo) {
+    // Says when the watch last answered, whether or not it had anything new. The line
+    // below reports the date on the data, which legitimately does not move between two
+    // syncs a minute apart — so on its own it made a working Sync button look dead.
+    watch.lastExchangeAtMillis?.let { exchangeAt ->
+        Text(
+            text = stringResource(
+                R.string.watch_last_exchange,
+                DateTimeFormatter.ofPattern("HH:mm:ss")
+                    .format(Instant.ofEpochMilli(exchangeAt).atZone(ZoneId.systemDefault())),
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
     val recordAt = watch.lastRecordEpochSeconds ?: return
 
     val watchDate = Instant.ofEpochSecond(recordAt).atZone(ZoneId.systemDefault()).toLocalDate()

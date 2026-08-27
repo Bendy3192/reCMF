@@ -94,4 +94,5 @@
     <string name="weather_status_waiting">На часы ещё не отправлено — это произойдёт при следующем обновлении или как только часы подключатся.</string>
     <string name="weather_status_no_city">Город не выбран, запрашивать нечего.</string>
     <string name="weather_status_unreachable">Не удалось связаться с сервисом погоды. reCMF попробует при следующем обновлении; на часах остаётся последний прогноз.</string>
+    <string name="watch_last_exchange">Часы последний раз ответили в %1$s</string>
 </resources>

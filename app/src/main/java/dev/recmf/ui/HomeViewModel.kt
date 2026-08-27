@@ -61,6 +61,8 @@ data class WatchInfo(
     /** The newest record the watch handed over, timestamped by the watch's own clock. */
     val lastRecordEpochSeconds: Long? = null,
     val lastRecordCount: Int? = null,
+    /** When the watch last finished answering, new data or not. */
+    val lastExchangeAtMillis: Long? = null,
 )
 
 /** What has become of the forecast, so the card can say rather than sit blank. */
@@ -94,13 +96,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private val watchInfo = combine(
-        WatchStatus.battery,
-        WatchStatus.firmware,
-        WatchStatus.serialNumber,
+        combine(WatchStatus.battery, WatchStatus.firmware, WatchStatus.serialNumber, ::Triple),
         WatchStatus.lastRecordEpochSeconds,
         WatchStatus.lastRecordCount,
-    ) { battery, firmware, serial, recordAt, recordCount ->
-        WatchInfo(battery, firmware, serial, recordAt, recordCount)
+        WatchStatus.lastExchangeAtMillis,
+    ) { (battery, firmware, serial), recordAt, recordCount, exchangeAt ->
+        WatchInfo(battery, firmware, serial, recordAt, recordCount, exchangeAt)
     }
 
     private val weatherStatus = combine(

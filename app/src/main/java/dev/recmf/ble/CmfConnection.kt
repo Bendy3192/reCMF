@@ -94,6 +94,9 @@ class CmfConnection(
     val failures: SharedFlow<ConnectionFailure> = _failures.asSharedFlow()
 
     private var gatt: BluetoothGatt? = null
+
+    /** The address of the link in hand, so a redundant connect can be recognised. */
+    private var connectedAddress: String? = null
     private var queueJob: Job? = null
     private var operations: Channel<QueuedOperation>? = null
 
@@ -115,7 +118,17 @@ class CmfConnection(
      */
     fun connect(address: String, authKey: ByteArray?) {
         scope.launch {
+            // A plain "start the service" arrives from the watchdog, from a swipe out of
+            // Recents, and from the boot receiver — and each one used to tear a working
+            // link down and build it again from the handshake up. Reconnecting to the
+            // watch we are already talking to is never the useful answer.
+            if (connectedAddress == address && _state.value == ConnectionState.READY) {
+                Log.i(TAG, "Already connected to $address")
+                return@launch
+            }
+
             teardown()
+            connectedAddress = address
 
             val adapter = context.getSystemService<BluetoothManager>()?.adapter
             if (adapter == null || !adapter.isEnabled) {
@@ -546,6 +559,7 @@ class CmfConnection(
 
         resetProtocolState()
         authenticator = null
+        connectedAddress = null
 
         // close() is what actually releases the native client; disconnect() alone
         // leaves it registered and leaks one per reconnect.

@@ -313,7 +313,11 @@ class WatchService : LifecycleService() {
 
                 if (state == ConnectionState.READY) {
                     backoff.reset()
-                    initializeWatch()
+                    // Launched rather than awaited: initialising fetches a forecast, and a
+                    // provider that takes its fifteen seconds to time out would hold up
+                    // every later state change behind it — including the disconnect that
+                    // would explain why it was slow.
+                    lifecycleScope.launch { initializeWatch() }
                 }
             }
         }
@@ -534,6 +538,10 @@ class WatchService : LifecycleService() {
                     connection.send(CmfCommand.ACTIVITY_FETCH_2, CmfFrame.A5)
 
                 ActivityFetchState.FINISHED -> {
+                    // The watch has said its piece. It may well have had nothing new,
+                    // which is still a completed exchange and the thing the user is
+                    // actually asking about when they press Sync.
+                    WatchStatus.lastExchangeAtMillis.value = System.currentTimeMillis()
                     ingest.flushToHealthConnect()
                     ingest.prune()
                 }
@@ -566,8 +574,26 @@ class WatchService : LifecycleService() {
         }
     }
 
+    /**
+     * Asks the watch for the battery level and anything it has recorded.
+     *
+     * When the link is not up this reconnects instead of returning quietly. Pressing Sync
+     * and having nothing at all happen — no data, no error, no attempt — was indisputably
+     * worse than either outcome.
+     */
     private suspend fun requestSync() {
-        if (_status.value != ConnectionState.READY) return
+        val state = _status.value
+        if (state != ConnectionState.READY) {
+            // Mid-handshake is already on its way to ready, and reconnecting would throw
+            // that progress away. Only a link that is idle or waiting needs a push.
+            if (state == ConnectionState.IDLE || state == ConnectionState.WAITING) {
+                ProtocolLog.note("Sync asked for while $state; reconnecting")
+                connectToPairedWatch()
+            } else {
+                ProtocolLog.note("Sync asked for while $state; already connecting")
+            }
+            return
+        }
 
         connection.send(CmfCommand.BATTERY)
         connection.send(CmfCommand.ACTIVITY_FETCH_1, dev.recmf.protocol.CmfFrame.A5)
