@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import android.annotation.SuppressLint
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -42,6 +43,26 @@ class MainActivity : ComponentActivity() {
 
     private val requestHealthConnect =
         registerForActivityResult(PermissionControllerContract()) { }
+
+    /**
+     * Opens the exemption dialog for reCMF specifically.
+     *
+     * Lint objects that this permission is restricted on the Play Store to a list of
+     * acceptable use cases. reCMF is not distributed there — it is a sideloaded companion
+     * app for a watch, which is the shape of app the exemption exists for — so the
+     * objection is noted rather than obeyed. Anyone taking this to Play should send the
+     * user to the system list via ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS instead,
+     * which asks for nothing but makes the user find reCMF among every installed app.
+     */
+    @SuppressLint("BatteryLife")
+    private fun requestBackgroundExemption() {
+        startActivity(
+            Intent(
+                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                "package:$packageName".toUri(),
+            ),
+        )
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,17 +104,7 @@ class MainActivity : ComponentActivity() {
                     onGrantNotificationAccess = {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     },
-                    onAllowBackgroundWork = {
-                        // The targeted dialog rather than the whole-app list: the
-                        // permission is declared, and making the user find reCMF among
-                        // every installed app is how a setting that matters goes unset.
-                        startActivity(
-                            Intent(
-                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                                "package:$packageName".toUri(),
-                            ),
-                        )
-                    },
+                    onAllowBackgroundWork = ::requestBackgroundExemption,
                     onScan = model::startScan,
                     onPair = model::pair,
                     onForget = model::forget,
