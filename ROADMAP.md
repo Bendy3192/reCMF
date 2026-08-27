@@ -115,18 +115,16 @@ ring — the first thing here that is a feature of the phone rather than of the 
 **Contacts** are untouched: `CONTACTS_GET` is in the table, Gadgetbridge never calls it,
 and the reply layout is unknown.
 
-## Phase 5 — Calls and music
+## Phase 5 — Calls and music *(music done)*
 
-**Music is the better-understood half, and is next.** Gadgetbridge implements both
-directions and reCMF can port them:
+**Music is done.** `MUSIC_INFO_SET` carries the state, the volume and its maximum, then
+the track and artist in 64 bytes each; `MUSIC_BUTTON` comes back as two little-endian
+bytes — an action and a direction, which read as one number in Gadgetbridge and hide that
+structure.
 
-- `MUSIC_INFO_SET` — 131 bytes: state, volume, maximum volume, then the track and the
-  artist in 64 bytes each.
-- `MUSIC_BUTTON` — a `uint16` from the watch: `0x0101` play, `0x0001` pause, `0x0102`
-  next, `0x0103` volume up, `0x0003` volume down.
-
-It needs `MediaSessionManager`, which is gated on notification-listener access — the
-permission reCMF already holds for forwarding notifications. No new permission.
+It needed `MediaSessionManager`, which is gated on notification-listener access, so it
+cost no new permission. Changes are pushed on the callback rather than polled: a track
+lasts minutes and the refresh timer is five.
 
 **Calls are the worse-understood half.** `CALL_REMINDER` has an opcode and nothing else;
 Gadgetbridge's handler for it is an empty override. Meanwhile the *useful* part is already

@@ -33,7 +33,10 @@ import dev.recmf.notifications.OutgoingNotifications
 import dev.recmf.weather.WeatherClient
 import dev.recmf.weather.WeatherLocation
 import dev.recmf.weather.WeatherSnapshot
+import dev.recmf.media.MediaWatcher
+import dev.recmf.media.NowPlaying
 import dev.recmf.protocol.CmfAlarms
+import dev.recmf.protocol.CmfMusic
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
@@ -114,6 +117,11 @@ class WatchService : LifecycleService() {
     /** What was last pushed, so only the groups that moved are sent again. */
     private var lastAppliedPreferences: WatchPreferences? = null
 
+    private val media by lazy { MediaWatcher(this) }
+
+    /** What the watch was last told is playing, so an unchanged track is not resent. */
+    private var lastSentNowPlaying: NowPlaying? = null
+
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
 
@@ -139,6 +147,11 @@ class WatchService : LifecycleService() {
 
         createNotificationChannel()
         observeConnection()
+
+        // Pushed on the change rather than polled: a track lasts minutes and the refresh
+        // timer is five, so a polled watch would spend half its time showing the song
+        // before.
+        media.start { lifecycleScope.launch { sendNowPlaying() } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -181,6 +194,7 @@ class WatchService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        media.stop()
         autoSyncJob?.cancel()
         connection.disconnect()
         bleScope.cancel()
@@ -233,6 +247,7 @@ class WatchService : LifecycleService() {
      */
     private suspend fun refreshNow() {
         requestSync()
+        sendNowPlaying()
 
         // requestSync may have started a reconnect rather than a fetch; there is nothing
         // to send a forecast down until that finishes, and the next refresh will carry it.
@@ -351,6 +366,33 @@ class WatchService : LifecycleService() {
 
         WatchSetting.SPORTS -> before.sportTypes != after.sportTypes
         WatchSetting.ALARMS -> before.alarms != after.alarms
+    }
+
+    /**
+     * Tells the watch what is playing.
+     *
+     * Sent only when it differs from what the watch was last given, for the same reason
+     * the forecast is: the watch keeps what it is handed, and a track that has not changed
+     * is radio time for a display that would not change either.
+     */
+    private suspend fun sendNowPlaying() {
+        if (_status.value != ConnectionState.READY) return
+
+        val playing = media.nowPlaying()
+        if (playing == lastSentNowPlaying) return
+
+        connection.send(
+            CmfCommand.MUSIC_INFO_SET,
+            CmfMusic.payload(
+                state = playing.state,
+                volume = playing.volume,
+                maxVolume = playing.maxVolume,
+                track = playing.track,
+                artist = playing.artist,
+            ),
+        )
+
+        lastSentNowPlaying = playing
     }
 
     /** Wall-clock time of a watch timestamp, for log lines a human has to check. */
@@ -553,7 +595,9 @@ class WatchService : LifecycleService() {
         // The watch may have been reset or used with another app since we last spoke, so
         // what it holds is not knowable from here.
         weatherSentSnapshot = null
+        lastSentNowPlaying = null
         sendWeather()
+        sendNowPlaying()
     }
 
     /**
@@ -774,6 +818,25 @@ class WatchService : LifecycleService() {
             // The watch answers our ring with one byte, and rings again when the wearer
             // taps its own find-phone button. Nothing to do with it either way.
             CmfCommand.FIND_WATCH -> Unit
+
+            CmfCommand.MUSIC_BUTTON -> {
+                val button = CmfMusic.parseButton(message.payload)
+                if (button == null) {
+                    ProtocolLog.note("Unrecognised music button")
+                } else if (media.press(button)) {
+                    // The phone's state has just changed under the watch, and it will not
+                    // find out any other way — there is no notification for "the volume
+                    // moved". Sending it back is what makes the watch's own display agree
+                    // with what its buttons just did.
+                    sendNowPlaying()
+                } else {
+                    ProtocolLog.note("Nothing to press for $button")
+                }
+            }
+
+            // The watch confirming it took the track. Nothing to do, but naming it keeps
+            // it out of the unhandled list.
+            CmfCommand.MUSIC_INFO_ACK -> Unit
 
             // Kept in memory rather than stored: enough to show the newest reading and to
             // prove the data is arriving. Persistence and Health Connect follow once the

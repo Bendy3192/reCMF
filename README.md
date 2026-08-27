@@ -98,13 +98,14 @@ exists because of it.
 | Alarms | Read from the watch and edited here, with repeat days |
 | Notifications | Forwarded with icons, optionally only while the phone's screen is off; SMS included; incoming calls show the caller's name |
 | Weather | Fetched from Open-Meteo for a typed city and pushed to the watch face |
+| Music | Now playing on the watch face, and play, pause, track and volume from the wrist |
 | Find watch | Makes it ring |
 | Updates | Checks this repository's releases and installs them |
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
 | UI | Compose, Material 3, dynamic colour, two tabs |
 
 **Not done:** sleep (parsed, unverified, not stored), workouts and their GPS tracks,
-contacts, music control, a call screen with answer and reject, watchfaces, firmware.
+contacts, a call screen with answer and reject, watchfaces, firmware.
 
 ### About Material 3 Expressive
 
