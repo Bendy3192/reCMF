@@ -1,12 +1,25 @@
 /**
+ * How far the run counter had got before the repository was recreated.
+ *
+ * Deleting a repository resets GITHUB_RUN_NUMBER to 1, and Android refuses to install a
+ * version code lower than the one already on the phone. Without this, every phone running
+ * a build from the old repository would be stuck: the only way forward would be an
+ * uninstall, which is exactly the settings loss the fixed signing key was meant to end.
+ *
+ * Raise it, never lower it.
+ */
+val VERSION_CODE_OFFSET = 200
+
+/**
  * The build's own number, which has to rise for Android to treat one APK as an update to
- * another. GitHub Actions counts runs; a local build is always 1, which is fine because a
- * local build is never something a phone is asked to upgrade to.
+ * another. GitHub Actions counts runs; a local build is always the offset plus one, which
+ * is fine because a local build is never something a phone is asked to upgrade to.
  *
  * Deliberately not the commit count: CI clones with fetch-depth 1, so a commit count read
  * there would be 1 on every build.
  */
-val buildNumber: Int = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull() ?: 1
+val buildNumber: Int =
+    VERSION_CODE_OFFSET + ((System.getenv("GITHUB_RUN_NUMBER") ?: "1").toIntOrNull() ?: 1)
 
 /** Bumped by hand when something is worth calling a new version. */
 val RELEASE_NAME = "0.2"
