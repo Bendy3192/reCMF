@@ -117,14 +117,21 @@ class SampleIngest(
                 previousIsRecordedTotal = fromTable == null && baseline != null,
             )
 
-            // Written down where the wearer can see it. What reaches Health Connect is a
-            // sum of differences, and the only way to tell it apart from the watch's own
-            // total — which is what the app shows — is to be able to add these up.
-            if (deltas.isNotEmpty()) {
+            // One line that settles where a shortfall lives.
+            //
+            // The app's front screen shows the watch's counter; Health Connect gets a sum
+            // of differences. When those disagree the question is whether the differences
+            // were computed short or arrived short, and nothing about either number on its
+            // own can say. So both are printed side by side: the counter's own advance
+            // across this batch, and what was written for it. Equal means the arithmetic
+            // is right and the loss is past this point; unequal means it is here.
+            if (activity.isNotEmpty()) {
+                val advance = baseline?.let { activity.last().steps - it.steps }
                 ProtocolLog.note(
-                    "Health Connect: ${deltas.sumOf { it.steps }} steps in " +
-                        "${deltas.size} interval(s), " +
-                        "${clock(deltas.first().startSeconds)}–${clock(deltas.last().endSeconds)}",
+                    "Health Connect: wrote ${deltas.sumOf { it.steps }} steps" +
+                        (advance?.let { ", counter moved $it" } ?: ", no baseline") +
+                        ", ${deltas.size} interval(s) over ${activity.size} reading(s)" +
+                        ", ${clock(activity.first().timestamp)}–${clock(activity.last().timestamp)}",
                 )
             }
 

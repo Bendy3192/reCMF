@@ -18,6 +18,7 @@ import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Percentage
+import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RestingHeartRateSampleEntity
 import dev.recmf.data.Spo2SampleEntity
@@ -181,7 +182,13 @@ class HealthConnectSync(private val context: Context) {
         } catch (e: Exception) {
             // Health Connect throws a variety of remote-process exceptions; none of them
             // should take down the sync service.
+            //
+            // Said out loud, not just to logcat. A refusal here is invisible from the
+            // outside — the records simply never appear — and the wearer cannot read
+            // logcat. Half a day was spent looking for a leak in the arithmetic that may
+            // well have been a refusal nobody could see.
             Log.e(TAG, "Health Connect rejected ${records.size} records", e)
+            ProtocolLog.note("Health Connect refused ${records.size} record(s): ${e.message}")
             false
         }
     }
