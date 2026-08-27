@@ -57,6 +57,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.TimeZone
 import java.util.concurrent.Executors
 
@@ -123,6 +125,17 @@ class WatchService : LifecycleService() {
     /** What the watch was last told is playing, so an unchanged track is not resent. */
     private var lastSentNowPlaying: NowPlaying? = null
 
+    /**
+     * One now-playing send at a time.
+     *
+     * Turning the volume down two steps produced six identical 131-byte writes in three
+     * seconds. Several things notice the same change at once — the volume observer, the
+     * session's audio callback, a refresh — and each launched a coroutine that read
+     * [lastSentNowPlaying] before any of them had written it, so the guard against
+     * resending an unchanged track never saw a change to guard against.
+     */
+    private val nowPlayingLock = Mutex()
+
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
 
@@ -166,7 +179,13 @@ class WatchService : LifecycleService() {
                 return START_NOT_STICKY
             }
 
-            ACTION_SYNC_NOW -> lifecycleScope.launch { refreshNow() }
+            ACTION_SYNC_NOW -> lifecycleScope.launch {
+                refreshNow()
+
+                // Only here, not on the timer: a person pressing Sync is asking what the
+                // watch says, and the answer is worth a dozen frames.
+                if (_status.value == ConnectionState.READY) readBackSettings()
+            }
 
             ACTION_FIND_WATCH -> lifecycleScope.launch {
                 if (_status.value == ConnectionState.READY) connection.send(CmfCommand.FIND_WATCH)
@@ -383,23 +402,27 @@ class WatchService : LifecycleService() {
      * is radio time for a display that would not change either.
      */
     private suspend fun sendNowPlaying() {
-        if (_status.value != ConnectionState.READY) return
+        // A block body, not an expression one: Kotlin refuses a bare `return` in an
+        // expression-bodied function, and the early exits below are the point.
+        nowPlayingLock.withLock {
+            if (_status.value != ConnectionState.READY) return
 
-        val playing = media.nowPlaying()
-        if (playing == lastSentNowPlaying) return
+            val playing = media.nowPlaying()
+            if (playing == lastSentNowPlaying) return
 
-        connection.send(
-            CmfCommand.MUSIC_INFO_SET,
-            CmfMusic.payload(
-                state = playing.state,
-                volume = playing.volume,
-                maxVolume = playing.maxVolume,
-                track = playing.track,
-                artist = playing.artist,
-            ),
-        )
+            connection.send(
+                CmfCommand.MUSIC_INFO_SET,
+                CmfMusic.payload(
+                    state = playing.state,
+                    volume = playing.volume,
+                    maxVolume = playing.maxVolume,
+                    track = playing.track,
+                    artist = playing.artist,
+                ),
+            )
 
-        lastSentNowPlaying = playing
+            lastSentNowPlaying = playing
+        }
     }
 
     /**
@@ -601,32 +624,7 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.FIRMWARE_VERSION_GET)
         connection.send(CmfCommand.SERIAL_NUMBER_GET)
 
-        // Ask the watch what it is actually set to. reCMF has never read a setting, which
-        // is why it only sends the ones the user has touched — and the replies are
-        // undocumented, so this starts by asking and writing down what comes back.
-        //
-        // The reply arrives under the matching SET opcode, not a distinct one: the pattern
-        // is visible in the pair the watch already answers, SERIAL_NUMBER_GET on
-        // 0x00de/0x0002 replying as 0x00de/0x0001. Nothing handles those inbound yet, so
-        // they land in the log with their bytes, which is the point of asking.
-        connection.send(CmfCommand.HEART_MONITORING_ENABLED_GET)
-        connection.send(CmfCommand.STANDING_REMINDER_GET)
-        connection.send(CmfCommand.WATER_REMINDER_GET)
-
-        // The same question put to every other setting reCMF writes. All five were a
-        // prediction and all five answered: the `0x0002` half of a pair has been answered
-        // under its `0x0001` every time it has been tried on this watch. What comes back
-        // is parsed in the handler below.
-        connection.send(CmfCommand.GOALS_GET)
-        connection.send(CmfCommand.TIME_FORMAT_GET)
-        connection.send(CmfCommand.WAKE_ON_WRIST_RAISE_GET)
-        connection.send(CmfCommand.SPORTS_GET)
-        connection.send(CmfCommand.DO_NOT_DISTURB_GET)
-
-        // The one that unblocks alarms. The watch keeps exactly the list it is sent, so
-        // reCMF must not offer an alarm UI until it can read what is already there —
-        // otherwise the first save deletes whatever the wearer set up in the stock app.
-        connection.send(CmfCommand.ALARMS_GET)
+        readBackSettings()
 
         // No previous on a fresh connection: the watch may have been reset, used with
         // another app, or simply be a different watch, so everything configured goes out.
@@ -642,6 +640,35 @@ class WatchService : LifecycleService() {
         lastSentNowPlaying = null
         sendWeather()
         sendNowPlaying()
+    }
+
+    /**
+     * Asks the watch what it is actually set to.
+     *
+     * The reply arrives under the matching SET opcode, not a distinct one: the `0x0002`
+     * half of a pair is answered by its `0x0001` half, every time it has been tried on
+     * this watch — the serial number, the alarms, both reminders, raise-to-wake, the clock
+     * format, the sport list, Do Not Disturb, the goals and the battery.
+     *
+     * Also runs on a *manual* sync, and only a manual one. It is a dozen small frames, too
+     * many to spend every five minutes on a timer — but pressing Sync is how a person
+     * asks "what does the watch actually say", and until this ran there, checking whether
+     * a setting had landed meant reconnecting the Bluetooth link by hand.
+     */
+    private suspend fun readBackSettings() {
+        connection.send(CmfCommand.HEART_MONITORING_ENABLED_GET)
+        connection.send(CmfCommand.STANDING_REMINDER_GET)
+        connection.send(CmfCommand.WATER_REMINDER_GET)
+        connection.send(CmfCommand.GOALS_GET)
+        connection.send(CmfCommand.TIME_FORMAT_GET)
+        connection.send(CmfCommand.WAKE_ON_WRIST_RAISE_GET)
+        connection.send(CmfCommand.SPORTS_GET)
+        connection.send(CmfCommand.DO_NOT_DISTURB_GET)
+
+        // The one that unblocks alarms. The watch keeps exactly the list it is sent, so
+        // reCMF must not offer an alarm UI until it can read what is already there —
+        // otherwise the first save deletes whatever the wearer set up in the stock app.
+        connection.send(CmfCommand.ALARMS_GET)
     }
 
     /**
