@@ -196,7 +196,7 @@ jobs:
       # Only from the development branch, and only when everything above passed: a release
       # is what phones will install, so a red build must never become one.
       - name: Publish the build as a release
-        if: success() && github.ref == 'refs/heads/claude/cmf-watch-pro-poisonfit-apdhqr'
+        if: success() && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
