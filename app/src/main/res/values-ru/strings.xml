@@ -139,6 +139,11 @@
     <string name="update_downloading">Скачиваю…</string>
     <string name="update_confirm">Android спросит подтверждение установки. Если откажет — разрешите reCMF устанавливать приложения в системных настройках.</string>
     <string name="update_failed">Не удалось обновить: %1$s</string>
+    <string name="update_notes_title">Что изменилось</string>
+    <string name="notification_channel_updates">Новые сборки</string>
+    <string name="notification_channel_updates_description">Один раз сообщает о новой сборке reCMF.</string>
+    <string name="update_notification_title">Доступна %1$s</string>
+    <string name="update_notification_text">Откройте reCMF, чтобы установить.</string>
     <string name="action_check_update">Проверить обновления</string>
     <string name="action_install_update">Скачать и установить</string>
 </resources>

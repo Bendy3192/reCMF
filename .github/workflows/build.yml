@@ -244,7 +244,11 @@ jobs:
             echo "Built from \`$GITHUB_SHA\`."
           } > notes.md
 
-          gh release create "build-$version" recmf.apk \
+          # notes.md ships as an asset as well as being the release body. The app reads
+          # it to say what an update contains, and it has to come from the same
+          # quota-free download path the APK does — asking the API for the body is what
+          # made the update check fail with 403 on mobile data in the first place.
+          gh release create "build-$version" recmf.apk notes.md \
             --title "build $version" \
             --notes-file notes.md \
             --latest

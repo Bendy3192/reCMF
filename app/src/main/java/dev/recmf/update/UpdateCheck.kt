@@ -3,11 +3,19 @@
  */
 package dev.recmf.update
 
-/** A build newer than this one, and where to get it. */
+/**
+ * A build newer than this one, and where to get it.
+ *
+ * @param notes what changed, as the release says, or null when it could not be read. Not
+ *   worth failing an update over: a version the wearer cannot describe is still a version
+ *   they can install.
+ */
 data class AvailableUpdate(
     val versionCode: Int,
     val name: String,
     val apkUrl: String,
+    val notesUrl: String,
+    val notes: String? = null,
 )
 
 /**
@@ -47,6 +55,15 @@ object UpdateCheck {
 
     /** The asset name the workflow uploads. */
     const val APK_NAME: String = "recmf.apk"
+
+    /**
+     * The changelog, uploaded as an asset next to the APK.
+     *
+     * The release body says the same thing, but reading that means asking the API, and
+     * the API is the thing this file exists to avoid. An asset comes down the same
+     * quota-free path as the APK itself.
+     */
+    const val NOTES_NAME: String = "notes.md"
 
     const val LATEST_RELEASE_URL: String = "https://github.com/$REPOSITORY/releases/latest"
 
@@ -92,9 +109,31 @@ object UpdateCheck {
         return AvailableUpdate(
             versionCode = version,
             name = tag.replace('-', ' '),
-            apkUrl = "https://github.com/$REPOSITORY/releases/download/$tag/$APK_NAME",
+            apkUrl = downloadUrl(tag, APK_NAME),
+            notesUrl = downloadUrl(tag, NOTES_NAME),
         )
     }
+
+    private fun downloadUrl(tag: String, asset: String): String =
+        "https://github.com/$REPOSITORY/releases/download/$tag/$asset"
+
+    /**
+     * Trims a changelog down to something a notification and a card can hold.
+     *
+     * The release body ends with a comparison link and the commit it was built from, which
+     * are for someone at a keyboard, not someone deciding whether to tap Install.
+     */
+    fun readableNotes(body: String): String? = body
+        .lineSequence()
+        .map { it.trim() }
+        .filter { it.startsWith("- ") }
+        .map { it.removePrefix("- ") }
+        .take(MAX_NOTE_LINES)
+        .joinToString("\n") { "• $it" }
+        .takeIf { it.isNotBlank() }
+
+    /** Longer than this is not a summary, and no notification shows it anyway. */
+    private const val MAX_NOTE_LINES = 8
 
     private const val TAG_PREFIX = "build-"
 }

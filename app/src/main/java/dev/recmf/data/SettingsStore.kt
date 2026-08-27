@@ -346,6 +346,20 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /**
+     * The newest build the wearer has already been told about.
+     *
+     * Kept so the daily check can tell "there is an update" from "there is an update you
+     * have not seen": the first is true every day until they install it, and a phone that
+     * says so every day is a phone people learn to ignore.
+     */
+    val lastAnnouncedVersion: Flow<Int> =
+        context.dataStore.data.map { it[KEY_LAST_ANNOUNCED_VERSION] ?: 0 }
+
+    suspend fun setLastAnnouncedVersion(versionCode: Int) {
+        context.dataStore.edit { it[KEY_LAST_ANNOUNCED_VERSION] = versionCode }
+    }
+
     suspend fun setLastSync(epochSeconds: Long) {
         context.dataStore.edit { it[KEY_LAST_SYNC] = epochSeconds }
     }
@@ -363,6 +377,7 @@ class SettingsStore(private val context: Context) {
         val KEY_WEATHER_LAT = doublePreferencesKey("weather_latitude")
         val KEY_WEATHER_LON = doublePreferencesKey("weather_longitude")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")
+        val KEY_LAST_ANNOUNCED_VERSION = intPreferencesKey("last_announced_version_code")
 
         val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")
         val KEY_SPO2_MONITORING = booleanPreferencesKey("watch_spo2_monitoring")

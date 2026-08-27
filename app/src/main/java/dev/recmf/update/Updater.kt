@@ -9,6 +9,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.Reader
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -51,8 +52,9 @@ class Updater(private val context: Context) {
             ?: return@withContext UpdateState.Failed("no release published yet")
 
         val update = UpdateCheck.update(tag, currentVersionCode)
+            ?: return@withContext UpdateState.UpToDate
 
-        if (update == null) UpdateState.UpToDate else UpdateState.Available(update)
+        UpdateState.Available(update.copy(notes = notes(update)))
     }
 
     /**
@@ -130,6 +132,56 @@ class Updater(private val context: Context) {
         }
     }
 
+    /**
+     * What the release says changed, or null.
+     *
+     * Best effort by design. The changelog is a courtesy — it says why the wearer is
+     * updating — and an update that could otherwise be installed must not be lost because
+     * a second file failed to download.
+     */
+    private fun notes(update: AvailableUpdate): String? = try {
+        val connection = (URL(update.notesUrl).openConnection() as HttpURLConnection).apply {
+            instanceFollowRedirects = true
+            connectTimeout = TIMEOUT_MILLIS
+            readTimeout = TIMEOUT_MILLIS
+            setRequestProperty("User-Agent", USER_AGENT)
+        }
+
+        try {
+            if (connection.responseCode !in 200..299) {
+                Log.i(TAG, "No release notes: ${connection.responseCode}")
+                null
+            } else {
+                // Bounded: this is a text file the build writes, but it arrives over the
+                // network and nothing here should read an arbitrary number of bytes into
+                // memory on the strength of that.
+                val body = connection.inputStream.bufferedReader()
+                    .use { it.readAtMost(MAX_NOTES_CHARS) }
+
+                UpdateCheck.readableNotes(body)
+            }
+        } finally {
+            connection.disconnect()
+        }
+    } catch (e: IOException) {
+        Log.i(TAG, "Could not read the release notes", e)
+        null
+    }
+
+    /** Reads up to [limit] characters and stops, however much more is offered. */
+    private fun Reader.readAtMost(limit: Int): String {
+        val buffer = CharArray(limit)
+        var filled = 0
+
+        while (filled < limit) {
+            val read = read(buffer, filled, limit - filled)
+            if (read < 0) break
+            filled += read
+        }
+
+        return String(buffer, 0, filled)
+    }
+
     /** Either where the latest release lives, or something specific enough to act on. */
     private sealed interface Fetched {
         data class Location(val url: String) : Fetched
@@ -195,6 +247,9 @@ class Updater(private val context: Context) {
         const val TIMEOUT_MILLIS = 30_000
         const val USER_AGENT = "reCMF"
         const val BUFFER = 64 * 1024
+
+        /** A changelog is a few lines; anything larger is not one. */
+        const val MAX_NOTES_CHARS = 8 * 1024
         const val APK_NAME = "recmf"
     }
 }

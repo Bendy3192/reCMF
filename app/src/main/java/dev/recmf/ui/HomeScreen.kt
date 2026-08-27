@@ -1399,10 +1399,26 @@ private fun UpdateCard(
                     style = MaterialTheme.typography.bodySmall,
                 )
 
-                is UpdateState.Available -> Text(
-                    stringResource(R.string.update_available, state.update.name),
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                is UpdateState.Available -> {
+                    Text(
+                        stringResource(R.string.update_available, state.update.name),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                    // Only when the release said something. An empty "What changed"
+                    // heading is worse than no heading.
+                    state.update.notes?.let { notes ->
+                        Text(
+                            stringResource(R.string.update_notes_title),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                        Text(
+                            notes,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
 
                 is UpdateState.Downloading -> {
                     Text(

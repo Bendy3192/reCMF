@@ -47,9 +47,37 @@ class UpdateCheckTest {
                 name = "build 58",
                 apkUrl = "https://github.com/${UpdateCheck.REPOSITORY}" +
                     "/releases/download/build-58/${UpdateCheck.APK_NAME}",
+                notesUrl = "https://github.com/${UpdateCheck.REPOSITORY}" +
+                    "/releases/download/build-58/${UpdateCheck.NOTES_NAME}",
             ),
             UpdateCheck.update("build-58", currentVersionCode = 57),
         )
+    }
+
+    @Test
+    fun `the changelog keeps the changes and drops the rest`() {
+        // Exactly the shape the workflow writes: bullets, then a comparison link and the
+        // commit, both of which are for someone at a keyboard.
+        val body = """
+            - Ring the phone when the watch asks for it
+            - Read the watch's own settings, and show them
+
+            [Everything that changed](https://github.com/o/r/compare/build-1...build-2)
+
+            Built from `abc1234`.
+        """.trimIndent()
+
+        assertEquals(
+            "• Ring the phone when the watch asks for it\n" +
+                "• Read the watch's own settings, and show them",
+            UpdateCheck.readableNotes(body),
+        )
+    }
+
+    @Test
+    fun `a release with nothing to say has no notes rather than empty ones`() {
+        assertNull(UpdateCheck.readableNotes("Built from `abc1234`."))
+        assertNull(UpdateCheck.readableNotes(""))
     }
 
     @Test

@@ -102,7 +102,7 @@ exists because of it.
 | Music | Now playing on the watch face, and play, pause, track and volume from the wrist |
 | Find watch | Makes it ring |
 | Find phone | The watch's own button rings the phone, on the alarm stream so a silent phone still answers |
-| Updates | Checks this repository's releases and installs them |
+| Updates | Checks this repository's releases once a day, says what changed, and installs them |
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
 | UI | Compose, Material 3, dynamic colour, two tabs |
 

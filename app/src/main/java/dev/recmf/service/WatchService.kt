@@ -253,14 +253,6 @@ class WatchService : LifecycleService() {
      * That is why the forecast refreshed on no schedule anyone could name.
      */
     private suspend fun refreshNow() {
-        // Asked a second time, after the writes above. The read at the top of this
-        // connection is the watch's state *before* reCMF said anything, so comparing the
-        // two says whether a write landed — and the goals write is under suspicion: it
-        // sends 5000 metres and 300 calories, and the watch reported 4000 and 400.
-        if (WatchSetting.GOALS in preferences.configured) {
-            connection.send(CmfCommand.GOALS_GET)
-        }
-
         requestSync()
         sendNowPlaying()
 
@@ -641,6 +633,15 @@ class WatchService : LifecycleService() {
         val preferences = settings.watchPreferences.first()
         applyWatchPreferences(preferences)
         lastAppliedPreferences = preferences
+
+        // Asked a second time, now that the writes have gone out. The read at the top of
+        // this connection was the watch before reCMF said anything; this one is the watch
+        // having heard it, and the difference between the two log lines says whether a
+        // write landed. The goals write is the one under suspicion: it sends 5000 metres
+        // and 300 calories, and the watch reported 4000 and 400.
+        if (WatchSetting.GOALS in preferences.configured) {
+            connection.send(CmfCommand.GOALS_GET)
+        }
 
         requestSync()
 
