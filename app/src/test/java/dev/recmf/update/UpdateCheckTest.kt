@@ -6,56 +6,74 @@ import org.junit.jupiter.api.Test
 
 class UpdateCheckTest {
 
-    private fun release(
-        tag: String = "build-58",
-        name: String = "build 58",
-        draft: Boolean = false,
-        prerelease: Boolean = false,
-        assets: String = """[{"name":"recmf.apk","browser_download_url":"https://example/recmf.apk","size":1234}]""",
-    ) = """{"tag_name":"$tag","name":"$name","draft":$draft,"prerelease":$prerelease,"assets":$assets}"""
+    private fun redirect(tag: String) =
+        "https://github.com/${UpdateCheck.REPOSITORY}/releases/tag/$tag"
+
+    @Test
+    fun `the tag is read out of the redirect`() {
+        assertEquals("build-58", UpdateCheck.tagOf(redirect("build-58")))
+    }
+
+    @Test
+    fun `a query or fragment is not part of the tag`() {
+        assertEquals("build-58", UpdateCheck.tagOf(redirect("build-58") + "?utm=x"))
+        assertEquals("build-58", UpdateCheck.tagOf(redirect("build-58") + "#notes"))
+    }
+
+    @Test
+    fun `a redirect to the releases listing names no release`() {
+        // What a repository with no releases at all answers with.
+        assertNull(UpdateCheck.tagOf("https://github.com/${UpdateCheck.REPOSITORY}/releases"))
+    }
+
+    @Test
+    fun `a redirect somewhere else entirely names no release`() {
+        assertNull(UpdateCheck.tagOf("https://github.com/login?return_to=%2Fsomewhere"))
+    }
+
+    @Test
+    fun `a tag that could steer the download URL is refused`() {
+        // The tag is pasted into the download URL, so this is the one that matters.
+        assertNull(UpdateCheck.tagOf(redirect("../../../etc/passwd")))
+        assertNull(UpdateCheck.tagOf(redirect("build 58")))
+        assertNull(UpdateCheck.tagOf(redirect("build%2f58")))
+    }
 
     @Test
     fun `a newer build is offered`() {
-        val update = UpdateCheck.parse(release(), currentVersionCode = 57)
-
         assertEquals(
-            AvailableUpdate(58, "build 58", "https://example/recmf.apk", 1234),
-            update,
+            AvailableUpdate(
+                versionCode = 58,
+                name = "build 58",
+                apkUrl = "https://github.com/${UpdateCheck.REPOSITORY}" +
+                    "/releases/download/build-58/${UpdateCheck.APK_NAME}",
+            ),
+            UpdateCheck.update("build-58", currentVersionCode = 57),
         )
     }
 
     @Test
     fun `the build already running is not an update`() {
-        assertNull(UpdateCheck.parse(release(tag = "build-57"), currentVersionCode = 57))
+        assertNull(UpdateCheck.update("build-57", currentVersionCode = 57))
     }
 
     @Test
     fun `an older release is not an update`() {
         // Re-running an old workflow can move the latest tag backwards; installing that
         // would be a downgrade, which Android refuses anyway.
-        assertNull(UpdateCheck.parse(release(tag = "build-12"), currentVersionCode = 57))
-    }
-
-    @Test
-    fun `a release with no apk is not an update`() {
-        assertNull(UpdateCheck.parse(release(assets = "[]"), currentVersionCode = 57))
-    }
-
-    @Test
-    fun `a release whose only asset is not an apk is not an update`() {
-        val notApk = """[{"name":"mapping.txt","browser_download_url":"https://example/m.txt","size":9}]"""
-
-        assertNull(UpdateCheck.parse(release(assets = notApk), currentVersionCode = 57))
-    }
-
-    @Test
-    fun `drafts and prereleases are ignored`() {
-        assertNull(UpdateCheck.parse(release(draft = true), currentVersionCode = 57))
-        assertNull(UpdateCheck.parse(release(prerelease = true), currentVersionCode = 57))
+        assertNull(UpdateCheck.update("build-12", currentVersionCode = 57))
     }
 
     @Test
     fun `a tag that is not a build number is not guessed at`() {
-        assertNull(UpdateCheck.parse(release(tag = "v1.0"), currentVersionCode = 57))
+        assertNull(UpdateCheck.update("v1.0", currentVersionCode = 57))
+        assertNull(UpdateCheck.update("nightly", currentVersionCode = 57))
+    }
+
+    @Test
+    fun `a tag that is only a number is not one of ours`() {
+        // removePrefix leaves a tag without the prefix untouched, so this would otherwise
+        // parse as version 999 and offer an update from a release nobody built here.
+        assertNull(UpdateCheck.update("999", currentVersionCode = 57))
     }
 }

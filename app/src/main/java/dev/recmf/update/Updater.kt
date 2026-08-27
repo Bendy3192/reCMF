@@ -42,14 +42,15 @@ sealed interface UpdateState {
 class Updater(private val context: Context) {
 
     suspend fun check(currentVersionCode: Int): UpdateState = withContext(Dispatchers.IO) {
-        val body = when (val result = get(UpdateCheck.LATEST_RELEASE_URL)) {
-            is Fetched.Body -> result.text
+        val location = when (val result = latestRelease()) {
+            is Fetched.Location -> result.url
             is Fetched.Problem -> return@withContext UpdateState.Failed(result.description)
         }
 
-        val update = runCatching { UpdateCheck.parse(body, currentVersionCode) }
-            .onFailure { Log.w(TAG, "Could not read the release", it) }
-            .getOrNull()
+        val tag = UpdateCheck.tagOf(location)
+            ?: return@withContext UpdateState.Failed("no release published yet")
+
+        val update = UpdateCheck.update(tag, currentVersionCode)
 
         if (update == null) UpdateState.UpToDate else UpdateState.Available(update)
     }
@@ -69,10 +70,11 @@ class Updater(private val context: Context) {
         var sessionId = -1
 
         try {
+            // No setSize: the size is not known until the download answers, and the
+            // hint is only a hint — the session sizes itself from what is written.
             val params = PackageInstaller.SessionParams(
                 PackageInstaller.SessionParams.MODE_FULL_INSTALL,
             )
-            if (update.sizeBytes > 0) params.setSize(update.sizeBytes)
 
             sessionId = installer.createSession(params)
 
@@ -89,10 +91,9 @@ class Updater(private val context: Context) {
                         return@withContext UpdateState.Failed("download failed (${connection.responseCode})")
                     }
 
-                    // The release asset's own length, which is the one that matches what
-                    // is arriving; the size from the API is a cross-check, not a source.
+                    // Null when the server does not say, which leaves the progress
+                    // indeterminate rather than wrong.
                     val total = connection.contentLengthLong.takeIf { it > 0 }
-                        ?: update.sizeBytes.takeIf { it > 0 }
 
                     var written = 0L
                     connection.inputStream.use { input ->
@@ -129,39 +130,52 @@ class Updater(private val context: Context) {
         }
     }
 
-    /** Either the body, or something specific enough to act on. */
+    /** Either where the latest release lives, or something specific enough to act on. */
     private sealed interface Fetched {
-        data class Body(val text: String) : Fetched
+        data class Location(val url: String) : Fetched
         data class Problem(val description: String) : Fetched
     }
 
     /**
-     * Every failure says what it was.
+     * Asks where `/releases/latest` points, without going there.
      *
-     * The first version reported "could not reach GitHub" for a refusal, a rate limit, a
-     * missing release and a dead network alike — the same unfalsifiable message that has
-     * cost a round of guessing every time it has appeared in this app.
+     * The redirect is the answer — see [UpdateCheck] for why this is the release page and
+     * not the API — so following it would fetch a page of HTML and throw away the one
+     * header worth having.
+     *
+     * Every failure says what it was. The first version reported "could not reach GitHub"
+     * for a refusal, a rate limit, a missing release and a dead network alike — the same
+     * unfalsifiable message that has cost a round of guessing every time it has appeared
+     * in this app.
      */
-    private fun get(url: String): Fetched {
+    private fun latestRelease(): Fetched {
+        val url = UpdateCheck.LATEST_RELEASE_URL
         var connection: HttpURLConnection? = null
+
         return try {
             connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
                 connectTimeout = TIMEOUT_MILLIS
                 readTimeout = TIMEOUT_MILLIS
-                setRequestProperty("Accept", "application/vnd.github+json")
-                // Required: GitHub's API refuses a request without one, and what
-                // HttpURLConnection sends by default is not always accepted.
+                // What HttpURLConnection sends by default is not always accepted.
                 setRequestProperty("User-Agent", USER_AGENT)
             }
 
             when (val code = connection.responseCode) {
-                in 200..299 ->
-                    Fetched.Body(connection.inputStream.bufferedReader().use { it.readText() })
+                in 300..399 -> {
+                    val location = connection.getHeaderField("Location")
 
-                // GitHub answers 404 for a repository it will not admit exists, so this
-                // covers both "no release yet" and "the repository is private" — which is
-                // what it turned out to mean the first time it appeared.
-                404 -> Fetched.Problem("no release visible (404) — is the repository private?")
+                    if (location.isNullOrBlank()) {
+                        Fetched.Problem("GitHub redirected without saying where")
+                    } else {
+                        // Resolved against the request, so a relative Location — which
+                        // the standard allows and a proxy may produce — still names a
+                        // whole URL by the time it is read.
+                        Fetched.Location(URL(URL(url), location).toString())
+                    }
+                }
+
+                404 -> Fetched.Problem("no releases visible (404) — is the repository private?")
                 403, 429 -> Fetched.Problem("GitHub refused the request ($code)")
                 else -> {
                     Log.i(TAG, "Release check answered $code")

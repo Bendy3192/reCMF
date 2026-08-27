@@ -3,63 +3,97 @@
  */
 package dev.recmf.update
 
-import org.json.JSONObject
-
 /** A build newer than this one, and where to get it. */
 data class AvailableUpdate(
     val versionCode: Int,
     val name: String,
     val apkUrl: String,
-    val sizeBytes: Long,
 )
 
 /**
- * Reads GitHub's "latest release" answer.
+ * Works out whether GitHub is offering a newer build.
+ *
+ * This deliberately does **not** use GitHub's API. The API allows an unauthenticated
+ * client sixty requests an hour *per IP address*, and a phone on mobile data shares one
+ * carrier address with thousands of strangers — so the quota is routinely spent by people
+ * the wearer has never met, and the check comes back 403 no matter how rarely they press
+ * the button. Sending a token instead would mean shipping a credential inside a public
+ * app, which is worse.
+ *
+ * What is used instead is the ordinary release page. `/releases/latest` answers any
+ * browser with a redirect to the newest release's own URL, which ends in its tag — and
+ * since CI names the tag after the version code, the tag is the whole answer. No quota
+ * applies, nothing needs authenticating, and the reply is a header rather than a document.
+ *
+ * The cost is that the download URL is constructed rather than read from a listing. That
+ * holds as long as the workflow keeps uploading the asset under [APK_NAME]; if it ever
+ * does not, the download fails with a 404 that says so, which is a better failure than a
+ * check nobody can complete.
  *
  * Kept apart from the fetching so it can be tested without a network: this is the part
- * that decides whether a phone downloads and installs something, and getting it wrong is
- * worse than not having it.
+ * that decides whether a phone installs something, and getting it wrong is worse than not
+ * having it.
  */
 object UpdateCheck {
 
-    const val LATEST_RELEASE_URL: String =
-        "https://api.github.com/repos/Bendy3192/reCMF/releases/latest"
+    /**
+     * The repository releases are taken from.
+     *
+     * Forks that build their own APKs should change this — a fork's app otherwise offers
+     * its users the upstream build, which is signed with a different key and will not
+     * install over theirs.
+     */
+    const val REPOSITORY: String = "Bendy3192/reCMF"
+
+    /** The asset name the workflow uploads. */
+    const val APK_NAME: String = "recmf.apk"
+
+    const val LATEST_RELEASE_URL: String = "https://github.com/$REPOSITORY/releases/latest"
+
+    /**
+     * The release tag a redirect points at, or null when it points at no release.
+     *
+     * A repository with no releases at all redirects to the releases listing instead of to
+     * a release, which is why this can come back empty-handed on a perfectly good reply.
+     */
+    fun tagOf(location: String): String? {
+        val marker = "/releases/tag/"
+        if (!location.contains(marker)) return null
+
+        val tag = location.substringAfter(marker)
+            .substringBefore('?')
+            .substringBefore('#')
+            .trim('/')
+
+        // The tag is pasted into the download URL, so anything that could steer that URL
+        // somewhere else — a slash, a dot pair, an escape — is refused rather than
+        // cleaned up. Git tags are this alphabet in practice; a tag that is not gets no
+        // update offered, which is the safe way to be wrong.
+        return tag.takeIf { it.isNotEmpty() && it.all(::allowedInTag) }
+    }
+
+    private fun allowedInTag(c: Char): Boolean =
+        (c.isLetterOrDigit() && c.code < 128) || c == '.' || c == '_' || c == '-'
 
     /**
      * @param currentVersionCode the running build's number.
-     * @return the update, or null when the latest release is this build or older.
+     * @return the update, or null when [tag] names this build or an older one.
      */
-    fun parse(json: String, currentVersionCode: Int): AvailableUpdate? {
-        val release = JSONObject(json)
-
-        // The tag is the version: CI names it build-<run number>, and versionCode is that
-        // same number. Comparing tags means the check costs one small request rather than
-        // a download.
-        val tag = release.optString("tag_name")
+    fun update(tag: String, currentVersionCode: Int): AvailableUpdate? {
+        // The tag is the version: CI names it build-<version code>, taken from the APK's
+        // own metadata so the two cannot drift apart.
         val version = tag.removePrefix(TAG_PREFIX).toIntOrNull() ?: return null
+
+        // removePrefix leaves a tag without the prefix untouched, so a bare "205" would
+        // otherwise parse as a version. A tag that is only a number is not one of ours.
+        if (tag == version.toString()) return null
         if (version <= currentVersionCode) return null
 
-        if (release.optBoolean("draft") || release.optBoolean("prerelease")) return null
-
-        val assets = release.optJSONArray("assets") ?: return null
-        for (i in 0 until assets.length()) {
-            val asset = assets.optJSONObject(i) ?: continue
-            val name = asset.optString("name")
-            if (!name.endsWith(".apk")) continue
-
-            val url = asset.optString("browser_download_url").ifBlank { continue }
-
-            return AvailableUpdate(
-                versionCode = version,
-                name = release.optString("name").ifBlank { tag },
-                apkUrl = url,
-                sizeBytes = asset.optLong("size"),
-            )
-        }
-
-        // A release with no APK is a release nothing can be installed from, which is not
-        // an update however new its tag is.
-        return null
+        return AvailableUpdate(
+            versionCode = version,
+            name = tag.replace('-', ' '),
+            apkUrl = "https://github.com/$REPOSITORY/releases/download/$tag/$APK_NAME",
+        )
     }
 
     private const val TAG_PREFIX = "build-"

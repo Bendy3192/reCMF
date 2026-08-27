@@ -57,8 +57,9 @@ you enable it. Nowhere else.
 
 Two things are specific to this repository:
 
-- `UpdateCheck.LATEST_RELEASE_URL` points at this repository's releases. Change it, or the
-  updater will offer builds from here.
+- `UpdateCheck.REPOSITORY` names this repository, and the updater reads its releases.
+  Change it, or your fork's app will offer builds from here — which are signed with a
+  different key and will not install over yours.
 - The signing key in `app/recmf-debug.keystore` is public, which means anyone can build an
   APK that Android will accept as an update to an install signed with it. That is the price
   of a fresh clone building and installing with no setup. To use your own instead, put a
