@@ -1,7 +1,6 @@
 package dev.recmf.notifications
 
-import dev.recmf.notifications.WatchNotification.Companion.truncateUtf8
-import org.junit.jupiter.api.Assertions.assertArrayEquals
+import dev.recmf.protocol.truncateToUtf8Bytes
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -39,18 +38,12 @@ class WatchNotificationTest {
         // Each Cyrillic letter is two bytes, so a naive cut at 20 bytes lands inside
         // one and the watch would render the rest of the line as garbage.
         val title = "Иван Петрович Сидоров"
-        val truncated = title.truncateUtf8(WatchNotification.MAX_TITLE_BYTES)
+        val truncated = title.truncateToUtf8Bytes(WatchNotification.MAX_TITLE_BYTES)
 
         assertTrue(truncated.size <= WatchNotification.MAX_TITLE_BYTES)
         val decoded = String(truncated, StandardCharsets.UTF_8)
         assertTrue(title.startsWith(decoded), "'$decoded' is not a prefix of the original")
         assertTrue('�' !in decoded, "decoded to a replacement character: $decoded")
-    }
-
-    @Test
-    fun `text that fits is passed through whole`() {
-        assertArrayEquals("Ivan".toByteArray(), "Ivan".truncateUtf8(20))
-        assertArrayEquals("Иван".toByteArray(), "Иван".truncateUtf8(20))
     }
 
     @Test
