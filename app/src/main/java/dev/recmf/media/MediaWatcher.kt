@@ -151,12 +151,15 @@ class MediaWatcher(private val context: Context) {
 
         val transport = controller()?.transportControls ?: return false
 
+        // Every button named, and no else. The volume pair cannot reach here — it
+        // returned above — but writing them out rather than leaning on an else means a
+        // button added later fails to compile instead of silently doing nothing.
         when (button) {
             MusicButton.PLAY -> transport.play()
             MusicButton.PAUSE -> transport.pause()
             MusicButton.NEXT -> transport.skipToNext()
             MusicButton.PREVIOUS -> transport.skipToPrevious()
-            else -> return false
+            MusicButton.VOLUME_UP, MusicButton.VOLUME_DOWN -> return false
         }
 
         return true
