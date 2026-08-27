@@ -368,6 +368,49 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LAST_ANNOUNCED_VERSION] = versionCode }
     }
 
+    /**
+     * Apps whose notifications the wearer has silenced, and the apps there are to silence.
+     *
+     * A blocklist rather than a list to opt into: a watch that shows nothing until every
+     * app has been ticked is a watch that looks broken, and the ones worth silencing are
+     * only known once they have been annoying. So everything is forwarded by default and
+     * turned off one at a time.
+     *
+     * [notificationSeenPackages] is what the picker is drawn from. Listing every installed
+     * package would be a screen of components nobody has ever heard from; listing the ones
+     * that have actually reached the watch is a short list of exactly the candidates.
+     */
+    val notificationBlockedPackages: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_NOTIFICATION_BLOCKED].orEmpty() }
+
+    val notificationSeenPackages: Flow<Set<String>> =
+        context.dataStore.data.map { it[KEY_NOTIFICATION_SEEN].orEmpty() }
+
+    suspend fun setNotificationBlocked(packageName: String, blocked: Boolean) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_NOTIFICATION_BLOCKED].orEmpty()
+            prefs[KEY_NOTIFICATION_BLOCKED] =
+                if (blocked) current + packageName else current - packageName
+        }
+    }
+
+    /**
+     * Notes that an app has sent something, so it can be silenced later.
+     *
+     * Capped, and oldest-first: a phone can host a surprising number of packages that
+     * notify once and never again, and this list is a convenience rather than a record.
+     */
+    suspend fun rememberNotificationPackage(packageName: String) {
+        context.dataStore.edit { prefs ->
+            val current = prefs[KEY_NOTIFICATION_SEEN].orEmpty()
+            if (packageName in current) return@edit
+
+            prefs[KEY_NOTIFICATION_SEEN] = (current + packageName).let {
+                if (it.size <= MAX_SEEN_PACKAGES) it else it.drop(it.size - MAX_SEEN_PACKAGES).toSet()
+            }
+        }
+    }
+
     /** When the app last asked GitHub anything, so opening it does not ask every time. */
     val lastUpdateCheckSeconds: Flow<Long> =
         context.dataStore.data.map { it[KEY_LAST_UPDATE_CHECK] ?: 0L }
@@ -395,6 +438,11 @@ class SettingsStore(private val context: Context) {
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")
         val KEY_LAST_ANNOUNCED_VERSION = intPreferencesKey("last_announced_version_code")
         val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_epoch_seconds")
+        val KEY_NOTIFICATION_BLOCKED = stringSetPreferencesKey("notification_blocked_packages")
+        val KEY_NOTIFICATION_SEEN = stringSetPreferencesKey("notification_seen_packages")
+
+        /** Long enough for every app that notifies, short enough to stay a list. */
+        const val MAX_SEEN_PACKAGES = 200
 
         val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")
         val KEY_SPO2_MONITORING = booleanPreferencesKey("watch_spo2_monitoring")

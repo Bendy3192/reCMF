@@ -6,6 +6,12 @@ package dev.recmf.notifications
 import android.app.Notification
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import dev.recmf.data.SettingsStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -51,8 +57,41 @@ class NotificationRelay : NotificationListenerService() {
      */
     private val forwarded = LinkedHashSet<String>()
 
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private lateinit var settings: SettingsStore
+
+    /**
+     * The silenced apps, kept in memory.
+     *
+     * [onNotificationPosted] is called on the main thread and has to answer immediately —
+     * a notification is not something to hold while a database is read. So the set is
+     * followed in the background and the callback consults the copy. A change made in the
+     * settings screen lands here within a frame or two, which is soon enough for a switch
+     * whose effect is the next notification.
+     */
+    @Volatile
+    private var blocked: Set<String> = emptySet()
+
+    override fun onCreate() {
+        super.onCreate()
+        settings = SettingsStore(this)
+        scope.launch { settings.notificationBlockedPackages.collect { blocked = it } }
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
+
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         if (!shouldForward(sbn)) return
+
+        // Noted whether or not it is silenced, and before the blocklist is consulted:
+        // this is the list the picker is drawn from, and an app that has been silenced
+        // still has to appear there to be un-silenced.
+        scope.launch { settings.rememberNotificationPackage(sbn.packageName) }
+
+        if (sbn.packageName in blocked) return
 
         val extras = sbn.notification.extras
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()

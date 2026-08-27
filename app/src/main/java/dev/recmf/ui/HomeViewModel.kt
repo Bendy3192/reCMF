@@ -46,6 +46,13 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
+/** One app in the notification list, as the settings screen shows it. */
+data class NotificationApp(
+    val packageName: String,
+    val label: String,
+    val blocked: Boolean,
+)
+
 data class HomeUiState(
     val connection: ConnectionState = ConnectionState.IDLE,
     val settings: WatchSettings = WatchSettings(),
@@ -275,6 +282,34 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun findWatch() {
         WatchService.findWatch(getApplication())
+    }
+
+    /**
+     * The apps that have sent something, and whether each is silenced.
+     *
+     * Names come from the package manager, and a package with no name — uninstalled since
+     * it last notified, or a system component with no label — falls back to its own
+     * identifier rather than vanishing from a list the wearer is trying to prune.
+     */
+    val notificationApps: StateFlow<List<NotificationApp>> = combine(
+        settingsStore.notificationSeenPackages,
+        settingsStore.notificationBlockedPackages,
+    ) { seen, blocked ->
+        val packages = application.packageManager
+
+        seen.map { name ->
+            NotificationApp(
+                packageName = name,
+                label = runCatching {
+                    packages.getApplicationLabel(packages.getApplicationInfo(name, 0)).toString()
+                }.getOrNull().orEmpty().ifBlank { name },
+                blocked = name in blocked,
+            )
+        }.sortedBy { it.label.lowercase() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    fun setNotificationBlocked(packageName: String, blocked: Boolean) {
+        viewModelScope.launch { settingsStore.setNotificationBlocked(packageName, blocked) }
     }
 
     private val updater = Updater(application)

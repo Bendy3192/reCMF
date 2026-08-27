@@ -54,6 +54,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -101,6 +102,8 @@ fun HomeScreen(
     watchPreferences: WatchPreferences,
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
+    notificationApps: List<NotificationApp>,
+    onNotificationAppBlocked: (String, Boolean) -> Unit,
     isBatteryExempt: Boolean,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
@@ -141,6 +144,8 @@ fun HomeScreen(
                         watchPreferences = watchPreferences,
                         onWatchPreferences = onWatchPreferences,
                         hasNotificationAccess = hasNotificationAccess,
+                        notificationApps = notificationApps,
+                        onNotificationAppBlocked = onNotificationAppBlocked,
                         isBatteryExempt = isBatteryExempt,
                         onNotificationsEnabled = onNotificationsEnabled,
                         onScreenOffOnlyEnabled = onScreenOffOnlyEnabled,
@@ -183,6 +188,8 @@ private fun TabContent(
     watchPreferences: WatchPreferences,
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
+    notificationApps: List<NotificationApp>,
+    onNotificationAppBlocked: (String, Boolean) -> Unit,
     isBatteryExempt: Boolean,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
@@ -230,7 +237,9 @@ private fun TabContent(
                     NotificationsCard(
                         state = state,
                         hasAccess = hasNotificationAccess,
+                        apps = notificationApps,
                         onEnabled = onNotificationsEnabled,
+                        onAppBlocked = onNotificationAppBlocked,
                         onScreenOffOnly = onScreenOffOnlyEnabled,
                         onGrantAccess = onGrantNotificationAccess,
                     )
@@ -1090,8 +1099,10 @@ private fun BackgroundWorkCard(onAllow: () -> Unit) {
 private fun NotificationsCard(
     state: HomeUiState,
     hasAccess: Boolean,
+    apps: List<NotificationApp>,
     onEnabled: (Boolean) -> Unit,
     onScreenOffOnly: (Boolean) -> Unit,
+    onAppBlocked: (String, Boolean) -> Unit,
     onGrantAccess: () -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
@@ -1134,6 +1145,78 @@ private fun NotificationsCard(
                         onCheckedChange = onScreenOffOnly,
                         enabled = state.settings.notificationsEnabled,
                     )
+                }
+
+                if (apps.isNotEmpty()) {
+                    HorizontalDivider(Modifier.padding(vertical = 8.dp))
+
+                    var expanded by rememberSaveable { mutableStateOf(false) }
+                    val silenced = apps.count { it.blocked }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expanded = !expanded },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                stringResource(R.string.notification_apps),
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                            Text(
+                                if (silenced == 0) {
+                                    pluralStringResource(
+                                        R.plurals.notification_apps_all,
+                                        apps.size,
+                                        apps.size,
+                                    )
+                                } else {
+                                    pluralStringResource(
+                                        R.plurals.notification_apps_silenced,
+                                        silenced,
+                                        silenced,
+                                    )
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            stringResource(
+                                if (expanded) R.string.action_hide else R.string.action_show,
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+
+                    if (expanded) {
+                        // A plain column, not a lazy list: this is already inside a
+                        // scrolling page, and nesting one scroller in another is how a
+                        // list ends up unscrollable. The set is bounded and short.
+                        apps.forEach { app ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    app.label,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Switch(
+                                    checked = !app.blocked,
+                                    onCheckedChange = { allowed ->
+                                        onAppBlocked(app.packageName, !allowed)
+                                    },
+                                    enabled = state.settings.notificationsEnabled,
+                                )
+                            }
+                        }
+                    }
                 }
             } else {
                 Text(

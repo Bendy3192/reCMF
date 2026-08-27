@@ -41,6 +41,19 @@
     <string name="notifications">Уведомления</string>
     <string name="notifications_explainer">Сообщения и оповещения с телефона отправляются на часы.</string>
     <string name="notifications_need_access">Доступ к уведомлениям выдаётся в системных настройках, а не здесь.</string>
+    <string name="notification_apps">Какие приложения доходят до часов</string>
+    <plurals name="notification_apps_all">
+        <item quantity="one">%d приложение уже что-то присылало. Все доходят до часов.</item>
+        <item quantity="few">%d приложения уже что-то присылали. Все доходят до часов.</item>
+        <item quantity="many">%d приложений уже что-то присылали. Все доходят до часов.</item>
+        <item quantity="other">%d приложения уже что-то присылали. Все доходят до часов.</item>
+    </plurals>
+    <plurals name="notification_apps_silenced">
+        <item quantity="one">%d приложение отключено</item>
+        <item quantity="few">%d приложения отключено</item>
+        <item quantity="many">%d приложений отключено</item>
+        <item quantity="other">%d приложения отключено</item>
+    </plurals>
     <string name="action_grant_access">Открыть настройки</string>
     <string name="notifications_screen_off_only">Только при выключенном экране</string>
     <string name="watch_settings">Настройки часов</string>
