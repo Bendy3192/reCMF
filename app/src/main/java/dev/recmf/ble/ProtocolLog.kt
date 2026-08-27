@@ -100,5 +100,10 @@ object ProtocolLog {
     }
 
     private const val CAPACITY = 200
-    private const val MAX_PAYLOAD_BYTES = 24
+    /**
+     * Enough to hold an unidentified frame whole. The first unknown command to arrive was
+     * 28 bytes and the preview cut it at 24 — losing exactly the tail that would say what
+     * it is. 200 entries of this is still tens of kilobytes.
+     */
+    private const val MAX_PAYLOAD_BYTES = 64
 }

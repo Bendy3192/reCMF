@@ -8,11 +8,16 @@ import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.OxygenSaturationRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Device
 import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.units.Percentage
 import dev.recmf.data.HeartRateSampleEntity
+import dev.recmf.data.RestingHeartRateSampleEntity
+import dev.recmf.data.Spo2SampleEntity
 import java.time.Instant
 import java.time.ZoneId
 
@@ -79,16 +84,23 @@ class HealthConnectSync(private val context: Context) {
     suspend fun write(
         steps: List<IntervalDelta>,
         heartRate: List<HeartRateSampleEntity>,
+        spo2: List<Spo2SampleEntity> = emptyList(),
+        restingHeartRate: List<RestingHeartRateSampleEntity> = emptyList(),
     ): WriteResult {
         val client = this.client ?: return WriteResult.unavailable()
         if (!hasPermissions()) return WriteResult.unavailable()
 
         val stepsWritten = insert(client, steps.map(::toStepsRecord))
         val heartRateWritten = insert(client, toHeartRateRecords(heartRate))
+        val spo2Written = insert(client, spo2.map(::toSpo2Record))
+        val restingWritten = insert(client, restingHeartRate.map(::toRestingHeartRateRecord))
 
         return WriteResult(
             stepsWritten = stepsWritten,
             heartRateTimestamps = if (heartRateWritten) heartRate.map { it.timestamp } else emptyList(),
+            spo2Timestamps = if (spo2Written) spo2.map { it.timestamp } else emptyList(),
+            restingHeartRateTimestamps =
+                if (restingWritten) restingHeartRate.map { it.timestamp } else emptyList(),
         )
     }
 
@@ -172,13 +184,56 @@ class HealthConnectSync(private val context: Context) {
         }
     }
 
+    /**
+     * Health Connect models a saturation as a single instant, not an interval, so each
+     * reading is its own record — there is no series form to group them into.
+     */
+    private fun toSpo2Record(sample: Spo2SampleEntity): OxygenSaturationRecord {
+        val time = Instant.ofEpochSecond(sample.timestamp)
+
+        return OxygenSaturationRecord(
+            time = time,
+            zoneOffset = zoneOffsetAt(time),
+            percentage = Percentage(sample.percent.toDouble()),
+            metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-spo2-${sample.timestamp}",
+            ),
+        )
+    }
+
+    private fun toRestingHeartRateRecord(
+        sample: RestingHeartRateSampleEntity,
+    ): RestingHeartRateRecord {
+        val time = Instant.ofEpochSecond(sample.timestamp)
+
+        return RestingHeartRateRecord(
+            time = time,
+            zoneOffset = zoneOffsetAt(time),
+            beatsPerMinute = sample.bpm.toLong(),
+            metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-resting-hr-${sample.timestamp}",
+            ),
+        )
+    }
+
     /** Resolved per sample: a backlog can span a DST change or a flight. */
     private fun zoneOffsetAt(instant: Instant) = ZoneId.systemDefault().rules.getOffset(instant)
 
     data class WriteResult(
         val stepsWritten: Boolean,
         val heartRateTimestamps: List<Long>,
+        val spo2Timestamps: List<Long> = emptyList(),
+        val restingHeartRateTimestamps: List<Long> = emptyList(),
     ) {
+        /** True when Health Connect took nothing at all, so nothing should be marked synced. */
+        val acceptedNothing: Boolean
+            get() = !stepsWritten &&
+                heartRateTimestamps.isEmpty() &&
+                spo2Timestamps.isEmpty() &&
+                restingHeartRateTimestamps.isEmpty()
+
         companion object {
             fun unavailable() = WriteResult(stepsWritten = false, heartRateTimestamps = emptyList())
         }
@@ -197,8 +252,12 @@ class HealthConnectSync(private val context: Context) {
         val REQUIRED_PERMISSIONS: Set<String> = setOf(
             HealthPermission.getWritePermission(StepsRecord::class),
             HealthPermission.getWritePermission(HeartRateRecord::class),
+            HealthPermission.getWritePermission(OxygenSaturationRecord::class),
+            HealthPermission.getWritePermission(RestingHeartRateRecord::class),
             HealthPermission.getReadPermission(StepsRecord::class),
             HealthPermission.getReadPermission(HeartRateRecord::class),
+            HealthPermission.getReadPermission(OxygenSaturationRecord::class),
+            HealthPermission.getReadPermission(RestingHeartRateRecord::class),
         )
     }
 }

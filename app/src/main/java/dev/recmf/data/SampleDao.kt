@@ -17,6 +17,12 @@ interface SampleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertHeartRate(samples: List<HeartRateSampleEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSpo2(samples: List<Spo2SampleEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertRestingHeartRate(samples: List<RestingHeartRateSampleEntity>)
+
     /**
      * Unsynced samples, oldest first and capped, so a long backlog is uploaded in
      * batches instead of being materialized into memory all at once.
@@ -26,6 +32,23 @@ interface SampleDao {
 
     @Query("SELECT * FROM heart_rate_samples WHERE syncedAt IS NULL ORDER BY timestamp LIMIT :limit")
     suspend fun pendingHeartRate(limit: Int): List<HeartRateSampleEntity>
+
+    @Query("SELECT * FROM spo2_samples WHERE syncedAt IS NULL ORDER BY timestamp LIMIT :limit")
+    suspend fun pendingSpo2(limit: Int): List<Spo2SampleEntity>
+
+    @Query(
+        "SELECT * FROM resting_heart_rate_samples WHERE syncedAt IS NULL " +
+            "ORDER BY timestamp LIMIT :limit",
+    )
+    suspend fun pendingRestingHeartRate(limit: Int): List<RestingHeartRateSampleEntity>
+
+    @Query("UPDATE spo2_samples SET syncedAt = :now WHERE timestamp IN (:timestamps)")
+    suspend fun markSpo2Synced(timestamps: List<Long>, now: Long)
+
+    @Query(
+        "UPDATE resting_heart_rate_samples SET syncedAt = :now WHERE timestamp IN (:timestamps)",
+    )
+    suspend fun markRestingHeartRateSynced(timestamps: List<Long>, now: Long)
 
     @Query("UPDATE activity_samples SET syncedAt = :now WHERE timestamp IN (:timestamps)")
     suspend fun markActivitySynced(timestamps: List<Long>, now: Long)
@@ -59,4 +82,13 @@ interface SampleDao {
 
     @Query("DELETE FROM heart_rate_samples WHERE syncedAt IS NOT NULL AND timestamp < :before")
     suspend fun pruneHeartRate(before: Long): Int
+
+    @Query("DELETE FROM spo2_samples WHERE syncedAt IS NOT NULL AND timestamp < :before")
+    suspend fun pruneSpo2(before: Long): Int
+
+    @Query(
+        "DELETE FROM resting_heart_rate_samples " +
+            "WHERE syncedAt IS NOT NULL AND timestamp < :before",
+    )
+    suspend fun pruneRestingHeartRate(before: Long): Int
 }

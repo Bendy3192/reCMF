@@ -578,24 +578,43 @@ class WatchService : LifecycleService() {
             CmfCommand.HEART_RATE_MANUAL_AUTO, CmfCommand.HEART_RATE_WORKOUT ->
                 ingest.storeHeartRate(CmfParsers.parseHeartRate(message.payload))
 
-            CmfCommand.HEART_RATE_RESTING ->
-                CmfParsers.parseRestingHeartRate(message.payload)
-                    .lastOrNull { it.isValid }
-                    ?.let { WatchStatus.restingHeartRate.value = it }
+            CmfCommand.HEART_RATE_RESTING -> {
+                val samples = CmfParsers.parseRestingHeartRate(message.payload)
+                samples.lastOrNull { it.isValid }?.let { WatchStatus.restingHeartRate.value = it }
+                ingest.storeRestingHeartRate(samples)
+            }
 
             // Informational: the timestamp the watch is sending activity from, plus four
             // bytes nobody has identified. Gadgetbridge logs it and does nothing with it.
             // Named here so it stops being reported as a command with no handler.
             CmfCommand.ACTIVITY_FETCH_ACK_2 -> Unit
 
+            // Consumed by the connection layer's authenticator before this ever sees them.
+            // They are relayed here too, so without naming them the log accused reCMF of
+            // dropping the very handshake it had just completed.
+            CmfCommand.AUTH_PAIR_REPLY,
+            CmfCommand.AUTH_WATCH_MAC,
+            CmfCommand.AUTH_NONCE_REPLY,
+            CmfCommand.AUTHENTICATED_CONFIRM_REPLY,
+            -> Unit
+
+            // The watch volunteers its language at connection time. reCMF does not set the
+            // language — the watch ignores that command — but this is the first read-back
+            // seen arriving at all, which is worth knowing when the time comes to use it
+            // for the settings that do have one.
+            CmfCommand.LANGUAGE_RET -> Unit
+
             // Kept in memory rather than stored: enough to show the newest reading and to
             // prove the data is arriving. Persistence and Health Connect follow once the
             // shape has been seen against a real watch rather than only a unit test.
-            CmfCommand.SPO2 ->
-                CmfParsers.parseSpo2(message.payload)
-                    .lastOrNull { it.isValid }
-                    ?.let { WatchStatus.spo2.value = it }
+            CmfCommand.SPO2 -> {
+                val samples = CmfParsers.parseSpo2(message.payload)
+                samples.lastOrNull { it.isValid }?.let { WatchStatus.spo2.value = it }
+                ingest.storeSpo2(samples)
+            }
 
+            // Not stored: Health Connect has no record type for stress, so there is
+            // nowhere for it to go beyond the screen until reCMF grows its own history.
             CmfCommand.STRESS ->
                 CmfParsers.parseStress(message.payload)
                     .lastOrNull { it.isValid }

@@ -7,6 +7,8 @@ import android.content.Context
 import android.util.Log
 import dev.recmf.data.ActivitySampleEntity
 import dev.recmf.data.HeartRateSampleEntity
+import dev.recmf.data.RestingHeartRateSampleEntity
+import dev.recmf.data.Spo2SampleEntity
 import dev.recmf.data.SampleDao
 import dev.recmf.data.SettingsStore
 import dev.recmf.health.CumulativeReading
@@ -14,6 +16,7 @@ import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.stepDeltas
 import dev.recmf.protocol.ActivitySample
 import dev.recmf.protocol.HeartRateSample
+import dev.recmf.protocol.Spo2Sample
 import java.time.Instant
 
 /**
@@ -55,6 +58,22 @@ class SampleIngest(
         dao.insertHeartRate(usable.map { HeartRateSampleEntity(timestamp = it.timestamp, bpm = it.bpm) })
     }
 
+    suspend fun storeSpo2(samples: List<Spo2Sample>) {
+        val usable = samples.filter { it.isValid }
+        if (usable.isEmpty()) return
+
+        dao.insertSpo2(usable.map { Spo2SampleEntity(timestamp = it.timestamp, percent = it.percent) })
+    }
+
+    suspend fun storeRestingHeartRate(samples: List<HeartRateSample>) {
+        val usable = samples.filter { it.isValid }
+        if (usable.isEmpty()) return
+
+        dao.insertRestingHeartRate(
+            usable.map { RestingHeartRateSampleEntity(timestamp = it.timestamp, bpm = it.bpm) },
+        )
+    }
+
     /**
      * Uploads everything still pending, in batches, stopping at the first batch that
      * fails so the rest stays pending for the next attempt.
@@ -71,7 +90,11 @@ class SampleIngest(
         while (true) {
             val activity = dao.pendingActivity(BATCH)
             val heartRate = dao.pendingHeartRate(BATCH)
-            if (activity.isEmpty() && heartRate.isEmpty()) break
+            val spo2 = dao.pendingSpo2(BATCH)
+            val resting = dao.pendingRestingHeartRate(BATCH)
+            if (activity.isEmpty() && heartRate.isEmpty() && spo2.isEmpty() && resting.isEmpty()) {
+                break
+            }
 
             // The watch reports running totals, so what Health Connect stores is the
             // movement between readings — which needs the reading before this batch.
@@ -81,8 +104,8 @@ class SampleIngest(
 
             val deltas = stepDeltas(activity.map { it.toReading() }, baseline)
 
-            val result = healthConnect.write(deltas, heartRate)
-            if (!result.stepsWritten && result.heartRateTimestamps.isEmpty()) {
+            val result = healthConnect.write(deltas, heartRate, spo2, resting)
+            if (result.acceptedNothing) {
                 Log.w(TAG, "Health Connect accepted nothing; will retry on the next sync")
                 return
             }
@@ -96,8 +119,15 @@ class SampleIngest(
             if (result.heartRateTimestamps.isNotEmpty()) {
                 dao.markHeartRateSynced(result.heartRateTimestamps, now)
             }
+            if (result.spo2Timestamps.isNotEmpty()) {
+                dao.markSpo2Synced(result.spo2Timestamps, now)
+            }
+            if (result.restingHeartRateTimestamps.isNotEmpty()) {
+                dao.markRestingHeartRateSynced(result.restingHeartRateTimestamps, now)
+            }
 
-            uploaded += deltas.size + result.heartRateTimestamps.size
+            uploaded += deltas.size + result.heartRateTimestamps.size +
+                result.spo2Timestamps.size + result.restingHeartRateTimestamps.size
         }
 
         if (uploaded > 0) {
@@ -118,7 +148,8 @@ class SampleIngest(
     /** Drops samples that have reached Health Connect and are older than the retention window. */
     suspend fun prune() {
         val cutoff = Instant.now().minusSeconds(RETENTION_SECONDS).epochSecond
-        val removed = dao.pruneActivity(cutoff) + dao.pruneHeartRate(cutoff)
+        val removed = dao.pruneActivity(cutoff) + dao.pruneHeartRate(cutoff) +
+            dao.pruneSpo2(cutoff) + dao.pruneRestingHeartRate(cutoff)
         if (removed > 0) Log.i(TAG, "Pruned $removed synced samples")
     }
 
