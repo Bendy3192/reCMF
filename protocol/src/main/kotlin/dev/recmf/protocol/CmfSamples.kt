@@ -89,3 +89,68 @@ enum class ActivityFetchState {
     /** The backlog has been fully sent. */
     FINISHED,
 }
+
+/** The stages the watch distinguishes. Anything it does not name is [UNKNOWN]. */
+enum class CmfSleepStage {
+    DEEP,
+    LIGHT,
+    REM,
+    UNKNOWN,
+    ;
+
+    companion object {
+        fun fromCode(code: Int): CmfSleepStage = when (code) {
+            1 -> DEEP
+            2 -> LIGHT
+            3 -> REM
+            else -> UNKNOWN
+        }
+    }
+}
+
+/**
+ * One stretch of one stage.
+ *
+ * [duration] is the watch's own figure and its unit is **not confirmed**. Gadgetbridge
+ * stores it without saying, and reading a wrong unit into Health Connect would file a
+ * night as either forty minutes or forty hours. Until a real night's frame is in hand,
+ * the stage boundaries are taken from the timestamps, which are unambiguous.
+ */
+data class SleepStageSample(
+    val timestamp: Long,
+    val duration: Int,
+    val stage: CmfSleepStage,
+)
+
+/**
+ * A night, as the watch reports it: when it began, when the wearer woke, and the stages
+ * in between.
+ *
+ * The ten bytes between the two timestamps are unidentified. They are carried rather than
+ * skipped so that a capture can be compared against them later.
+ */
+data class SleepSession(
+    val startTimestamp: Long,
+    val wakeTimestamp: Long,
+    val metadata: ByteArray,
+    val stages: List<SleepStageSample>,
+) {
+    /** Data classes compare arrays by identity, which would make two equal nights unequal. */
+    override fun equals(other: Any?): Boolean =
+        this === other ||
+            (
+                other is SleepSession &&
+                    startTimestamp == other.startTimestamp &&
+                    wakeTimestamp == other.wakeTimestamp &&
+                    metadata.contentEquals(other.metadata) &&
+                    stages == other.stages
+                )
+
+    override fun hashCode(): Int {
+        var result = startTimestamp.hashCode()
+        result = 31 * result + wakeTimestamp.hashCode()
+        result = 31 * result + metadata.contentHashCode()
+        result = 31 * result + stages.hashCode()
+        return result
+    }
+}

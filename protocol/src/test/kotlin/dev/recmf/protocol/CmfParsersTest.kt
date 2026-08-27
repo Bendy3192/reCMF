@@ -25,6 +25,65 @@ class CmfParsersTest {
             .putInt(ts).putInt(value)
             .array()
 
+    private fun sleepPayload(start: Int, wake: Int, vararg stages: Triple<Int, Int, Int>): ByteArray {
+        val buf = ByteBuffer
+            .allocate(CmfParsers.SLEEP_HEADER_SIZE + stages.size * CmfParsers.SLEEP_STAGE_SIZE)
+            .order(ByteOrder.LITTLE_ENDIAN)
+        buf.putInt(start).putInt(wake).put(ByteArray(CmfParsers.SLEEP_METADATA_SIZE))
+        stages.forEach { (ts, duration, stage) ->
+            buf.putInt(ts).putShort(duration.toShort()).putShort(stage.toShort())
+        }
+        return buf.array()
+    }
+
+    @Test
+    fun `a night decodes into its stages`() {
+        val payload = sleepPayload(
+            start = 1_787_780_000,
+            wake = 1_787_808_000,
+            Triple(1_787_780_000, 30, 2),
+            Triple(1_787_781_800, 45, 1),
+            Triple(1_787_784_500, 20, 3),
+        )
+
+        val session = CmfParsers.parseSleep(payload)!!
+
+        assertEquals(1_787_780_000L, session.startTimestamp)
+        assertEquals(1_787_808_000L, session.wakeTimestamp)
+        assertEquals(
+            listOf(CmfSleepStage.LIGHT, CmfSleepStage.DEEP, CmfSleepStage.REM),
+            session.stages.map { it.stage },
+        )
+        assertEquals(listOf(30, 45, 20), session.stages.map { it.duration })
+    }
+
+    @Test
+    fun `a sleep payload with a partial stage is refused`() {
+        val payload = sleepPayload(1_787_780_000, 1_787_808_000, Triple(1_787_780_000, 30, 2)) +
+            byteArrayOf(1, 2, 3)
+
+        assertNull(CmfParsers.parseSleep(payload))
+    }
+
+    @Test
+    fun `a session with no stages is still a session`() {
+        // The watch reports the night before it reports how it was spent; an empty stage
+        // list is not a malformed frame.
+        val session = CmfParsers.parseSleep(sleepPayload(1_787_780_000, 1_787_808_000))!!
+
+        assertTrue(session.stages.isEmpty())
+        assertEquals(1_787_808_000L, session.wakeTimestamp)
+    }
+
+    @Test
+    fun `an unnamed stage code is carried as unknown rather than dropped`() {
+        val session = CmfParsers.parseSleep(
+            sleepPayload(1_787_780_000, 1_787_808_000, Triple(1_787_780_000, 15, 9)),
+        )!!
+
+        assertEquals(CmfSleepStage.UNKNOWN, session.stages.single().stage)
+    }
+
     @Test
     fun `resting heart rate decodes the bytes a real watch sent`() {
         // Captured from a Watch Pro 2 on firmware 1.0.0.73: 2026-08-27 05:41:35 UTC, 79

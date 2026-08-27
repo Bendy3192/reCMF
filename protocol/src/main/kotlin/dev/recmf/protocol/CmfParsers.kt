@@ -31,6 +31,11 @@ object CmfParsers {
     /** Resting heart rate is the odd one out: a timestamp and a single byte. */
     const val RESTING_RECORD_SIZE: Int = 5
 
+    /** Two timestamps and ten bytes that have not been identified. */
+    const val SLEEP_METADATA_SIZE: Int = 10
+    const val SLEEP_HEADER_SIZE: Int = 4 + 4 + SLEEP_METADATA_SIZE
+    const val SLEEP_STAGE_SIZE: Int = 8
+
 
     /**
      * `ACTIVITY_DATA`: a run of 32-byte records — timestamp, steps, distance, calories,
@@ -118,6 +123,41 @@ object CmfParsers {
         }
 
         return out
+    }
+
+    /**
+     * `SLEEP_DATA`: a session header, then one record per stretch of sleep stage.
+     *
+     * The header is the start and wake timestamps and ten bytes nobody has identified;
+     * each stage is a timestamp, a duration and a stage code, in eight bytes.
+     *
+     * **Ported, not observed.** Unlike the resting heart rate, Gadgetbridge does decode
+     * this, so this follows its reading — but the resting rate is exactly the case where
+     * a payload turned out not to match what the opcode suggested, so treat this as
+     * unconfirmed until a real night has been through it.
+     */
+    fun parseSleep(payload: ByteArray): SleepSession? {
+        if (payload.size < SLEEP_HEADER_SIZE) return null
+        if ((payload.size - SLEEP_HEADER_SIZE) % SLEEP_STAGE_SIZE != 0) return null
+
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+
+        val start = buf.int.toUnsignedLong()
+        val wake = buf.int.toUnsignedLong()
+        val metadata = ByteArray(SLEEP_METADATA_SIZE).also(buf::get)
+
+        val stages = ArrayList<SleepStageSample>((payload.size - SLEEP_HEADER_SIZE) / SLEEP_STAGE_SIZE)
+        while (buf.remaining() >= SLEEP_STAGE_SIZE) {
+            stages.add(
+                SleepStageSample(
+                    timestamp = buf.int.toUnsignedLong(),
+                    duration = buf.short.toInt() and 0xffff,
+                    stage = CmfSleepStage.fromCode(buf.short.toInt() and 0xffff),
+                ),
+            )
+        }
+
+        return SleepSession(start, wake, metadata, stages)
     }
 
     /** `BATTERY`: level percentage then a charging flag. */

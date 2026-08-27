@@ -282,6 +282,11 @@ class WatchService : LifecycleService() {
         WatchStatus.weatherTemperatureC.value = snapshot.today.temperatureC
     }
 
+    /** Wall-clock time of a watch timestamp, for log lines a human has to check. */
+    private fun clock(epochSeconds: Long): String =
+        java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+            .format(java.time.Instant.ofEpochSecond(epochSeconds).atZone(java.time.ZoneId.systemDefault()))
+
     private fun isScreenOn(): Boolean =
         getSystemService<PowerManager>()?.isInteractive ?: false
 
@@ -437,6 +442,18 @@ class WatchService : LifecycleService() {
         )
         connection.send(CmfCommand.FIRMWARE_VERSION_GET)
         connection.send(CmfCommand.SERIAL_NUMBER_GET)
+
+        // Ask the watch what it is actually set to. reCMF has never read a setting, which
+        // is why it only sends the ones the user has touched — and the replies are
+        // undocumented, so this starts by asking and writing down what comes back.
+        //
+        // The reply arrives under the matching SET opcode, not a distinct one: the pattern
+        // is visible in the pair the watch already answers, SERIAL_NUMBER_GET on
+        // 0x00de/0x0002 replying as 0x00de/0x0001. Nothing handles those inbound yet, so
+        // they land in the log with their bytes, which is the point of asking.
+        connection.send(CmfCommand.HEART_MONITORING_ENABLED_GET)
+        connection.send(CmfCommand.STANDING_REMINDER_GET)
+        connection.send(CmfCommand.WATER_REMINDER_GET)
 
         applyWatchPreferences(settings.watchPreferences.first())
 
@@ -611,6 +628,26 @@ class WatchService : LifecycleService() {
                 val samples = CmfParsers.parseSpo2(message.payload)
                 samples.lastOrNull { it.isValid }?.let { WatchStatus.spo2.value = it }
                 ingest.storeSpo2(samples)
+            }
+
+            // Parsed and reported, not stored. The layout is ported from Gadgetbridge and
+            // has never met a real night, so the log carries reCMF's reading of it in
+            // plain words next to the raw bytes: if the watch says the night ran from
+            // 23:41 to 07:12 in four stages, that is checkable at a glance against having
+            // been there. Storage follows confirmation, not the other way round.
+            CmfCommand.SLEEP_DATA -> {
+                val session = CmfParsers.parseSleep(message.payload)
+                if (session == null) {
+                    ProtocolLog.note("Sleep frame did not fit the expected layout")
+                } else {
+                    ProtocolLog.note(
+                        "Sleep ${clock(session.startTimestamp)}→${clock(session.wakeTimestamp)}, " +
+                            "${session.stages.size} stages: " +
+                            session.stages.joinToString(" ") {
+                                "${it.stage.name.first()}${it.duration}"
+                            },
+                    )
+                }
             }
 
             // Not stored: Health Connect has no record type for stress, so there is
