@@ -116,8 +116,9 @@ being on silent is the case the feature exists for. The volume is left alone and
 Disturb is left to refuse; a find-phone that overrides both is a fright waiting for a
 mis-press. It stops after thirty seconds, on the notification, or when the watch says so.
 
-The payload is a guess — one leading byte, zero for off — because nothing documents this
-one and Gadgetbridge never sends it. The bytes are in the protocol log next to the guess.
+The payload was a guess — one leading byte, zero for off — because nothing documents this
+one and Gadgetbridge never sends it. A capture settled it: `01` on the press, `00` when the
+wearer ends the search from the watch. The guess was right, and it is now a reading.
 
 **Contacts** are untouched: `CONTACTS_GET` is in the table, Gadgetbridge never calls it,
 and the reply layout is unknown.
@@ -154,6 +155,22 @@ payload discovered from scratch.
 Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and firmware. These use the second GATT service and a
 chunked upload protocol, and firmware flashing is the one operation here that can brick a
 watch — so it comes last and stays behind a warning.
+
+## Unidentified
+
+Bytes seen on a real watch that nothing here explains yet. Written down so the next capture
+can be compared against them rather than starting over.
+
+- **`ffff/0051`, one byte.** Arrives once per connection, in the middle of the settings
+  burst, unasked. The one capture of it reads `0x38` — 56 — and the same connection shows
+  no answer to `BATTERY`, which makes a battery level the first thing to rule out.
+- **`ffff/a055`, 28 bytes.** `01 05 06 07` and then five-byte groups: 274, 273, 275, 276,
+  277, 280. A stable list of something the watch supports; the numbers do not move between
+  connections.
+- **The reply to `HEART_MONITORING_ENABLED_GET`, 8 bytes.** High-entropy and *different on
+  every connection*, which rules out the obvious reading — it is not the monitoring state.
+- **The 16-byte tail of every activity record.** Always zero in every capture so far, so
+  there is nothing yet to read.
 
 ## Not planned
 
