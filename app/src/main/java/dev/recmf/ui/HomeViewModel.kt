@@ -38,9 +38,11 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -116,6 +118,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // level, and may not advertise at all while it is connected to something else.
         // Offer it before the user asks for a scan.
         _discovered.value = scanner.bonded()
+
+        checkForUpdateOnOpen()
     }
 
     private val watchInfo = combine(
@@ -281,10 +285,42 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun checkForUpdate() {
         if (_updateState.value is UpdateState.Checking) return
 
+        viewModelScope.launch { check() }
+    }
+
+    /**
+     * Looks for a newer build on opening the app, but not on every opening.
+     *
+     * The daily background check is what catches a build while the app is closed; this is
+     * for the other half of the same wish — opening reCMF and seeing that something is
+     * waiting, without pressing anything. Throttled, because an app that is opened eight
+     * times an hour should not ask GitHub eight times an hour, and because the answer does
+     * not change that fast.
+     *
+     * Silent about failure by design. Nobody opened the app to be told the network is
+     * down; the button is there for anyone who wants an answer now.
+     */
+    private fun checkForUpdateOnOpen() {
         viewModelScope.launch {
-            _updateState.value = UpdateState.Checking
-            _updateState.value = updater.check(BuildConfig.VERSION_CODE)
+            val since = Instant.now().epochSecond - settingsStore.lastUpdateCheckSeconds.first()
+            if (since < CHECK_ON_OPEN_INTERVAL_SECONDS) return@launch
+
+            val state = check()
+            if (state is UpdateState.Failed) _updateState.value = UpdateState.Idle
         }
+    }
+
+    private suspend fun check(): UpdateState {
+        _updateState.value = UpdateState.Checking
+
+        val state = updater.check(BuildConfig.VERSION_CODE)
+        _updateState.value = state
+
+        // Recorded whatever the answer was, including a failure: a phone with no signal
+        // would otherwise retry on every single opening.
+        settingsStore.setLastUpdateCheck(Instant.now().epochSecond)
+
+        return state
     }
 
     fun installUpdate(update: AvailableUpdate) {
@@ -302,6 +338,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+
+        /** Often enough to be useful on opening, rare enough not to be a poll. */
+        const val CHECK_ON_OPEN_INTERVAL_SECONDS = 6L * 60 * 60
 
         fun startOfToday(): Long =
             LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond()

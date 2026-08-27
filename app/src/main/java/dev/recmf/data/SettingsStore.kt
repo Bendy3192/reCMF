@@ -368,6 +368,14 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_LAST_ANNOUNCED_VERSION] = versionCode }
     }
 
+    /** When the app last asked GitHub anything, so opening it does not ask every time. */
+    val lastUpdateCheckSeconds: Flow<Long> =
+        context.dataStore.data.map { it[KEY_LAST_UPDATE_CHECK] ?: 0L }
+
+    suspend fun setLastUpdateCheck(epochSeconds: Long) {
+        context.dataStore.edit { it[KEY_LAST_UPDATE_CHECK] = epochSeconds }
+    }
+
     suspend fun setLastSync(epochSeconds: Long) {
         context.dataStore.edit { it[KEY_LAST_SYNC] = epochSeconds }
     }
@@ -386,6 +394,7 @@ class SettingsStore(private val context: Context) {
         val KEY_WEATHER_LON = doublePreferencesKey("weather_longitude")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")
         val KEY_LAST_ANNOUNCED_VERSION = intPreferencesKey("last_announced_version_code")
+        val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_epoch_seconds")
 
         val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")
         val KEY_SPO2_MONITORING = booleanPreferencesKey("watch_spo2_monitoring")

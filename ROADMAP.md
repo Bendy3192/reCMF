@@ -215,18 +215,20 @@ total — every reading after it is a counter against a counter.
 Bytes seen on a real watch that nothing here explains yet. Written down so the next capture
 can be compared against them rather than starting over.
 
-- **`ffff/0051`, one byte.** Reads `0x38` in both captures of it, and both times it
-  followed reCMF sending `BATTERY` — the answer opcode — as though it were a request. The
-  standing guess is that it is the watch saying it did not understand, with a code. That
-  request is gone now, so if the guess is right this frame stops appearing, and if it
-  keeps arriving it was never about the battery.
+- **`ffff/0051`, one byte.** Reads `0x38` in every capture of it, once per connection.
+  The guess was that it was the watch refusing the pointless `BATTERY` request reCMF used
+  to send; that request is gone and the frame still arrives, so the guess was wrong. It is
+  unsolicited, always the same value, and 56 matches nothing on the watch's screen.
 - **`ffff/a055`, 28 bytes.** `01 05 06 07` and then five-byte groups: 274, 273, 275, 276,
   277, 280. A stable list of something the watch supports; the numbers do not move between
   connections.
 - **The reply to `HEART_MONITORING_ENABLED_GET`, 8 bytes.** High-entropy and *different on
   every connection*, which rules out the obvious reading — it is not the monitoring state.
-- **The 16-byte tail of every activity record.** Always zero in every capture so far, so
-  there is nothing yet to read.
+- **The 16-byte tail of every activity record.** Not always zero after all: its first
+  four bytes are a little-endian number that tracks the day — `09` in the morning, `0b`
+  by evening. Climbs are the obvious candidate, since the goal block counts those too and
+  the numbers are the right size. The remaining twelve bytes have been zero in every
+  capture.
 
 ## Not planned
 
