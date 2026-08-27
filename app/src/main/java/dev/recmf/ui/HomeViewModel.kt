@@ -10,7 +10,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
-import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.WatchScanner
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
@@ -169,11 +168,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch { settingsStore.updateWatchPreferences(setting, transform) }
     }
-
-    /** The recent protocol exchange, for the in-app log. */
-    val protocolLog: StateFlow<List<ProtocolLog.Entry>> = ProtocolLog.entries
-
-    fun clearLog() = ProtocolLog.clear()
 
     val healthConnectAvailability: HealthConnectAvailability get() = healthConnect.availability()
 

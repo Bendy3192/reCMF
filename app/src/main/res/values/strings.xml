@@ -37,7 +37,6 @@
     <string name="action_sync_now">Sync now</string>
     <string name="action_forget">Forget</string>
     <string name="firmware_version">Firmware %1$s</string>
-    <string name="protocol_log">Protocol log (%1$d)</string>
     <string name="protocol_log_empty">Nothing exchanged yet.</string>
     <string name="action_show">Show</string>
     <string name="action_hide">Hide</string>
@@ -112,4 +111,5 @@
     <string name="find_watch">Find the watch</string>
     <string name="find_watch_explainer">Makes the watch ring and vibrate, as long as it is in Bluetooth range.</string>
     <string name="action_find_watch">Ring the watch</string>
+    <string name="protocol_log_title">Protocol log</string>
 </resources>

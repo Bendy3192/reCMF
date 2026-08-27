@@ -76,7 +76,6 @@ class MainActivity : ComponentActivity() {
                 val state by model.uiState.collectAsStateWithLifecycle()
                 val discovered by model.discovered.collectAsStateWithLifecycle()
                 val scanError by model.scanError.collectAsStateWithLifecycle()
-                val protocolLog by model.protocolLog.collectAsStateWithLifecycle()
                 val watchPreferences by model.watchPreferences.collectAsStateWithLifecycle()
                 val cityLookup by model.cityLookup.collectAsStateWithLifecycle()
 
@@ -90,12 +89,10 @@ class MainActivity : ComponentActivity() {
                     discovered = discovered,
                     scanError = scanError,
                     healthConnectAvailability = model.healthConnectAvailability,
-                    protocolLog = protocolLog,
                     watchPreferences = watchPreferences,
                     onWatchPreferences = model::updateWatchPreferences,
                     hasNotificationAccess = hasNotificationAccess,
                     isBatteryExempt = isBatteryExempt,
-                    onClearLog = model::clearLog,
                     onNotificationsEnabled = model::setNotificationsEnabled,
                     onScreenOffOnlyEnabled = model::setNotifyOnlyWhenScreenOff,
                     cityLookup = cityLookup,

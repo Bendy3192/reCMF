@@ -34,7 +34,6 @@
     <string name="action_sync_now">Синхронизировать</string>
     <string name="action_forget">Забыть</string>
     <string name="firmware_version">Прошивка %1$s</string>
-    <string name="protocol_log">Журнал протокола (%1$d)</string>
     <string name="protocol_log_empty">Обмена ещё не было.</string>
     <string name="action_show">Показать</string>
     <string name="action_hide">Скрыть</string>
@@ -113,4 +112,5 @@
     <string name="find_watch">Найти часы</string>
     <string name="find_watch_explainer">Часы зазвонят и завибрируют — если они в зоне действия Bluetooth.</string>
     <string name="action_find_watch">Позвонить на часы</string>
+    <string name="protocol_log_title">Лог протокола</string>
 </resources>

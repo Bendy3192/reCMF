@@ -47,6 +47,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -91,12 +92,10 @@ fun HomeScreen(
     discovered: List<DiscoveredWatch>,
     scanError: String?,
     healthConnectAvailability: HealthConnectAvailability,
-    protocolLog: List<ProtocolLog.Entry>,
     watchPreferences: WatchPreferences,
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
     isBatteryExempt: Boolean,
-    onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
     cityLookup: CityLookup,
@@ -130,12 +129,10 @@ fun HomeScreen(
                         tab = HomeTab.entries[page],
                         state = state,
                         healthConnectAvailability = healthConnectAvailability,
-                        protocolLog = protocolLog,
                         watchPreferences = watchPreferences,
                         onWatchPreferences = onWatchPreferences,
                         hasNotificationAccess = hasNotificationAccess,
                         isBatteryExempt = isBatteryExempt,
-                        onClearLog = onClearLog,
                         onNotificationsEnabled = onNotificationsEnabled,
                         onScreenOffOnlyEnabled = onScreenOffOnlyEnabled,
                         cityLookup = cityLookup,
@@ -159,7 +156,7 @@ fun HomeScreen(
                         .padding(bottom = 24.dp),
                 )
             } else {
-                PairingList(discovered, scanError, protocolLog, onScan, onPair, onClearLog)
+                PairingList(discovered, scanError, onScan, onPair)
             }
         }
     }
@@ -171,12 +168,10 @@ private fun TabContent(
     tab: HomeTab,
     state: HomeUiState,
     healthConnectAvailability: HealthConnectAvailability,
-    protocolLog: List<ProtocolLog.Entry>,
     watchPreferences: WatchPreferences,
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
     isBatteryExempt: Boolean,
-    onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
     cityLookup: CityLookup,
@@ -226,7 +221,7 @@ private fun TabContent(
                     )
                 }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
-                item { ProtocolLogCard(protocolLog, onClearLog) }
+                item { ProtocolLogCard() }
             }
         }
     }
@@ -236,10 +231,8 @@ private fun TabContent(
 private fun PairingList(
     discovered: List<DiscoveredWatch>,
     scanError: String?,
-    protocolLog: List<ProtocolLog.Entry>,
     onScan: () -> Unit,
     onPair: (DiscoveredWatch) -> Unit,
-    onClearLog: () -> Unit,
 ) {
     LazyColumn(
         modifier = Modifier
@@ -272,7 +265,7 @@ private fun PairingList(
 
         // Kept here too: a pairing that fails leaves nothing else to look at, and this is
         // the one place that says why.
-        item { ProtocolLogCard(protocolLog, onClearLog) }
+        item { ProtocolLogCard() }
     }
 }
 
@@ -492,8 +485,7 @@ private fun WatchClockNote(watch: WatchInfo) {
         Text(
             text = stringResource(
                 R.string.watch_last_exchange,
-                DateTimeFormatter.ofPattern("HH:mm:ss")
-                    .format(Instant.ofEpochMilli(exchangeAt).atZone(ZoneId.systemDefault())),
+                LOG_TIME.format(Instant.ofEpochMilli(exchangeAt)),
             ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -504,8 +496,7 @@ private fun WatchClockNote(watch: WatchInfo) {
 
     val watchDate = Instant.ofEpochSecond(recordAt).atZone(ZoneId.systemDefault()).toLocalDate()
     val agrees = watchDate == LocalDate.now()
-    val stamp = DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm")
-        .format(Instant.ofEpochSecond(recordAt).atZone(ZoneId.systemDefault()))
+    val stamp = RECORD_STAMP.format(Instant.ofEpochSecond(recordAt))
 
     val count = watch.lastRecordCount ?: 0
 
@@ -1005,10 +996,7 @@ private fun WeatherStatusLine(weather: WeatherStatus) {
         else -> R.string.weather_status_sent to false
     }
 
-    val detail = weather.sentAtMillis?.let {
-        DateTimeFormatter.ofPattern("HH:mm")
-            .format(Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()))
-    }
+    val detail = weather.sentAtMillis?.let { CLOCK_TIME.format(Instant.ofEpochMilli(it)) }
 
     Text(
         text = if (textRes == R.string.weather_status_sent) {
@@ -1127,7 +1115,7 @@ private fun NotificationsCard(
  * Showing the traffic is what makes it reportable without a cable and logcat.
  */
 @Composable
-private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Unit) {
+private fun ProtocolLogCard() {
     var expanded by remember { mutableStateOf(false) }
 
     Card(Modifier.fillMaxWidth()) {
@@ -1138,7 +1126,7 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    stringResource(R.string.protocol_log, entries.size),
+                    stringResource(R.string.protocol_log_title),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 TextButton(onClick = { expanded = !expanded }) {
@@ -1147,6 +1135,12 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
             }
 
             if (!expanded) return@Column
+
+            // Subscribed here, and only while the log is open. Collected at the top of the
+            // tree it recomposed the whole screen — both pager pages included — on every
+            // frame the watch sent, which during a sync burst is a dozen a second. That
+            // was the scrolling and swiping stutter.
+            val entries by ProtocolLog.entries.collectAsStateWithLifecycle()
 
             HorizontalDivider()
 
@@ -1201,7 +1195,7 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
                     Text(stringResource(R.string.action_copy))
                 }
 
-                TextButton(onClick = onClear) { Text(stringResource(R.string.action_clear)) }
+                TextButton(onClick = ProtocolLog::clear) { Text(stringResource(R.string.action_clear)) }
             }
         }
     }
@@ -1238,7 +1232,7 @@ private enum class HomeTab(@param:StringRes val labelRes: Int) {
 
 /** One log line, as both the screen and the clipboard render it. */
 private fun ProtocolLog.Entry.render(): String = buildString {
-    append(TIME_FORMAT.format(java.util.Date(atMillis)))
+    append(LOG_TIME.format(Instant.ofEpochMilli(atMillis)))
     append("  ")
     append(
         when (direction) {
@@ -1257,4 +1251,13 @@ private fun ProtocolLog.Entry.render(): String = buildString {
 /** Enough to see a whole handshake, few enough to scroll past. */
 private const val LOG_LINES = 60
 
-private val TIME_FORMAT = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.ROOT)
+/**
+ * Shared and immutable. SimpleDateFormat is neither, and ofPattern parses its pattern on
+ * every call — which the log did sixty times per redraw.
+ */
+private val LOG_TIME: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
+private val CLOCK_TIME: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+private val RECORD_STAMP: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm").withZone(ZoneId.systemDefault())

@@ -465,6 +465,11 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.STANDING_REMINDER_GET)
         connection.send(CmfCommand.WATER_REMINDER_GET)
 
+        // The one that unblocks alarms. The watch keeps exactly the list it is sent, so
+        // reCMF must not offer an alarm UI until it can read what is already there —
+        // otherwise the first save deletes whatever the wearer set up in the stock app.
+        connection.send(CmfCommand.ALARMS_GET)
+
         applyWatchPreferences(settings.watchPreferences.first())
 
         requestSync()
