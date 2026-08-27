@@ -101,11 +101,21 @@ class SampleIngest(
 
             // The watch reports running totals, so what Health Connect stores is the
             // movement between readings — which needs the reading before this batch.
-            val baseline = activity.firstOrNull()
-                ?.let { dao.activityBefore(it.timestamp) }
-                ?.toReading()
+            //
+            // Failing that, ask Health Connect what is already there for that day. The
+            // staging table is wiped by a reinstall and Health Connect's records are not,
+            // so without this the first reading after one is dropped and a whole morning
+            // with it. Its own total is the sum of what is already stored, which is the
+            // one number that cannot double-count.
+            val first = activity.firstOrNull()
+            val fromTable = first?.let { dao.activityBefore(it.timestamp) }?.toReading()
+            val baseline = fromTable ?: first?.let { healthConnect.stepsAlreadyWritten(it.timestamp) }
 
-            val deltas = stepDeltas(activity.map { it.toReading() }, baseline)
+            val deltas = stepDeltas(
+                activity.map { it.toReading() },
+                previous = baseline,
+                previousIsRecordedTotal = fromTable == null && baseline != null,
+            )
 
             // Written down where the wearer can see it. What reaches Health Connect is a
             // sum of differences, and the only way to tell it apart from the watch's own

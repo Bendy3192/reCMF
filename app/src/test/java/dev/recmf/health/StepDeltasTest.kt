@@ -108,6 +108,67 @@ class StepDeltasTest {
     }
 
     @Test
+    fun `a day already recorded elsewhere is measured from what it holds`() {
+        // A fresh install: the staging table is empty, but Health Connect kept what an
+        // earlier install wrote. 1400 steps are already there, ending at 09:00, and the
+        // watch now says 2100 — so 700 are owed, for the stretch since that record.
+        val alreadyWritten = CumulativeReading(at(day = 2, hour = 9), 1_400, 0, 0)
+        val now = reading(at(day = 2, hour = 11), 2_100)
+
+        val deltas = stepDeltas(
+            listOf(now),
+            previous = alreadyWritten,
+            zone = utc,
+            previousIsRecordedTotal = true,
+        )
+
+        assertEquals(
+            listOf(IntervalDelta(at(day = 2, hour = 9), at(day = 2, hour = 11), 700)),
+            deltas,
+        )
+    }
+
+    @Test
+    fun `a recording ahead of the watch writes nothing rather than twice`() {
+        // The watch was reset mid-day, so its counter is now below what is already in
+        // Health Connect. Treating that as a midnight reset would write the day again.
+        val alreadyWritten = CumulativeReading(at(day = 2, hour = 9), 1_400, 0, 0)
+        val afterReset = reading(at(day = 2, hour = 11), 60)
+
+        val deltas = stepDeltas(
+            listOf(afterReset),
+            previous = alreadyWritten,
+            zone = utc,
+            previousIsRecordedTotal = true,
+        )
+
+        assertTrue(deltas.isEmpty())
+    }
+
+    @Test
+    fun `only the first reading is measured against the recorded total`() {
+        // Everything after it is a counter against a counter, so a drop in the middle of
+        // the batch is a reset and is written — starting at the reading before it, which
+        // is later than midnight and therefore the honest start.
+        val alreadyWritten = CumulativeReading(at(day = 2, hour = 9), 1_000, 0, 0)
+
+        val deltas = stepDeltas(
+            listOf(reading(at(day = 2, hour = 10), 1_500), reading(at(day = 2, hour = 11), 30)),
+            previous = alreadyWritten,
+            zone = utc,
+            previousIsRecordedTotal = true,
+        )
+
+        assertEquals(
+            listOf(
+                IntervalDelta(at(day = 2, hour = 9), at(day = 2, hour = 10), 500),
+                IntervalDelta(at(day = 2, hour = 10), at(day = 2, hour = 11), 30),
+            ),
+            deltas,
+        )
+    }
+
+    @Test
     fun `without a baseline the first reading is not counted`() {
         // Its total covers a period that may already have been recorded, so counting it
         // would double whatever came before.

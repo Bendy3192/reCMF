@@ -193,11 +193,22 @@ watch's 3517 is what that looks like. The interval now starts at the reset, and 
 previous reading when the counter dropped for some other reason, because a reboot at two
 in the afternoon does not mean the morning is up for grabs.
 
-**The first reading after a fresh install is still dropped.** Its total covers a period
-reCMF may already have written from an earlier install, and Health Connect keeps those
-records across a reinstall even though the app's own staging table does not. Reading back
-what is already there would settle it; until then the loss is one morning, once, and only
-on a wipe rather than an update.
+**The first reading after a fresh install used to be dropped**, and with it every step
+since midnight. Its total covers a period an earlier install may already have written, and
+Health Connect keeps those records across a reinstall even though the staging table does
+not — so counting it would have doubled them.
+
+Health Connect is asked instead, since Health Connect is the thing that would be
+double-counted. The sum of reCMF's own records for that day, ending where the last one
+ends, *is* a cumulative reading, so it slots in as a baseline with no special case
+anywhere else. Only reCMF's records are counted: the phone counts steps too, and adding
+those in would subtract them from what the watch is owed.
+
+One case does need telling apart. A counter below its own last value has been reset; a
+counter below what is already *recorded* means the recording is ahead of the watch, and
+writing the difference there would count those steps twice. So the baseline knows which
+of the two it is, and only the first reading of a batch is measured against a recorded
+total — every reading after it is a counter against a counter.
 
 ## Unidentified
 

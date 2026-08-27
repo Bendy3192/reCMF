@@ -44,11 +44,18 @@ data class IntervalDelta(
  * @param previous the last reading before this run, if one is known. Without it the first
  *   reading cannot be turned into an interval and is used only as the baseline for the
  *   second, since its own total covers a period we may already have recorded.
+ * @param previousIsRecordedTotal whether [previous] is what has already been *stored* for
+ *   the day rather than a reading of the watch's counter. The two are the same number
+ *   when all is well, but they behave differently when the counter drops below it: a
+ *   counter below its own last value has been reset, while a counter below what is
+ *   already recorded means the recording is ahead of the watch — and writing the
+ *   difference then would count those steps twice.
  */
 fun stepDeltas(
     readings: List<CumulativeReading>,
     previous: CumulativeReading? = null,
     zone: ZoneId = ZoneId.systemDefault(),
+    previousIsRecordedTotal: Boolean = false,
 ): List<IntervalDelta> {
     val ordered = readings.sortedBy { it.timestamp }
     if (ordered.isEmpty()) return emptyList()
@@ -56,14 +63,25 @@ fun stepDeltas(
     val out = ArrayList<IntervalDelta>(ordered.size)
     var baseline = previous
 
+    // Only the first reading is measured against a total that was already recorded;
+    // everything after it is measured against the reading before, which is a counter.
+    var againstRecorded = previousIsRecordedTotal
+
     for (reading in ordered) {
         val from = baseline
+        val fromRecorded = againstRecorded
         baseline = reading
+        againstRecorded = false
 
         if (from == null) continue
         if (reading.timestamp <= from.timestamp) continue
 
         val reset = reading.steps < from.steps
+
+        // The recording is ahead of the watch, so there is nothing owed and the next
+        // reading will settle it. Writing the difference here would be writing steps that
+        // are already in Health Connect.
+        if (reset && fromRecorded) continue
 
         // A reset makes the reading its own total: it counts from the zero, not from a
         // number that no longer exists.

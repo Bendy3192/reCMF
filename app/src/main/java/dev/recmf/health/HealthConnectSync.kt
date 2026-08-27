@@ -13,7 +13,10 @@ import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Device
+import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.records.metadata.Metadata
+import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Percentage
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RestingHeartRateSampleEntity
@@ -73,6 +76,68 @@ class HealthConnectSync(private val context: Context) {
     suspend fun hasPermissions(): Boolean {
         val granted = client?.permissionController?.getGrantedPermissions() ?: return false
         return granted.containsAll(REQUIRED_PERMISSIONS)
+    }
+
+    /**
+     * What reCMF has already written for the day [timestampSeconds] falls in, as a
+     * cumulative reading.
+     *
+     * This is the answer to the one loss the staging table cannot cover. Health Connect
+     * keeps reCMF's records across a reinstall; the app's own table does not, so on a
+     * fresh install the first reading of the day has nothing to be differenced against
+     * and is dropped — losing every step since midnight. Guessing instead and writing the
+     * whole total would double whatever an earlier install had already recorded.
+     *
+     * Asking Health Connect settles it, because Health Connect is the thing that would be
+     * double-counted. The sum of what is already there, ending where the last record
+     * ends, *is* a cumulative reading for the day — so it slots straight into [stepDeltas]
+     * as a baseline with no special case anywhere else.
+     *
+     * Only reCMF's own records are counted. The phone counts steps too, and so may
+     * another watch; adding those in would subtract them from what the watch is owed.
+     *
+     * @return a baseline, or null when Health Connect cannot be read at all — in which
+     *   case the caller is no worse off than before this existed.
+     */
+    suspend fun stepsAlreadyWritten(timestampSeconds: Long): CumulativeReading? {
+        val client = this.client ?: return null
+
+        val zone = ZoneId.systemDefault()
+        val day = Instant.ofEpochSecond(timestampSeconds).atZone(zone).toLocalDate()
+        val dayStart = day.atStartOfDay(zone).toInstant()
+
+        return try {
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = StepsRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(
+                        dayStart,
+                        Instant.ofEpochSecond(timestampSeconds),
+                    ),
+                    dataOriginFilter = setOf(DataOrigin(context.packageName)),
+                ),
+            )
+
+            val written = response.records.sumOf { it.count }.toInt()
+
+            // Ending where our last record ends, so the interval about to be written
+            // starts where the last one stopped rather than overlapping it. With nothing
+            // there, midnight and zero — which is exactly true.
+            val lastEnd = response.records.maxOfOrNull { it.endTime.epochSecond }
+                ?: dayStart.epochSecond
+
+            CumulativeReading(
+                timestamp = lastEnd,
+                steps = written,
+                distanceMeters = 0,
+                calories = 0,
+            )
+        } catch (e: Exception) {
+            // Reading is a courtesy here, not the job. Permission may have been revoked,
+            // or the provider may be mid-update; either way the sync goes on.
+            Log.i(TAG, "Could not read back what was already written", e)
+            null
+        }
     }
 
     /**
