@@ -24,6 +24,7 @@ import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
 import dev.recmf.service.WatchService
 import dev.recmf.service.WeatherProblem
+import dev.recmf.protocol.HeartRateSample
 import dev.recmf.protocol.Spo2Sample
 import dev.recmf.protocol.StressSample
 import dev.recmf.service.WatchStatus
@@ -49,6 +50,7 @@ data class HomeUiState(
     val weather: WeatherStatus = WeatherStatus(),
     val spo2: Spo2Sample? = null,
     val stress: StressSample? = null,
+    val restingHeartRate: HeartRateSample? = null,
 )
 
 /** How the search for a place is going. */
@@ -80,6 +82,7 @@ private data class Extras(
     val weather: WeatherStatus,
     val spo2: Spo2Sample?,
     val stress: StressSample?,
+    val restingHeartRate: HeartRateSample?,
 )
 
 /** What has become of the forecast, so the card can say rather than sit blank. */
@@ -139,6 +142,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             weatherStatus,
             WatchStatus.spo2,
             WatchStatus.stress,
+            WatchStatus.restingHeartRate,
             ::Extras,
         ),
     ) { connection, settings, watch, steps, extras ->
@@ -151,6 +155,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             weather = extras.weather,
             spo2 = extras.spo2,
             stress = extras.stress,
+            restingHeartRate = extras.restingHeartRate,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HomeUiState())
 

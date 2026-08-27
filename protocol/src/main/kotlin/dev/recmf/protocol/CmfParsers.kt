@@ -28,6 +28,9 @@ object CmfParsers {
      */
     const val PAIR_RECORD_SIZE: Int = 8
 
+    /** Resting heart rate is the odd one out: a timestamp and a single byte. */
+    const val RESTING_RECORD_SIZE: Int = 5
+
 
     /**
      * `ACTIVITY_DATA`: a run of 32-byte records — timestamp, steps, distance, calories,
@@ -82,6 +85,36 @@ object CmfParsers {
 
         while (buf.remaining() >= PAIR_RECORD_SIZE) {
             out.add(make(buf.int.toUnsignedLong(), buf.int))
+        }
+
+        return out
+    }
+
+    /**
+     * `HEART_RATE_RESTING`: five bytes — a little-endian epoch second, then one byte of
+     * beats per minute.
+     *
+     * Read off a real Watch Pro 2 rather than ported: Gadgetbridge decodes the opcode but
+     * leaves the payload as a TODO, so there was nothing to port. Five-byte records at
+     * `0fce8f6a 4f` — 2026-08-27 08:41:35 local, 79 bpm — with the timestamp tracking the
+     * fetch to the second across four consecutive syncs.
+     *
+     * Note the one byte: the paired records elsewhere spend four on the value, and reading
+     * this as one of those would consume the next record's timestamp as part of this one.
+     */
+    fun parseRestingHeartRate(payload: ByteArray): List<HeartRateSample> {
+        if (payload.isEmpty() || payload.size % RESTING_RECORD_SIZE != 0) return emptyList()
+
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val out = ArrayList<HeartRateSample>(payload.size / RESTING_RECORD_SIZE)
+
+        while (buf.remaining() >= RESTING_RECORD_SIZE) {
+            out.add(
+                HeartRateSample(
+                    timestamp = buf.int.toUnsignedLong(),
+                    bpm = buf.get().toInt() and 0xff,
+                ),
+            )
         }
 
         return out

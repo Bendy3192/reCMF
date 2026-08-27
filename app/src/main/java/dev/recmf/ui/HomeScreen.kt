@@ -47,6 +47,9 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import dev.recmf.R
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
@@ -57,6 +60,8 @@ import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfSettings
+import android.os.Build
+import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
 import java.time.Instant
@@ -235,8 +240,15 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
             // Shown only once the watch has sent one. An em dash next to steps would
             // suggest reCMF is measuring these and getting nothing, when until now it was
             // discarding them unread.
-            if (state.spo2 != null || state.stress != null) {
+            if (state.spo2 != null || state.stress != null || state.restingHeartRate != null) {
                 Row(verticalAlignment = Alignment.Bottom) {
+                    state.restingHeartRate?.let {
+                        Metric(
+                            value = it.bpm.toString(),
+                            label = stringResource(R.string.metric_resting_heart_rate),
+                        )
+                        Spacer(Modifier.width(32.dp))
+                    }
                     state.spo2?.let {
                         Metric(
                             value = "${it.percent}%",
@@ -963,24 +975,11 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
             }
 
             // Newest first: the interesting event is always the most recent one.
-            entries.asReversed().take(LOG_LINES).forEach { entry ->
+            val newestFirst = entries.asReversed().take(LOG_LINES)
+
+            newestFirst.forEach { entry ->
                 Text(
-                    text = buildString {
-                        append(TIME_FORMAT.format(java.util.Date(entry.atMillis)))
-                        append("  ")
-                        append(
-                            when (entry.direction) {
-                                ProtocolLog.Direction.OUT -> "→"
-                                ProtocolLog.Direction.IN -> "←"
-                                ProtocolLog.Direction.ACK -> "✓"
-                                ProtocolLog.Direction.DROP -> "✕"
-                                ProtocolLog.Direction.NOTE -> "·"
-                            },
-                        )
-                        append(" ")
-                        append(entry.label)
-                        entry.detail?.let { append("\n        ").append(it) }
-                    },
+                    text = entry.render(),
                     style = MaterialTheme.typography.bodySmall,
                     fontFamily = FontFamily.Monospace,
                     color = when (entry.direction) {
@@ -991,9 +990,54 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
                 )
             }
 
-            TextButton(onClick = onClear) { Text(stringResource(R.string.action_clear)) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // The same lines the screen is showing, so what gets pasted is what was
+                // read — a copy built from a second formatter would drift from it.
+                val clipboard = LocalClipboardManager.current
+                val copied = pluralStringResource(
+                    R.plurals.log_copied,
+                    newestFirst.size,
+                    newestFirst.size,
+                )
+                val context = LocalContext.current
+
+                TextButton(
+                    onClick = {
+                        clipboard.setText(
+                            AnnotatedString(newestFirst.joinToString("\n") { it.render() }),
+                        )
+                        // Android 13 and up shows its own paste confirmation, and two
+                        // overlapping toasts is worse than none.
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            Toast.makeText(context, copied, Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                ) {
+                    Text(stringResource(R.string.action_copy))
+                }
+
+                TextButton(onClick = onClear) { Text(stringResource(R.string.action_clear)) }
+            }
         }
     }
+}
+
+/** One log line, as both the screen and the clipboard render it. */
+private fun ProtocolLog.Entry.render(): String = buildString {
+    append(TIME_FORMAT.format(java.util.Date(atMillis)))
+    append("  ")
+    append(
+        when (direction) {
+            ProtocolLog.Direction.OUT -> "→"
+            ProtocolLog.Direction.IN -> "←"
+            ProtocolLog.Direction.ACK -> "✓"
+            ProtocolLog.Direction.DROP -> "✕"
+            ProtocolLog.Direction.NOTE -> "·"
+        },
+    )
+    append(" ")
+    append(label)
+    detail?.let { append("\n        ").append(it) }
 }
 
 /** Enough to see a whole handshake, few enough to scroll past. */

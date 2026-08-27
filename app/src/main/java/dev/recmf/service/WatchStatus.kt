@@ -5,6 +5,7 @@ package dev.recmf.service
 
 import dev.recmf.ble.ConnectionState
 import dev.recmf.protocol.BatteryStatus
+import dev.recmf.protocol.HeartRateSample
 import dev.recmf.protocol.Spo2Sample
 import dev.recmf.protocol.StressSample
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,6 +62,9 @@ object WatchStatus {
     /** The newest blood-oxygen and stress readings the watch has handed over. */
     val spo2 = MutableStateFlow<Spo2Sample?>(null)
     val stress = MutableStateFlow<StressSample?>(null)
+
+    /** Resting heart rate, which the watch volunteers with every activity fetch. */
+    val restingHeartRate = MutableStateFlow<HeartRateSample?>(null)
 }
 
 /**

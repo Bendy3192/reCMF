@@ -26,6 +26,32 @@ class CmfParsersTest {
             .array()
 
     @Test
+    fun `resting heart rate decodes the bytes a real watch sent`() {
+        // Captured from a Watch Pro 2 on firmware 1.0.0.73: 2026-08-27 05:41:35 UTC, 79
+        // bpm. Gadgetbridge leaves this payload unparsed, so this is the record of what
+        // it actually contains rather than a restatement of someone else's decoder.
+        val payload = byteArrayOf(0x0f, 0xce.toByte(), 0x8f.toByte(), 0x6a, 0x4f)
+
+        assertEquals(
+            listOf(HeartRateSample(1_787_809_295L, 79)),
+            CmfParsers.parseRestingHeartRate(payload),
+        )
+    }
+
+    @Test
+    fun `resting heart rate reads consecutive records without sliding`() {
+        // One byte for the value, not four: reading it as a paired record would swallow
+        // the next record's timestamp and report a plausible, wrong series.
+        val payload = byteArrayOf(0x0f, 0xce.toByte(), 0x8f.toByte(), 0x6a, 0x4f) +
+            byteArrayOf(0xf1.toByte(), 0xcd.toByte(), 0x8f.toByte(), 0x6a, 0x50)
+
+        assertEquals(
+            listOf(HeartRateSample(1_787_809_295L, 79), HeartRateSample(1_787_809_265L, 80)),
+            CmfParsers.parseRestingHeartRate(payload),
+        )
+    }
+
+    @Test
     fun `spo2 records decode in order`() {
         val payload = pairRecord(1_700_000_000, 97) + pairRecord(1_700_003_600, 95)
 

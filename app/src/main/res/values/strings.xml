@@ -101,4 +101,10 @@
     <string name="action_allow_background">Allow background use</string>
     <string name="metric_spo2">blood oxygen</string>
     <string name="metric_stress">stress</string>
+    <string name="action_copy">Copy</string>
+    <plurals name="log_copied">
+        <item quantity="one">Copied %d line</item>
+        <item quantity="other">Copied %d lines</item>
+    </plurals>
+    <string name="metric_resting_heart_rate">resting</string>
 </resources>

@@ -578,6 +578,16 @@ class WatchService : LifecycleService() {
             CmfCommand.HEART_RATE_MANUAL_AUTO, CmfCommand.HEART_RATE_WORKOUT ->
                 ingest.storeHeartRate(CmfParsers.parseHeartRate(message.payload))
 
+            CmfCommand.HEART_RATE_RESTING ->
+                CmfParsers.parseRestingHeartRate(message.payload)
+                    .lastOrNull { it.isValid }
+                    ?.let { WatchStatus.restingHeartRate.value = it }
+
+            // Informational: the timestamp the watch is sending activity from, plus four
+            // bytes nobody has identified. Gadgetbridge logs it and does nothing with it.
+            // Named here so it stops being reported as a command with no handler.
+            CmfCommand.ACTIVITY_FETCH_ACK_2 -> Unit
+
             // Kept in memory rather than stored: enough to show the newest reading and to
             // prove the data is arriving. Persistence and Health Connect follow once the
             // shape has been seen against a real watch rather than only a unit test.
