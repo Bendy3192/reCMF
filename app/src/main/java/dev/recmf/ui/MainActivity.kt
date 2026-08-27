@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.recmf.health.HealthConnectSync
@@ -61,6 +62,7 @@ class MainActivity : ComponentActivity() {
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
                 val hasNotificationAccess = model.hasNotificationAccess()
+                val isBatteryExempt = model.isExemptFromBatteryOptimisation()
 
                 HomeScreen(
                     state = state,
@@ -71,6 +73,7 @@ class MainActivity : ComponentActivity() {
                     watchPreferences = watchPreferences,
                     onWatchPreferences = model::updateWatchPreferences,
                     hasNotificationAccess = hasNotificationAccess,
+                    isBatteryExempt = isBatteryExempt,
                     onClearLog = model::clearLog,
                     onNotificationsEnabled = model::setNotificationsEnabled,
                     onScreenOffOnlyEnabled = model::setNotifyOnlyWhenScreenOff,
@@ -79,6 +82,17 @@ class MainActivity : ComponentActivity() {
                     onFindCity = model::findCity,
                     onGrantNotificationAccess = {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    },
+                    onAllowBackgroundWork = {
+                        // The targeted dialog rather than the whole-app list: the
+                        // permission is declared, and making the user find reCMF among
+                        // every installed app is how a setting that matters goes unset.
+                        startActivity(
+                            Intent(
+                                Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                                "package:$packageName".toUri(),
+                            ),
+                        )
                     },
                     onScan = model::startScan,
                     onPair = model::pair,

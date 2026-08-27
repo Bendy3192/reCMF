@@ -95,4 +95,7 @@
     <string name="weather_status_no_city">Город не выбран, запрашивать нечего.</string>
     <string name="weather_status_unreachable">Не удалось связаться с сервисом погоды. reCMF попробует при следующем обновлении; на часах остаётся последний прогноз.</string>
     <string name="watch_last_exchange">Часы последний раз ответили в %1$s</string>
+    <string name="background_work">Работа в фоне ограничена</string>
+    <string name="background_work_explainer">Android может откладывать фоновые задачи reCMF, пока телефон простаивает — из-за этого прогноз и шаги обновляются раз в несколько часов. Разрешение на работу в фоне это снимает; reCMF всё так же просыпается только по своему интервалу обновления.</string>
+    <string name="action_allow_background">Разрешить работу в фоне</string>
 </resources>

@@ -139,7 +139,7 @@ class WatchService : LifecycleService() {
                 return START_NOT_STICKY
             }
 
-            ACTION_SYNC_NOW -> lifecycleScope.launch { requestSync() }
+            ACTION_SYNC_NOW -> lifecycleScope.launch { refreshNow() }
 
             else -> lifecycleScope.launch { connectToPairedWatch() }
         }
@@ -199,10 +199,27 @@ class WatchService : LifecycleService() {
                 delay(intervalSeconds * 1000L)
                 if (_status.value != ConnectionState.READY) continue
 
-                requestSync()
-                sendWeather()
+                refreshNow()
             }
         }
+    }
+
+    /**
+     * Everything a refresh means: the watch's counters, and the forecast.
+     *
+     * The two used to be separate, and only the counters were wired to the watchdog — so
+     * the one refresh path that survives Doze never touched the weather. The interval
+     * loop that did is a coroutine delay, and coroutine delays are measured against
+     * uptime, which stops advancing while the phone is in deep sleep: a five-minute tick
+     * scheduled at bedtime fires five *awake* minutes later, which can be most of a day.
+     * That is why the forecast refreshed on no schedule anyone could name.
+     */
+    private suspend fun refreshNow() {
+        requestSync()
+
+        // requestSync may have started a reconnect rather than a fetch; there is nothing
+        // to send a forecast down until that finishes, and the next refresh will carry it.
+        if (_status.value == ConnectionState.READY) sendWeather()
     }
 
     /**

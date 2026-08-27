@@ -75,6 +75,7 @@ fun HomeScreen(
     watchPreferences: WatchPreferences,
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
+    isBatteryExempt: Boolean,
     onClearLog: () -> Unit,
     onNotificationsEnabled: (Boolean) -> Unit,
     onScreenOffOnlyEnabled: (Boolean) -> Unit,
@@ -82,6 +83,7 @@ fun HomeScreen(
     onWeatherEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
     onGrantNotificationAccess: () -> Unit,
+    onAllowBackgroundWork: () -> Unit,
     onScan: () -> Unit,
     onPair: (DiscoveredWatch) -> Unit,
     onForget: () -> Unit,
@@ -115,6 +117,9 @@ fun HomeScreen(
                         onScreenOffOnly = onScreenOffOnlyEnabled,
                         onGrantAccess = onGrantNotificationAccess,
                     )
+                }
+                if (!isBatteryExempt) {
+                    item { BackgroundWorkCard(onAllowBackgroundWork) }
                 }
             } else {
                 item { PairingHeader(scanError, onScan) }
@@ -804,6 +809,38 @@ private fun WeatherStatusLine(weather: WeatherStatus) {
             MaterialTheme.colorScheme.onSurfaceVariant
         },
     )
+}
+
+/**
+ * Asks for the one system setting that decides whether reCMF keeps up while the phone is
+ * idle.
+ *
+ * Shown only while the exemption is missing, and it is not decoration: the background
+ * refresh is scheduled work, and Android defers scheduled work on an optimised app until
+ * it next feels like running it — which is how a forecast ends up hours stale.
+ */
+@Composable
+private fun BackgroundWorkCard(onAllow: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        ),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.background_work),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Text(
+                stringResource(R.string.background_work_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            FilledTonalButton(onClick = onAllow) {
+                Text(stringResource(R.string.action_allow_background))
+            }
+        }
+    }
 }
 
 @Composable

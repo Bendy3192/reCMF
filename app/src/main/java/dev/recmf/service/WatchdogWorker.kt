@@ -24,6 +24,10 @@ import java.util.concurrent.TimeUnit
  *
  * It deliberately does nothing when nothing is paired — a watchdog that restarts a
  * service the user turned off is a battery bug, not a feature.
+ *
+ * It doubles as the dependable refresh. Everything else that refreshes on a timer does so
+ * on a coroutine delay, which does not advance while the phone is in deep sleep; this runs
+ * on the job scheduler, which does.
  */
 class WatchdogWorker(
     context: Context,
@@ -45,6 +49,9 @@ class WatchdogWorker(
                 WatchService.start(applicationContext)
             }
 
+            // Also the refresh that survives Doze. The service's own interval loop is a
+            // coroutine delay, and those are measured against uptime, which stops while
+            // the phone sleeps — so this is the only tick with a schedule anyone can name.
             ConnectionState.READY -> WatchService.syncNow(applicationContext)
 
             // Mid-handshake or backing off: the service is alive and already working on

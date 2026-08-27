@@ -4,6 +4,8 @@
 package dev.recmf.ui
 
 import android.app.Application
+import android.content.Context
+import android.os.PowerManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import dev.recmf.ble.ConnectionState
@@ -145,6 +147,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * rather than by a permission dialog, so there is nothing to request — only to check
      * and to link to.
      */
+    /**
+     * Whether the system will let reCMF work while the phone is idle.
+     *
+     * Without this the background refresh runs when Android feels like letting it, which
+     * for a watch that is meant to stay in step is the difference between a companion app
+     * and a widget you have to open.
+     */
+    fun isExemptFromBatteryOptimisation(): Boolean {
+        val context = getApplication<Application>()
+        val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+        return power.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
     fun hasNotificationAccess(): Boolean {
         val context = getApplication<Application>()
         return context.packageName in NotificationManagerCompat.getEnabledListenerPackages(context)
