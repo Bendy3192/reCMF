@@ -126,4 +126,13 @@
     <string name="day_sat">Сб</string>
     <string name="day_sun">Вс</string>
     <string name="app_version">reCMF %1$s</string>
+    <string name="updates">Обновления</string>
+    <string name="update_checking">Проверяю…</string>
+    <string name="update_none">Это самая свежая сборка.</string>
+    <string name="update_available">Доступна %1$s.</string>
+    <string name="update_downloading">Скачиваю…</string>
+    <string name="update_confirm">Android спросит подтверждение установки. Если откажет — разрешите reCMF устанавливать приложения в системных настройках.</string>
+    <string name="update_failed">Не удалось обновить: %1$s</string>
+    <string name="action_check_update">Проверить обновления</string>
+    <string name="action_install_update">Скачать и установить</string>
 </resources>

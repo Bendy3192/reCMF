@@ -22,6 +22,14 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+      For installing an update reCMF downloaded itself. Declaring it is not enough: the
+      user also has to allow reCMF to install apps, in system settings. Android shows its
+      own confirmation for every install regardless — there is no silent path here short
+      of owning the device.
+    -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
         Requested at runtime, and only after the user asks for background sync: without
         it Doze suspends the link and the watch silently stops syncing overnight, which
         is exactly the failure this app exists to avoid.
@@ -110,5 +118,12 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
-    </application>
+    
+        <!-- Where the package installer reports back to; not for anything else to call. -->
+        <receiver
+            android:name=".update.InstallReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+</application>
 </manifest>

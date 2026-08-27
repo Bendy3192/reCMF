@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
                 val scanError by model.scanError.collectAsStateWithLifecycle()
                 val watchPreferences by model.watchPreferences.collectAsStateWithLifecycle()
                 val cityLookup by model.cityLookup.collectAsStateWithLifecycle()
+                val updateState by model.updateState.collectAsStateWithLifecycle()
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -107,6 +108,9 @@ class MainActivity : ComponentActivity() {
                     onForget = model::forget,
                     onSyncNow = model::syncNow,
                     onFindWatch = model::findWatch,
+                    updateState = updateState,
+                    onCheckForUpdate = model::checkForUpdate,
+                    onInstallUpdate = model::installUpdate,
                     onAutoSyncSeconds = model::setAutoSyncSeconds,
                     onHealthConnectEnabled = { enabled ->
                         model.setHealthConnectEnabled(enabled)

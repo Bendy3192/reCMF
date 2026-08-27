@@ -84,6 +84,8 @@ import androidx.annotation.StringRes
 import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
+import dev.recmf.update.AvailableUpdate
+import dev.recmf.update.UpdateState
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -112,6 +114,9 @@ fun HomeScreen(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
+    updateState: UpdateState,
+    onCheckForUpdate: () -> Unit,
+    onInstallUpdate: (AvailableUpdate) -> Unit,
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
@@ -147,6 +152,9 @@ fun HomeScreen(
                         onForget = onForget,
                         onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
+                        updateState = updateState,
+                        onCheckForUpdate = onCheckForUpdate,
+                        onInstallUpdate = onInstallUpdate,
                         onAutoSyncSeconds = onAutoSyncSeconds,
                         onHealthConnectEnabled = onHealthConnectEnabled,
                     )
@@ -186,6 +194,9 @@ private fun TabContent(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
+    updateState: UpdateState,
+    onCheckForUpdate: () -> Unit,
+    onInstallUpdate: (AvailableUpdate) -> Unit,
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
@@ -226,6 +237,7 @@ private fun TabContent(
                 }
                 item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
+                item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
         }
@@ -1350,6 +1362,89 @@ private fun CmfWeekday.labelRes(): Int = when (this) {
     CmfWeekday.FRIDAY -> R.string.day_fri
     CmfWeekday.SATURDAY -> R.string.day_sat
     CmfWeekday.SUNDAY -> R.string.day_sun
+}
+
+/**
+ * Fetches a newer build and hands it to Android's installer.
+ *
+ * There is no silent install: Android confirms every sideloaded package itself and this
+ * card can only get as far as that dialog. What it saves is the browser, the download, the
+ * file manager and — since every build now shares a signing key — the uninstall that used
+ * to take the settings with it.
+ */
+@Composable
+private fun UpdateCard(
+    state: UpdateState,
+    onCheck: () -> Unit,
+    onInstall: (AvailableUpdate) -> Unit,
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.updates), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+
+            when (state) {
+                UpdateState.Idle -> Unit
+
+                UpdateState.Checking -> Text(
+                    stringResource(R.string.update_checking),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                UpdateState.UpToDate -> Text(
+                    stringResource(R.string.update_none),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                is UpdateState.Available -> Text(
+                    stringResource(R.string.update_available, state.update.name),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                is UpdateState.Downloading -> {
+                    Text(
+                        stringResource(R.string.update_downloading),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (state.percent == null) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                    } else {
+                        LinearProgressIndicator(
+                            progress = { state.percent / 100f },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+
+                UpdateState.AwaitingConfirmation -> Text(
+                    stringResource(R.string.update_confirm),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+
+                is UpdateState.Failed -> Text(
+                    stringResource(R.string.update_failed, state.reason),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+
+            val available = state as? UpdateState.Available
+            val busy = state is UpdateState.Checking || state is UpdateState.Downloading
+
+            if (available != null) {
+                FilledTonalButton(onClick = { onInstall(available.update) }, enabled = !busy) {
+                    Text(stringResource(R.string.action_install_update))
+                }
+            } else {
+                OutlinedButton(onClick = onCheck, enabled = !busy) {
+                    Text(stringResource(R.string.action_check_update))
+                }
+            }
+        }
+    }
 }
 
 /** Rings the watch. Disabled while it is out of range, where the button would do nothing. */

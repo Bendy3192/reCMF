@@ -93,6 +93,9 @@ jobs:
 
   app:
     runs-on: ubuntu-latest
+    # Only to publish the release below; everything else here reads.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -164,3 +167,22 @@ jobs:
           name: recmf-debug-apk
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
+
+      # What the app checks for updates against. Artifacts would not do: reading one
+      # needs a token, and they expire — a release is public, permanent, and has a stable
+      # "latest" the app can ask for without credentials.
+      #
+      # Only from the development branch, and only when everything above passed: a release
+      # is what phones will install, so a red build must never become one.
+      - name: Publish the build as a release
+        if: success() && github.ref == 'refs/heads/claude/cmf-watch-pro-poisonfit-apdhqr'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=$(ls app/build/outputs/apk/debug/*.apk | head -1)
+          # The version code is the run number, so the tag is the version and the app can
+          # compare without downloading anything.
+          gh release create "build-${{ github.run_number }}" "$apk#recmf.apk" \
+            --title "build ${{ github.run_number }}" \
+            --notes "Automatic build of ${{ github.sha }}." \
+            --latest

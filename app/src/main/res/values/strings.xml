@@ -125,4 +125,13 @@
     <string name="day_sat">Sat</string>
     <string name="day_sun">Sun</string>
     <string name="app_version">reCMF %1$s</string>
+    <string name="updates">Updates</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_none">This is the newest build.</string>
+    <string name="update_available">%1$s is available.</string>
+    <string name="update_downloading">Downloading…</string>
+    <string name="update_confirm">Android will ask you to confirm the install. If it refuses, allow reCMF to install apps in system settings.</string>
+    <string name="update_failed">Update failed: %1$s</string>
+    <string name="action_check_update">Check for updates</string>
+    <string name="action_install_update">Download and install</string>
 </resources>

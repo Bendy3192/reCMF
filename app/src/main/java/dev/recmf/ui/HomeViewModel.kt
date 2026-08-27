@@ -21,7 +21,11 @@ import dev.recmf.health.HealthConnectAvailability
 import androidx.core.app.NotificationManagerCompat
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
+import dev.recmf.BuildConfig
 import dev.recmf.service.WatchService
+import dev.recmf.update.AvailableUpdate
+import dev.recmf.update.UpdateState
+import dev.recmf.update.Updater
 import dev.recmf.service.WeatherProblem
 import dev.recmf.protocol.HeartRateSample
 import dev.recmf.protocol.Spo2Sample
@@ -267,6 +271,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun findWatch() {
         WatchService.findWatch(getApplication())
+    }
+
+    private val updater = Updater(application)
+
+    private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
+    val updateState: StateFlow<UpdateState> = _updateState.asStateFlow()
+
+    fun checkForUpdate() {
+        if (_updateState.value is UpdateState.Checking) return
+
+        viewModelScope.launch {
+            _updateState.value = UpdateState.Checking
+            _updateState.value = updater.check(BuildConfig.VERSION_CODE)
+        }
+    }
+
+    fun installUpdate(update: AvailableUpdate) {
+        viewModelScope.launch {
+            _updateState.value = UpdateState.Downloading(null)
+            _updateState.value = updater.install(update) { percent ->
+                _updateState.value = UpdateState.Downloading(percent)
+            }
+        }
     }
 
     fun setHealthConnectEnabled(enabled: Boolean) {
