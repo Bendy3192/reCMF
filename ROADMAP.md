@@ -162,8 +162,13 @@ Bytes seen on a real watch that nothing here explains yet. Written down so the n
 can be compared against them rather than starting over.
 
 - **`ffff/0051`, one byte.** Arrives once per connection, in the middle of the settings
-  burst, unasked. The one capture of it reads `0x38` — 56 — and the same connection shows
-  no answer to `BATTERY`, which makes a battery level the first thing to rule out.
+  burst, unasked. The one capture of it reads `0x38` — 56. Not the battery: the watch read
+  96% at the time.
+- **Where the battery level actually comes from.** The app shows the right number, so
+  something answers — but a capture covering two full refreshes contains no inbound
+  `BATTERY` at all. Either it arrives outside a refresh, or the displayed value is simply
+  the last one and is quietly ageing. `BATTERY_GET` now goes out alongside the old request
+  to find out which.
 - **`ffff/a055`, 28 bytes.** `01 05 06 07` and then five-byte groups: 274, 273, 275, 276,
   277, 280. A stable list of something the watch supports; the numbers do not move between
   connections.

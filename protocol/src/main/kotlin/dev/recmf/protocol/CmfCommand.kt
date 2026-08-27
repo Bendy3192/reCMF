@@ -31,7 +31,19 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     AUTH_FAILED(0xffff, 0xa061),
     AUTHENTICATED_CONFIRM_REPLY(0xffff, 0x0004),
     AUTHENTICATED_CONFIRM_REQUEST(0xffff, 0x804d),
+    /** The answer, not the question: asking for it is [BATTERY_GET]. */
     BATTERY(0x005c, 0x0001),
+
+    /**
+     * Gadgetbridge calls this TRIGGER_SYNC, which hides what it is.
+     *
+     * It is the `0x0002` half of the `0x005c` pair, and this protocol answers a `0x0002`
+     * under the matching `0x0001` — the same shape as `SERIAL_NUMBER_GET` and the
+     * reminders. So this is how a battery level is asked for, and [BATTERY] is what comes
+     * back. Sending [BATTERY] itself, as reCMF did, is sending an answer as a question:
+     * the watch has nothing to do with it and says nothing.
+     */
+    BATTERY_GET(0x005c, 0x0002),
     CALL_REMINDER(0xffff, 0x9066),
     CONTACTS_GET(0x00d5, 0x0002),
     CONTACTS_SET(0x00d5, 0x0001),
@@ -50,12 +62,14 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     DATA_TRANSFER_WATCHFACE_INIT_2_REPLY(0xffff, 0xa063),
     DATA_TRANSFER_WATCHFACE_INIT_2_REQUEST(0xffff, 0x9063),
     DO_NOT_DISTURB(0x0099, 0x0001),
+    DO_NOT_DISTURB_GET(0x0099, 0x0002),
     FACTORY_RESET(0x009a, 0x0001),
     FIND_PHONE(0x005b, 0x0001),
     FIND_WATCH(0x005d, 0x0001),
     FIRMWARE_VERSION_GET(0xffff, 0x8006),
     FIRMWARE_VERSION_RET(0xffff, 0x0006),
     GOALS_SET(0x005e, 0x0001),
+    GOALS_GET(0x005e, 0x0002),
     GPS_COORDS(0xffff, 0x906a),
     HEART_MONITORING_ALERTS(0xffff, 0x9059),
     HEART_MONITORING_ENABLED_GET(0x009b, 0x0002),
@@ -73,15 +87,17 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     SLEEP_DATA(0x0058, 0x0001),
     SPO2(0x0055, 0x0001),
     SPORTS_SET(0x00dc, 0x0001),
+    SPORTS_GET(0x00dc, 0x0002),
     STANDING_REMINDER_GET(0x0060, 0x0002),
     STANDING_REMINDER_SET(0x0060, 0x0001),
     STRESS(0x009d, 0x0001),
     TIME_FORMAT(0x005f, 0x0001),
+    TIME_FORMAT_GET(0x005f, 0x0002),
     TIME(0xffff, 0x8004),
-    TRIGGER_SYNC(0x005c, 0x0002),
     UNIT_LENGTH(0xffff, 0x9067),
     UNIT_TEMPERATURE(0xffff, 0x9068),
     WAKE_ON_WRIST_RAISE(0x0062, 0x0001),
+    WAKE_ON_WRIST_RAISE_GET(0x0062, 0x0002),
     WATCHFACE(0x009f, 0x0001),
     WATER_REMINDER_GET(0x0061, 0x0002),
     WATER_REMINDER_SET(0x0061, 0x0001),

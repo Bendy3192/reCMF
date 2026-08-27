@@ -586,6 +586,19 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.STANDING_REMINDER_GET)
         connection.send(CmfCommand.WATER_REMINDER_GET)
 
+        // The same question put to every other setting reCMF writes. These five are a
+        // prediction, not a reading: nothing documents them, but the `0x0002` half of a
+        // pair has answered under its `0x0001` every single time it has been tried here.
+        // Whatever comes back lands in the log with its bytes, which is how the four
+        // above were worked out, and is what the parsing in the next round will be
+        // written against. Nothing is stored from them yet — a reply read wrongly would
+        // overwrite goals the wearer set, and a guess is not worth that.
+        connection.send(CmfCommand.GOALS_GET)
+        connection.send(CmfCommand.TIME_FORMAT_GET)
+        connection.send(CmfCommand.WAKE_ON_WRIST_RAISE_GET)
+        connection.send(CmfCommand.SPORTS_GET)
+        connection.send(CmfCommand.DO_NOT_DISTURB_GET)
+
         // The one that unblocks alarms. The watch keeps exactly the list it is sent, so
         // reCMF must not offer an alarm UI until it can read what is already there —
         // otherwise the first save deletes whatever the wearer set up in the stock app.
@@ -808,6 +821,16 @@ class WatchService : LifecycleService() {
             // adopted: reading a setting is one thing, and letting a read change what the
             // phone will later write is another, which wants care about the difference
             // between "the watch says so" and "the user asked for it".
+            // Answers to the probes above. Logged and not stored: the layouts are a
+            // guess until a capture says otherwise, and the bytes are already on the line
+            // above this note.
+            CmfCommand.GOALS_SET,
+            CmfCommand.TIME_FORMAT,
+            CmfCommand.WAKE_ON_WRIST_RAISE,
+            CmfCommand.SPORTS_SET,
+            CmfCommand.DO_NOT_DISTURB,
+            -> ProtocolLog.note("Read back from the watch: ${message.cmd.name}")
+
             CmfCommand.STANDING_REMINDER_SET, CmfCommand.WATER_REMINDER_SET -> {
                 val which = if (message.cmd == CmfCommand.STANDING_REMINDER_SET) "Stand" else "Drink"
                 val state = CmfSettings.parseReminder(message.payload)
@@ -943,6 +966,16 @@ class WatchService : LifecycleService() {
             return
         }
 
+        // Both halves, on purpose, for one build.
+        //
+        // The level shown in the app is right, so something is answering — but a capture
+        // covering two whole refreshes contains no reply to this at all, which says the
+        // value arrives some other way and may simply be old. 0x005c/0x0002 is what the
+        // pattern predicts the question to be, so it goes out alongside the existing
+        // 0x0001 rather than instead of it: whichever produces an inbound BATTERY in the
+        // log is the real one, and asking twice costs one frame and cannot break a
+        // reading that already works.
+        connection.send(CmfCommand.BATTERY_GET)
         connection.send(CmfCommand.BATTERY)
         connection.send(CmfCommand.ACTIVITY_FETCH_1, dev.recmf.protocol.CmfFrame.A5)
     }
