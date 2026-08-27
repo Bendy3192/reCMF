@@ -5,9 +5,9 @@
  */
 package dev.recmf.notifications
 
+import dev.recmf.protocol.truncateToUtf8Bytes
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.charset.StandardCharsets
 
 /**
  * The icon the watch draws beside a notification. The codes are the watch's own; anything
@@ -86,8 +86,8 @@ data class WatchNotification(
      * Big-endian, and both strings are truncated to what the watch accepts.
      */
     fun toPayload(): ByteArray {
-        val titleBytes = title.truncateUtf8(MAX_TITLE_BYTES)
-        val bodyBytes = body.truncateUtf8(MAX_BODY_BYTES)
+        val titleBytes = title.truncateToUtf8Bytes(MAX_TITLE_BYTES)
+        val bodyBytes = body.truncateToUtf8Bytes(MAX_BODY_BYTES)
 
         return ByteBuffer.allocate(HEADER_SIZE + titleBytes.size + bodyBytes.size)
             .order(ByteOrder.BIG_ENDIAN)
@@ -106,21 +106,5 @@ data class WatchNotification(
         const val MAX_TITLE_BYTES = 20
         const val MAX_BODY_BYTES = 128
 
-        /**
-         * Truncates on a character boundary, not a byte one.
-         *
-         * Cutting mid-character would send the watch half a code point — which for
-         * anything outside ASCII, Cyrillic included, is most of the text.
-         */
-        internal fun String.truncateUtf8(maxBytes: Int): ByteArray {
-            val encoded = toByteArray(StandardCharsets.UTF_8)
-            if (encoded.size <= maxBytes) return encoded
-
-            var end = maxBytes
-            // Continuation bytes are 10xxxxxx; back off until we are on a lead byte.
-            while (end > 0 && (encoded[end].toInt() and 0xc0) == 0x80) end--
-
-            return encoded.copyOf(end)
-        }
     }
 }

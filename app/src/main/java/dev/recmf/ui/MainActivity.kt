@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
                     onPair = model::pair,
                     onForget = model::forget,
                     onSyncNow = model::syncNow,
+                    onFindWatch = model::findWatch,
                     onAutoSyncSeconds = model::setAutoSyncSeconds,
                     onHealthConnectEnabled = { enabled ->
                         model.setHealthConnectEnabled(enabled)

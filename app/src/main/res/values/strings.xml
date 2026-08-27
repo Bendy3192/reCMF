@@ -109,4 +109,7 @@
     <string name="metric_resting_heart_rate">resting</string>
     <string name="tab_health">Health</string>
     <string name="tab_device">Device</string>
+    <string name="find_watch">Find the watch</string>
+    <string name="find_watch_explainer">Makes the watch ring and vibrate, as long as it is in Bluetooth range.</string>
+    <string name="action_find_watch">Ring the watch</string>
 </resources>

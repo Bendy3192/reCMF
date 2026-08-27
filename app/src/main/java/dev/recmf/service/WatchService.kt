@@ -141,6 +141,10 @@ class WatchService : LifecycleService() {
 
             ACTION_SYNC_NOW -> lifecycleScope.launch { refreshNow() }
 
+            ACTION_FIND_WATCH -> lifecycleScope.launch {
+                if (_status.value == ConnectionState.READY) connection.send(CmfCommand.FIND_WATCH)
+            }
+
             else -> lifecycleScope.launch { connectToPairedWatch() }
         }
 
@@ -790,6 +794,7 @@ class WatchService : LifecycleService() {
 
         const val ACTION_STOP = "dev.recmf.action.STOP"
         const val ACTION_SYNC_NOW = "dev.recmf.action.SYNC_NOW"
+        const val ACTION_FIND_WATCH = "dev.recmf.action.FIND_WATCH"
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, WatchService::class.java))
@@ -798,6 +803,13 @@ class WatchService : LifecycleService() {
         fun syncNow(context: Context) {
             context.startForegroundService(
                 Intent(context, WatchService::class.java).setAction(ACTION_SYNC_NOW),
+            )
+        }
+
+        /** Makes the watch ring, for the usual reason. */
+        fun findWatch(context: Context) {
+            context.startForegroundService(
+                Intent(context, WatchService::class.java).setAction(ACTION_FIND_WATCH),
             )
         }
 

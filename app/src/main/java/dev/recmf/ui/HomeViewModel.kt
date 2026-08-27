@@ -271,6 +271,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         WatchService.syncNow(getApplication())
     }
 
+    fun findWatch() {
+        WatchService.findWatch(getApplication())
+    }
+
     fun setHealthConnectEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setHealthConnectEnabled(enabled) }
     }

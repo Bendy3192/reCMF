@@ -100,6 +100,7 @@ fun HomeScreen(
     onPair: (DiscoveredWatch) -> Unit,
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
+    onFindWatch: () -> Unit,
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
@@ -167,6 +168,7 @@ fun HomeScreen(
                                 onGrantAccess = onGrantNotificationAccess,
                             )
                         }
+                        item { FindWatchCard(state.connection.isUsable, onFindWatch) }
                         item { ProtocolLogCard(protocolLog, onClearLog) }
                     }
                 }
@@ -1067,6 +1069,23 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
                 }
 
                 TextButton(onClick = onClear) { Text(stringResource(R.string.action_clear)) }
+            }
+        }
+    }
+}
+
+/** Rings the watch. Disabled while it is out of range, where the button would do nothing. */
+@Composable
+private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.find_watch), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.find_watch_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            FilledTonalButton(onClick = onFindWatch, enabled = connected) {
+                Text(stringResource(R.string.action_find_watch))
             }
         }
     }

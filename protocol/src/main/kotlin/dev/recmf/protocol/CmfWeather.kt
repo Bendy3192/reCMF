@@ -7,7 +7,6 @@ package dev.recmf.protocol
 
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import java.nio.charset.StandardCharsets
 
 /**
  * The icons the watch can draw. The codes are its own, worked out by observation rather
@@ -128,7 +127,7 @@ object CmfWeather {
         }
 
         // The watch scrolls anything longer, and the name must not be cut mid-character.
-        val name = location.truncateUtf8(LOCATION_BYTES - 2)
+        val name = location.truncateToUtf8Bytes(LOCATION_BYTES - 2)
         buf.put(name)
         buf.put(ByteArray(LOCATION_BYTES - name.size))
 
@@ -155,12 +154,4 @@ object CmfWeather {
     }
 
     /** Cuts on a character boundary: half a code point would render as rubbish. */
-    private fun String.truncateUtf8(maxBytes: Int): ByteArray {
-        val encoded = toByteArray(StandardCharsets.UTF_8)
-        if (encoded.size <= maxBytes) return encoded
-
-        var end = maxBytes
-        while (end > 0 && (encoded[end].toInt() and 0xc0) == 0x80) end--
-        return encoded.copyOf(end)
-    }
 }
