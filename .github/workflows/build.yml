@@ -147,7 +147,10 @@ jobs:
             [ -f "$log" ] || continue
             echo "===== $log"
             sed -n "/^\* What went wrong:/,/^\* Try:/p" "$log" | head -70
-            grep -E "^e: " "$log" | head -30 || true
+            # Warnings too, not just errors: the build runs with -Werror, so the line
+            # that actually names the cause is a "w:" and only the useless "warnings
+            # found and -Werror specified" is an "e:".
+            grep -E "^(e|w): " "$log" | head -30 || true
           done
           # Both test tasks point at an HTML report rather than naming what failed.
           find . -path "*/test-results/*" -name "*.xml" \

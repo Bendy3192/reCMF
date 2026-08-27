@@ -40,6 +40,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,9 +48,10 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.platform.LocalClipboardManager
+import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
 import dev.recmf.R
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
@@ -60,6 +62,7 @@ import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfSettings
+import android.content.ClipData
 import android.os.Build
 import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
@@ -993,7 +996,8 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 // The same lines the screen is showing, so what gets pasted is what was
                 // read — a copy built from a second formatter would drift from it.
-                val clipboard = LocalClipboardManager.current
+                val clipboard = LocalClipboard.current
+                val scope = rememberCoroutineScope()
                 val copied = pluralStringResource(
                     R.plurals.log_copied,
                     newestFirst.size,
@@ -1003,13 +1007,16 @@ private fun ProtocolLogCard(entries: List<ProtocolLog.Entry>, onClear: () -> Uni
 
                 TextButton(
                     onClick = {
-                        clipboard.setText(
-                            AnnotatedString(newestFirst.joinToString("\n") { it.render() }),
-                        )
-                        // Android 13 and up shows its own paste confirmation, and two
-                        // overlapping toasts is worse than none.
-                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
-                            Toast.makeText(context, copied, Toast.LENGTH_SHORT).show()
+                        val text = newestFirst.joinToString("\n") { it.render() }
+                        scope.launch {
+                            clipboard.setClipEntry(
+                                ClipEntry(ClipData.newPlainText("reCMF protocol log", text)),
+                            )
+                            // Android 13 and up shows its own paste confirmation, and two
+                            // overlapping toasts is worse than none.
+                            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                                Toast.makeText(context, copied, Toast.LENGTH_SHORT).show()
+                            }
                         }
                     },
                 ) {
