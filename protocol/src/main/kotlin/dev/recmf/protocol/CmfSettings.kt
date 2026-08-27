@@ -20,6 +20,14 @@ enum class MonitoringChannel(val selector: Byte) {
     STRESS(0x04),
 }
 
+/** A reminder as the watch holds it. */
+data class ReminderState(
+    val enabled: Boolean,
+    val intervalMinutes: Int,
+    val quietStartSeconds: Int,
+    val quietEndSeconds: Int,
+)
+
 /**
  * Builders for the watch's configuration payloads.
  *
@@ -112,6 +120,28 @@ object CmfSettings {
             .putInt(if (quiet) quietEndSeconds else 0)
             .array()
     }
+
+    /**
+     * Reads a reminder back, in the layout it was written.
+     *
+     * Confirmed against a real watch: `STANDING_REMINDER_GET` and `WATER_REMINDER_GET`
+     * both answered `00 003c 00000000 00000000` — off, every sixty minutes, no quiet
+     * window — which is byte-for-byte what [reminder] builds. The reply arrives under the
+     * matching SET opcode, so this is the same eleven bytes read the other way.
+     */
+    fun parseReminder(payload: ByteArray): ReminderState? {
+        if (payload.size != REMINDER_PAYLOAD_SIZE) return null
+
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
+        return ReminderState(
+            enabled = buf.get().toInt() != 0,
+            intervalMinutes = buf.short.toInt() and 0xffff,
+            quietStartSeconds = buf.int,
+            quietEndSeconds = buf.int,
+        )
+    }
+
+    const val REMINDER_PAYLOAD_SIZE: Int = 11
 
     /** The watch refuses a longer gap between nudges. */
     const val MAX_REMINDER_INTERVAL_MINUTES: Int = 180

@@ -109,7 +109,7 @@
     </plurals>
     <string name="metric_resting_heart_rate">пульс покоя</string>
     <string name="tab_health">Здоровье</string>
-    <string name="tab_device">Устройство</string>
+    <string name="tab_device">Часы</string>
     <string name="find_watch">Найти часы</string>
     <string name="find_watch_explainer">Часы зазвонят и завибрируют — если они в зоне действия Bluetooth.</string>
     <string name="action_find_watch">Позвонить на часы</string>

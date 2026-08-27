@@ -3,7 +3,9 @@
  */
 package dev.recmf.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
@@ -31,25 +33,31 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TimeInput
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
 import androidx.compose.material3.TopAppBar
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.ClipEntry
@@ -104,103 +112,228 @@ fun HomeScreen(
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
-    // Only once there is a watch: while pairing there is one thing to do, and a tab bar
-    // over a device list would be two empty rooms and a corridor.
-    var tab by rememberSaveable { mutableStateOf(HomeTab.HEALTH) }
+    val pager = rememberPagerState { HomeTab.entries.size }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        topBar = {
-            Column {
-                TopAppBar(title = { Text(stringResource(R.string.app_name)) })
-                if (state.settings.isPaired) {
-                    PrimaryTabRow(selectedTabIndex = tab.ordinal) {
-                        HomeTab.entries.forEach { entry ->
-                            Tab(
-                                selected = tab == entry,
-                                onClick = { tab = entry },
-                                text = { Text(stringResource(entry.labelRes)) },
-                            )
-                        }
-                    }
-                }
-            }
-        },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
     ) { insets ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(insets)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // On both tabs: it is the answer to "is any of this current?", and neither
-            // tab means anything without it.
-            item { ConnectionCard(state, onSyncNow, onForget) }
-
+        Box(Modifier.fillMaxSize().padding(insets)) {
             if (state.settings.isPaired) {
-                when (tab) {
-                    HomeTab.HEALTH -> {
-                        item { TodayCard(state, onAutoSyncSeconds) }
-                        item {
-                            HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled)
-                        }
-                        if (!isBatteryExempt) {
-                            item { BackgroundWorkCard(onAllowBackgroundWork) }
-                        }
-                    }
-
-                    HomeTab.DEVICE -> {
-                        item {
-                            WatchSettingsCard(
-                                watchPreferences,
-                                state.connection.isUsable,
-                                onWatchPreferences,
-                            )
-                        }
-                        item { WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity) }
-                        item {
-                            NotificationsCard(
-                                state = state,
-                                hasAccess = hasNotificationAccess,
-                                onEnabled = onNotificationsEnabled,
-                                onScreenOffOnly = onScreenOffOnlyEnabled,
-                                onGrantAccess = onGrantNotificationAccess,
-                            )
-                        }
-                        item { FindWatchCard(state.connection.isUsable, onFindWatch) }
-                        item { ProtocolLogCard(protocolLog, onClearLog) }
-                    }
-                }
-            } else {
-                item { PairingHeader(scanError, onScan) }
-                items(discovered, key = { it.address }) { watch ->
-                    ListItem(
-                        headlineContent = { Text(watch.name ?: stringResource(R.string.unnamed_watch)) },
-                        supportingContent = {
-                            Text(
-                                if (watch.isBonded) {
-                                    stringResource(R.string.device_paired, watch.address)
-                                } else {
-                                    watch.address
-                                },
-                            )
-                        },
-                        trailingContent = {
-                            FilledTonalButton(onClick = { onPair(watch) }) {
-                                Text(stringResource(R.string.action_pair))
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+                // A pager rather than a swapped body, so the tabs can be swiped as well as
+                // tapped. Each page carries its own scroll, which is why the connection
+                // card is repeated rather than hoisted: hoisting it would pin a card above
+                // a horizontally sliding surface and the two would come apart mid-swipe.
+                HorizontalPager(state = pager) { page ->
+                    TabContent(
+                        tab = HomeTab.entries[page],
+                        state = state,
+                        healthConnectAvailability = healthConnectAvailability,
+                        protocolLog = protocolLog,
+                        watchPreferences = watchPreferences,
+                        onWatchPreferences = onWatchPreferences,
+                        hasNotificationAccess = hasNotificationAccess,
+                        isBatteryExempt = isBatteryExempt,
+                        onClearLog = onClearLog,
+                        onNotificationsEnabled = onNotificationsEnabled,
+                        onScreenOffOnlyEnabled = onScreenOffOnlyEnabled,
+                        cityLookup = cityLookup,
+                        onWeatherEnabled = onWeatherEnabled,
+                        onFindCity = onFindCity,
+                        onGrantNotificationAccess = onGrantNotificationAccess,
+                        onAllowBackgroundWork = onAllowBackgroundWork,
+                        onForget = onForget,
+                        onSyncNow = onSyncNow,
+                        onFindWatch = onFindWatch,
+                        onAutoSyncSeconds = onAutoSyncSeconds,
+                        onHealthConnectEnabled = onHealthConnectEnabled,
                     )
                 }
 
-                // Kept here too: a pairing that fails leaves nothing else to look at, and
-                // this is the one place that says why.
-                item { ProtocolLogCard(protocolLog, onClearLog) }
+                FloatingTabDock(
+                    selected = pager.currentPage,
+                    onSelect = { scope.launch { pager.animateScrollToPage(it) } },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 24.dp),
+                )
+            } else {
+                PairingList(discovered, scanError, protocolLog, onScan, onPair, onClearLog)
+            }
+        }
+    }
+}
+
+/** One tab's worth of cards. */
+@Composable
+private fun TabContent(
+    tab: HomeTab,
+    state: HomeUiState,
+    healthConnectAvailability: HealthConnectAvailability,
+    protocolLog: List<ProtocolLog.Entry>,
+    watchPreferences: WatchPreferences,
+    onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
+    hasNotificationAccess: Boolean,
+    isBatteryExempt: Boolean,
+    onClearLog: () -> Unit,
+    onNotificationsEnabled: (Boolean) -> Unit,
+    onScreenOffOnlyEnabled: (Boolean) -> Unit,
+    cityLookup: CityLookup,
+    onWeatherEnabled: (Boolean) -> Unit,
+    onFindCity: (String) -> Unit,
+    onGrantNotificationAccess: () -> Unit,
+    onAllowBackgroundWork: () -> Unit,
+    onForget: () -> Unit,
+    onSyncNow: () -> Unit,
+    onFindWatch: () -> Unit,
+    onAutoSyncSeconds: (Int) -> Unit,
+    onHealthConnectEnabled: (Boolean) -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        // Room for the floating dock, which sits over the content rather than beside it.
+        contentPadding = PaddingValues(bottom = 96.dp),
+    ) {
+        // On both tabs: it is the answer to "is any of this current?", and neither tab
+        // means anything without it.
+        item { ConnectionCard(state, onSyncNow, onForget) }
+
+        when (tab) {
+            HomeTab.HEALTH -> {
+                item { TodayCard(state, onAutoSyncSeconds) }
+                item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
+                if (!isBatteryExempt) {
+                    item { BackgroundWorkCard(onAllowBackgroundWork) }
+                }
             }
 
-            item { Spacer(Modifier.padding(8.dp)) }
+            HomeTab.DEVICE -> {
+                item {
+                    WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences)
+                }
+                item { WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity) }
+                item {
+                    NotificationsCard(
+                        state = state,
+                        hasAccess = hasNotificationAccess,
+                        onEnabled = onNotificationsEnabled,
+                        onScreenOffOnly = onScreenOffOnlyEnabled,
+                        onGrantAccess = onGrantNotificationAccess,
+                    )
+                }
+                item { FindWatchCard(state.connection.isUsable, onFindWatch) }
+                item { ProtocolLogCard(protocolLog, onClearLog) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PairingList(
+    discovered: List<DiscoveredWatch>,
+    scanError: String?,
+    protocolLog: List<ProtocolLog.Entry>,
+    onScan: () -> Unit,
+    onPair: (DiscoveredWatch) -> Unit,
+    onClearLog: () -> Unit,
+) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 24.dp),
+    ) {
+        item { PairingHeader(scanError, onScan) }
+        items(discovered, key = { it.address }) { watch ->
+            ListItem(
+                headlineContent = { Text(watch.name ?: stringResource(R.string.unnamed_watch)) },
+                supportingContent = {
+                    Text(
+                        if (watch.isBonded) {
+                            stringResource(R.string.device_paired, watch.address)
+                        } else {
+                            watch.address
+                        },
+                    )
+                },
+                trailingContent = {
+                    FilledTonalButton(onClick = { onPair(watch) }) {
+                        Text(stringResource(R.string.action_pair))
+                    }
+                },
+                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
+            )
+        }
+
+        // Kept here too: a pairing that fails leaves nothing else to look at, and this is
+        // the one place that says why.
+        item { ProtocolLogCard(protocolLog, onClearLog) }
+    }
+}
+
+/**
+ * A floating pill rather than a bar across the screen.
+ *
+ * It hovers over the content instead of reserving a strip of it, which is why the pages
+ * carry bottom padding. The selected entry's background follows the pager continuously,
+ * so a half-finished swipe shows a half-moved highlight rather than snapping when the
+ * gesture ends.
+ */
+@Composable
+private fun FloatingTabDock(
+    selected: Int,
+    onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(percent = 50),
+        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shadowElevation = 6.dp,
+    ) {
+        Row(
+            modifier = Modifier.padding(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            HomeTab.entries.forEachIndexed { index, entry ->
+                val isSelected = index == selected
+                val background by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        Color.Transparent
+                    },
+                    label = "dock background",
+                )
+                val content by animateColorAsState(
+                    targetValue = if (isSelected) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    label = "dock label",
+                )
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(percent = 50))
+                        .background(background)
+                        .clickable { onSelect(index) }
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        text = stringResource(entry.labelRes),
+                        color = content,
+                        style = MaterialTheme.typography.labelLarge,
+                    )
+                }
+            }
         }
     }
 }

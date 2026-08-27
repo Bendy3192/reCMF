@@ -211,4 +211,37 @@ class CmfSportTypesTest {
         val codes = CmfActivityType.entries.map { it.code }
         assertEquals(codes.size, codes.distinct().size)
     }
+
+    @Test
+    fun `a reminder read back is the same eleven bytes read the other way`() {
+        // Captured from a real watch: both reminders answered this. Off, every sixty
+        // minutes, no quiet window.
+        val payload = byteArrayOf(0, 0, 0x3c, 0, 0, 0, 0, 0, 0, 0, 0)
+
+        assertEquals(
+            ReminderState(enabled = false, intervalMinutes = 60, 0, 0),
+            CmfSettings.parseReminder(payload),
+        )
+    }
+
+    @Test
+    fun `what reminder builds, parseReminder reads`() {
+        val built = CmfSettings.reminder(
+            enabled = true,
+            intervalMinutes = 45,
+            quietStartSeconds = 22 * 3600,
+            quietEndSeconds = 7 * 3600,
+        )
+
+        assertEquals(
+            ReminderState(true, 45, 22 * 3600, 7 * 3600),
+            CmfSettings.parseReminder(built),
+        )
+    }
+
+    @Test
+    fun `a reminder payload of the wrong length is refused`() {
+        assertNull(CmfSettings.parseReminder(ByteArray(10)))
+        assertNull(CmfSettings.parseReminder(ByteArray(12)))
+    }
 }

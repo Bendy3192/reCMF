@@ -625,6 +625,28 @@ class WatchService : LifecycleService() {
             // for the settings that do have one.
             CmfCommand.LANGUAGE_RET -> Unit
 
+            // The reply to our GET, arriving under the SET opcode. Reported rather than
+            // adopted: reading a setting is one thing, and letting a read change what the
+            // phone will later write is another, which wants care about the difference
+            // between "the watch says so" and "the user asked for it".
+            CmfCommand.STANDING_REMINDER_SET, CmfCommand.WATER_REMINDER_SET -> {
+                val which = if (message.cmd == CmfCommand.STANDING_REMINDER_SET) "Stand" else "Drink"
+                val state = CmfSettings.parseReminder(message.payload)
+                ProtocolLog.note(
+                    if (state == null) {
+                        "$which reminder: unreadable reply"
+                    } else {
+                        "$which reminder on the watch: " +
+                            (if (state.enabled) "on" else "off") +
+                            ", every ${state.intervalMinutes} min"
+                    },
+                )
+            }
+
+            // The watch answers our ring with one byte, and rings again when the wearer
+            // taps its own find-phone button. Nothing to do with it either way.
+            CmfCommand.FIND_WATCH -> Unit
+
             // Kept in memory rather than stored: enough to show the newest reading and to
             // prove the data is arriving. Persistence and Health Connect follow once the
             // shape has been seen against a real watch rather than only a unit test.
