@@ -3,12 +3,18 @@ coroutines = "1.11.0"
 junit = "5.14.0"
 json = "20260814"
 
-# Compose 1.12 and the 2026.x BOMs require compileSdk 37 and AGP 9.1, and the Android 17
+# Compose 1.12 and the 2026.x BOMs require compileSdk 37 and AGP 9.2, and the Android 17
 # platform is not published to any installable SDK channel yet. So the Compose artifacts
 # are pinned to the last train that compiles against 36, and the BOM is not used at all —
 # it would only drag the whole set forward again.
 composeUi = "1.11.4"
-material3 = "1.4.0"
+
+# material3 moves separately, and 1.5.0-alpha23 removed *its* compileSdk 37 requirement —
+# which is what had ruled out Material 3 Expressive here. The expressive APIs
+# (MaterialExpressiveTheme, the wavy progress indicators, button groups) are public from
+# the 1.5.0 line. An alpha, deliberately: this is a sideloaded app for one watch, the
+# alternative is waiting months for the stable, and a build that fails costs five minutes.
+material3 = "1.5.0-alpha27"
 activityCompose = "1.11.0"
 lifecycle = "2.9.4"
 coreKtx = "1.17.0"
