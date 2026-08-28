@@ -32,8 +32,6 @@ import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
 import dev.recmf.service.WeatherProblem
-import dev.recmf.protocol.HeartRateSample
-import dev.recmf.protocol.Spo2Sample
 import dev.recmf.protocol.StressSample
 import dev.recmf.service.WatchStatus
 import dev.recmf.service.WatchdogWorker
@@ -46,6 +44,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
