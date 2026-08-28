@@ -122,10 +122,24 @@ Done and confirmed against a real watch, byte for byte:
 - **Resting heart rate** — 5 bytes, not 8: a timestamp and a *single byte* of bpm. Not
   ported, because Gadgetbridge leaves this payload as a TODO. Read out of a capture.
 
-**Sleep has to be asked for.** Everything else arrives with `ACTIVITY_FETCH_2` — steps,
-heart rate, SpO₂, stress — and a whole night of sleep was missing for the plainest reason
-there is: nothing ever sent `SLEEP_DATA_GET`. The same `0x0002` asks, `0x0001` answers pair
-as the rest of this watch. It goes out once per connection, since sleep happens once a day.
+**Sleep is pushed, not fetched, and the window is why it never arrives.**
+
+Checked against Gadgetbridge rather than guessed at further. Its sleep parser is the same
+layout reCMF already had, byte for byte; its command table is a subset of this one, so
+there is no fetch command being missed; and it never asks for sleep at all — it waits for
+`SLEEP_DATA` to turn up in the `ACTIVITY_FETCH_2` stream, alongside the steps and the
+heart rate. `SLEEP_DATA_GET` exists and answers, but always with nothing, in both the bare
+form and with the fetch's own `0xa5`.
+
+What the stream carries is bounded. `ACTIVITY_FETCH_ACK_2` opens it with *"activity since
+T"*, and on this watch T is the last fetch: a capture at 06:54 read `T = 06:50`. reCMF
+refreshes every five minutes, so its window is always the last five minutes and never
+contains the moment a sleep session began. Gadgetbridge is normally used the other way —
+one fetch after hours disconnected — and its window spans the whole night.
+
+That is a theory with a test rather than a conclusion: a window covering the night is what
+has never been asked for, and either a re-pair (which should reset the watch's pointer) or
+a night with the refresh turned off would produce one.
 
 The parser is written but unverified: a session header (`start:int`, `wakeup:int`, 10
 unidentified bytes) then 8-byte stages. The stage duration's unit is not confirmed, so
