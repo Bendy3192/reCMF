@@ -18,11 +18,14 @@ import androidx.compose.ui.platform.LocalContext
  * introduced it, so there is no static fallback palette to keep in sync.
  *
  * Material 3 Expressive — `MaterialExpressiveTheme`, `MotionScheme.expressive()`, the
- * wavy progress indicators — is deliberately not used here. Those APIs are still
- * `internal` in material3 1.4.0 and only become public in the 1.5.0 line, which pulls
- * Compose 1.12 and so requires compileSdk 37; the Android 17 platform is not published
- * to any installable SDK channel yet. See gradle/libs.versions.toml. Switching over is a
- * change to this file and two call sites once that lands.
+ * wavy progress indicators — is not used here because it cannot be. Those APIs are public
+ * from the 1.5.0 line, and 1.5.0-alpha27 was tried: it fails at `checkDebugAarMetadata`,
+ * because `material3-ripple` requires compileSdk 37 and AGP 9.1, and the line pulls
+ * `compose.animation` 1.12.0-beta01, which requires the same. The Android 17 platform is
+ * not published to any installable SDK channel yet.
+ *
+ * So the blocker is one thing, not two: the platform. When it ships, this file and two
+ * call sites change, and everything drawn by hand below can be handed back to the library.
  */
 @Composable
 fun ReCmfTheme(
