@@ -137,9 +137,27 @@ refreshes every five minutes, so its window is always the last five minutes and 
 contains the moment a sleep session began. Gadgetbridge is normally used the other way —
 one fetch after hours disconnected — and its window spans the whole night.
 
-That is a theory with a test rather than a conclusion: a window covering the night is what
-has never been asked for, and either a re-pair (which should reset the watch's pointer) or
-a night with the refresh turned off would produce one.
+**Re-pairing does not reset it.** Forgetting the watch and pairing again produced a fetch
+whose window was four minutes wide, exactly as before: at 07:54:51 the watch offered
+activity since 07:50:17. Whatever holds that mark lives in the watch and does not care
+about pairings, so there is no way to ask for the past — only to stop asking for a while
+and let the window grow.
+
+Which leaves one test, and it needs no code: refresh turned off overnight, one sync in the
+morning. If a window spanning the night carries `SLEEP_DATA`, the mechanism is confirmed
+and the fix is for reCMF to hold the activity fetch through the night — the rest of the
+refresh, weather and battery and music, has no reason to pause with it. Steps would then
+arrive in one lump attributed to the whole night, which for hours nobody is walking is a
+fair price.
+
+Two smaller readings from the same capture, worth keeping:
+
+- The timestamp in `ACTIVITY_FETCH_ACK_2` is the *previous* record's, not an arbitrary
+  mark: 06:45 before a record at 06:47, 06:50 before 06:54, 07:50 before 07:54. The watch
+  writes an activity record every few minutes and offers what is newer than the last one
+  it handed over.
+- A sleep session's own timestamp is when it *started*. With a five-minute window it is
+  always in the past, which is why no amount of asking has ever produced one.
 
 The parser is written but unverified: a session header (`start:int`, `wakeup:int`, 10
 unidentified bytes) then 8-byte stages. The stage duration's unit is not confirmed, so
