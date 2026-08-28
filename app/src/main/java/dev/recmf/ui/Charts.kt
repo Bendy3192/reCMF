@@ -57,15 +57,11 @@ fun LineChart(
     points: List<ChartPoint>,
     color: Color,
     modifier: Modifier = Modifier,
+    minimumSpan: Float = 0f,
 ) {
     if (points.size < 2) return
 
-    val minValue = points.minOf { it.value }
-    val maxValue = points.maxOf { it.value }
-
-    // A flat run would divide by zero, and a line pinned to the top of its box reads as a
-    // record high rather than as "this did not change".
-    val span = (maxValue - minValue).takeIf { it > 0f } ?: 1f
+    val (minValue, span) = points.scale(minimumSpan)
 
     val firstTime = points.first().atSeconds.toFloat()
     val timeSpan = (points.last().atSeconds - points.first().atSeconds).toFloat().takeIf { it > 0f } ?: 1f
@@ -147,12 +143,14 @@ fun DotChart(
     points: List<ChartPoint>,
     color: Color,
     modifier: Modifier = Modifier,
+    range: ClosedFloatingPointRange<Float>? = null,
 ) {
     if (points.isEmpty()) return
 
-    val minValue = points.minOf { it.value }
-    val maxValue = points.maxOf { it.value }
-    val span = (maxValue - minValue).takeIf { it > 0f } ?: 1f
+    val minValue = range?.start ?: points.minOf { it.value }
+    val span = range?.let { it.endInclusive - it.start }
+        ?: (points.maxOf { it.value } - points.minOf { it.value }).takeIf { it > 0f }
+        ?: 1f
 
     val firstTime = points.first().atSeconds.toFloat()
     val timeSpan = (points.last().atSeconds - points.first().atSeconds).toFloat().takeIf { it > 0f } ?: 1f
@@ -178,6 +176,25 @@ fun DotChart(
 @Composable
 fun EmptyChart(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth().height(CHART_HEIGHT))
+}
+
+/**
+ * The bottom of the plot and how much it spans, given what has to fit.
+ *
+ * A range taken straight from the data makes every chart look dramatic: two blood-oxygen
+ * readings a percent apart end up at opposite edges of the box, which is a picture of
+ * noise drawn as if it were news. [minimumSpan] is the smallest difference worth showing
+ * as the full height; anything narrower is centred inside it instead.
+ */
+private fun List<ChartPoint>.scale(minimumSpan: Float): Pair<Float, Float> {
+    val low = minOf { it.value }
+    val high = maxOf { it.value }
+    val span = high - low
+
+    if (span >= minimumSpan && span > 0f) return low to span
+
+    val wanted = maxOf(minimumSpan, 1f)
+    return (low + span / 2f - wanted / 2f) to wanted
 }
 
 /** One reading: when, and how much. */

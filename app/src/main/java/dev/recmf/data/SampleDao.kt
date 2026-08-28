@@ -98,6 +98,26 @@ interface SampleDao {
     @Query("SELECT * FROM spo2_samples WHERE timestamp >= :since AND percent > 0 ORDER BY timestamp")
     fun spo2Since(since: Long): Flow<List<Spo2SampleEntity>>
 
+    /**
+     * The newest reading of the day, for the row above the chart.
+     *
+     * The row used to come from a value held in memory by the service, which is empty
+     * until a sample happens to arrive — so after any restart the card read "—" for blood
+     * oxygen while the chart underneath it was full of blood oxygen. The table is what
+     * both should agree with.
+     */
+    @Query(
+        "SELECT * FROM spo2_samples WHERE timestamp >= :since AND percent > 0 " +
+            "ORDER BY timestamp DESC LIMIT 1",
+    )
+    fun latestSpo2Since(since: Long): Flow<Spo2SampleEntity?>
+
+    @Query(
+        "SELECT * FROM resting_heart_rate_samples WHERE timestamp >= :since AND bpm BETWEEN 25 AND 250 " +
+            "ORDER BY timestamp DESC LIMIT 1",
+    )
+    fun latestRestingHeartRateSince(since: Long): Flow<RestingHeartRateSampleEntity?>
+
     @Query(
         "SELECT * FROM resting_heart_rate_samples WHERE timestamp >= :since AND bpm BETWEEN 25 AND 250 " +
             "ORDER BY timestamp",

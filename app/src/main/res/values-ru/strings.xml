@@ -114,6 +114,7 @@
     <string name="action_allow_background">Разрешить работу в фоне</string>
     <string name="metric_spo2">кислород</string>
     <string name="metric_stress">стресс</string>
+    <string name="metrics_waiting">Часы сегодня ещё ничего не прислали.</string>
     <string name="metric_sleep">Прошлая ночь</string>
     <string name="metric_sleep_value">%1$s → %2$s</string>
     <string name="chart_heart_rate">Пульс за сегодня</string>

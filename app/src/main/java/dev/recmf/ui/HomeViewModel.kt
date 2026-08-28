@@ -76,9 +76,12 @@ data class HomeUiState(
     val stepsToday: Int = 0,
     val latestHeartRate: HeartRateSampleEntity? = null,
     val weather: WeatherStatus = WeatherStatus(),
-    val spo2: Spo2Sample? = null,
+    /** Percent, from the day's newest stored reading. */
+    val spo2: Int? = null,
     val stress: StressSample? = null,
-    val restingHeartRate: HeartRateSample? = null,
+
+    /** Beats per minute, from the day's newest stored reading. */
+    val restingHeartRate: Int? = null,
 )
 
 /** How the search for a place is going. */
@@ -108,9 +111,9 @@ data class WatchInfo(
 private data class Extras(
     val heartRate: HeartRateSampleEntity?,
     val weather: WeatherStatus,
-    val spo2: Spo2Sample?,
+    val spo2: Int?,
     val stress: StressSample?,
-    val restingHeartRate: HeartRateSample?,
+    val restingHeartRate: Int?,
 )
 
 /** What has become of the forecast, so the card can say rather than sit blank. */
@@ -170,9 +173,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         combine(
             dao.latestHeartRate(),
             weatherStatus,
-            WatchStatus.spo2,
+            // From the table, not from the service's memory. The in-memory value is empty
+            // until a sample happens to arrive, so after every restart the card read "—"
+            // for blood oxygen above a chart that was full of it. Stress is the one that
+            // still comes from memory, because stress is the one measurement with nowhere
+            // to be stored: Health Connect has no record type for it and neither has this
+            // app, yet.
+            dao.latestSpo2Since(startOfToday()).map { it?.percent },
             WatchStatus.stress,
-            WatchStatus.restingHeartRate,
+            dao.latestRestingHeartRateSince(startOfToday()).map { it?.bpm },
             ::Extras,
         ),
     ) { connection, settings, watch, steps, extras ->

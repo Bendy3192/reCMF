@@ -480,6 +480,9 @@ private fun TodayCard(
                     Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    // Only what the watch has actually sent. A column of em dashes is a
+                    // list of things the app cannot tell you, and four of them next to one
+                    // real number read as a broken app rather than a quiet one.
                     MetricRow(
                         icon = R.drawable.ic_metric_heart,
                         label = stringResource(R.string.metric_heart_rate),
@@ -488,18 +491,30 @@ private fun TodayCard(
                     MetricRow(
                         icon = R.drawable.ic_metric_heart,
                         label = stringResource(R.string.metric_resting_heart_rate),
-                        value = state.restingHeartRate?.bpm?.toString(),
+                        value = state.restingHeartRate?.toString(),
                     )
                     MetricRow(
                         icon = R.drawable.ic_metric_oxygen,
                         label = stringResource(R.string.metric_spo2),
-                        value = state.spo2?.let { "${it.percent}%" },
+                        value = state.spo2?.let { "$it%" },
                     )
                     MetricRow(
                         icon = R.drawable.ic_metric_stress,
                         label = stringResource(R.string.metric_stress),
                         value = state.stress?.level?.toString(),
                     )
+
+                    // Said once, instead of four times over in dashes: the watch has
+                    // connected and has not yet handed anything over.
+                    if (state.latestHeartRate == null && state.restingHeartRate == null &&
+                        state.spo2 == null && state.stress == null
+                    ) {
+                        Text(
+                            stringResource(R.string.metrics_waiting),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -508,7 +523,13 @@ private fun TodayCard(
             // one point is not a shape, and an axis around it is furniture around a fact.
             if (charts.heartRate.size >= 2) {
                 ChartSection(stringResource(R.string.chart_heart_rate)) {
-                    LineChart(charts.heartRate, MaterialTheme.colorScheme.primary)
+                    // Twenty beats is the narrowest spread worth the full height. A quiet
+                    // hour otherwise gets drawn as a mountain range.
+                    LineChart(
+                        charts.heartRate,
+                        MaterialTheme.colorScheme.primary,
+                        minimumSpan = 20f,
+                    )
                 }
             }
 
@@ -520,7 +541,15 @@ private fun TodayCard(
 
             if (charts.spo2.isNotEmpty()) {
                 ChartSection(stringResource(R.string.chart_spo2)) {
-                    DotChart(charts.spo2, MaterialTheme.colorScheme.tertiary)
+                    // A fixed scale, because blood oxygen has one. Ninety to a hundred is
+                    // the range the number means something in, and drawn against the day's
+                    // own minimum and maximum instead, two readings a percent apart sat at
+                    // opposite edges of the chart — which is what the first version did.
+                    DotChart(
+                        charts.spo2,
+                        MaterialTheme.colorScheme.tertiary,
+                        range = 90f..100f,
+                    )
                 }
             }
 
@@ -1451,14 +1480,19 @@ private fun StepsRing(steps: Int, goal: Int) {
 }
 
 /**
- * One measurement: what it is, and what it reads.
+ * One measurement: what it is, and what it reads. Absent when there is nothing to read.
  *
- * An em dash for a measurement the watch has not sent yet, rather than the row vanishing.
- * A row that disappears makes the card jump every time a reading lands, and leaves the
- * wearer unsure whether reCMF cannot read stress or simply has not yet.
+ * This used to hold its place with an em dash, on the reasoning that a row appearing and
+ * disappearing makes the card jump. In front of a real watch that reasoning lost: most of
+ * these arrive only when the wearer sits still for a measurement, so the ordinary state of
+ * the card was a column of dashes with one number in it, which reads as an app that cannot
+ * do anything rather than one waiting for something. The whole block says "nothing yet"
+ * once, in words, and that is the case the dashes were there for.
  */
 @Composable
 private fun MetricRow(@DrawableRes icon: Int, label: String, value: String?) {
+    if (value == null) return
+
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1476,10 +1510,7 @@ private fun MetricRow(@DrawableRes icon: Int, label: String, value: String?) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1f),
         )
-        Text(
-            value ?: "—",
-            style = MaterialTheme.typography.titleMedium,
-        )
+        Text(value, style = MaterialTheme.typography.titleMedium)
     }
 }
 
