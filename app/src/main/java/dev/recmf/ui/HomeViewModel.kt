@@ -12,6 +12,7 @@ import androidx.lifecycle.viewModelScope
 import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
 import dev.recmf.ble.WatchScanner
+import dev.recmf.data.ActivitySampleEntity
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
@@ -19,7 +20,9 @@ import dev.recmf.data.SleepSummary
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
 import dev.recmf.data.WatchSettings
+import dev.recmf.health.CumulativeReading
 import dev.recmf.health.HealthConnectAvailability
+import dev.recmf.health.stepDeltas
 import androidx.core.app.NotificationManagerCompat
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
@@ -51,6 +54,13 @@ import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+
+/** What the health screen draws for the day so far. */
+data class HealthCharts(
+    val heartRate: List<ChartPoint> = emptyList(),
+    val stepsByHour: List<Float> = emptyList(),
+    val spo2: List<ChartPoint> = emptyList(),
+)
 
 /** One app in the notification list, as the settings screen shows it. */
 data class NotificationApp(
@@ -346,6 +356,49 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsStore.setNotificationBlocked(packageNames, blocked) }
     }
 
+    /**
+     * The day so far, as something to draw.
+     *
+     * All three come out of the staging table, which has been holding a week of readings
+     * since the app was written and had never once been read back — the screen showed the
+     * newest number of each kind and the rest sat there.
+     */
+    val charts: StateFlow<HealthCharts> = combine(
+        dao.heartRateSince(startOfToday()),
+        dao.activitySince(startOfToday()),
+        dao.spo2Since(startOfToday()),
+    ) { heartRate, activity, spo2 ->
+        HealthCharts(
+            heartRate = heartRate.map { ChartPoint(it.timestamp, it.bpm.toFloat()) },
+            stepsByHour = stepsByHour(activity),
+            spo2 = spo2.map { ChartPoint(it.timestamp, it.percent.toFloat()) },
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HealthCharts())
+
+    /**
+     * The day's steps, split into the hour each one was taken in.
+     *
+     * The table holds a cumulative counter, so this is the same differencing that feeds
+     * Health Connect — the movement between readings — bucketed by when it happened. Bars
+     * of a running total would be a staircase that only ever climbs, which says nothing
+     * about when the walking was.
+     */
+    private fun stepsByHour(readings: List<ActivitySampleEntity>): List<Float> {
+        val hours = FloatArray(HOURS_IN_DAY)
+        val zone = ZoneId.systemDefault()
+
+        stepDeltas(readings.map { CumulativeReading(it.timestamp, it.steps, it.distanceMeters, it.calories) })
+            .forEach { delta ->
+                // Attributed to the hour the interval ended in. Splitting an interval
+                // across an hour boundary would be more honest and, at five minutes a
+                // reading, entirely invisible.
+                val hour = Instant.ofEpochSecond(delta.endSeconds).atZone(zone).hour
+                hours[hour] += delta.steps.toFloat()
+            }
+
+        return hours.toList()
+    }
+
     /** The last night the watch reported, or null until it reports one. */
     val lastSleep: StateFlow<SleepSummary?> = settingsStore.lastSleep
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
@@ -414,6 +467,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         /** Often enough to be useful on opening, rare enough not to be a poll. */
         const val CHECK_ON_OPEN_INTERVAL_SECONDS = 6L * 60 * 60
+
+        const val HOURS_IN_DAY = 24
 
         fun startOfToday(): Long =
             LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond()

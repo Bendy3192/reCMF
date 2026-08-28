@@ -106,6 +106,7 @@ class MainActivity : ComponentActivity() {
                 val updateState by model.updateState.collectAsStateWithLifecycle()
                 val notificationApps by model.notificationApps.collectAsStateWithLifecycle()
                 val lastSleep by model.lastSleep.collectAsStateWithLifecycle()
+                val charts by model.charts.collectAsStateWithLifecycle()
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -122,6 +123,7 @@ class MainActivity : ComponentActivity() {
                     hasNotificationAccess = hasNotificationAccess,
                     notificationApps = notificationApps,
                     lastSleep = lastSleep,
+                    charts = charts,
                     onNotificationAppBlocked = model::setNotificationBlocked,
                     onNotificationAppsBlocked = model::setNotificationBlocked,
                     isBatteryExempt = isBatteryExempt,

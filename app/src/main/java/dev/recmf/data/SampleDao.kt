@@ -66,6 +66,45 @@ interface SampleDao {
     @Query("SELECT * FROM heart_rate_samples WHERE bpm BETWEEN 25 AND 250 ORDER BY timestamp DESC LIMIT 1")
     fun latestHeartRate(): Flow<HeartRateSampleEntity?>
 
+    // region History
+    //
+    // The staging table has held a week of readings all along and nothing has ever read
+    // it back: the screen showed the newest number of each kind and the rest sat there.
+    // These are the queries that turn it into something to look at. Ascending, because a
+    // chart is drawn left to right and reversing a list in the UI is work the database
+    // has already been asked to do.
+
+    /**
+     * Heart rate over a window. Bounded by the same sanity range as the latest reading —
+     * a zero means the watch could not get a pulse, and a chart that dips to the floor
+     * every time a wrist moved is worse than one with a gap.
+     */
+    @Query(
+        "SELECT * FROM heart_rate_samples WHERE timestamp >= :since AND bpm BETWEEN 25 AND 250 " +
+            "ORDER BY timestamp",
+    )
+    fun heartRateSince(since: Long): Flow<List<HeartRateSampleEntity>>
+
+    /**
+     * The cumulative step counter over a window, as the watch reported it.
+     *
+     * Deliberately not differenced here. A daily counter that resets at midnight tells a
+     * chart two different stories depending on whether it is drawn as a total or as
+     * movement, and picking which is the caller's business, not SQL's.
+     */
+    @Query("SELECT * FROM activity_samples WHERE timestamp >= :since ORDER BY timestamp")
+    fun activitySince(since: Long): Flow<List<ActivitySampleEntity>>
+
+    @Query("SELECT * FROM spo2_samples WHERE timestamp >= :since AND percent > 0 ORDER BY timestamp")
+    fun spo2Since(since: Long): Flow<List<Spo2SampleEntity>>
+
+    @Query(
+        "SELECT * FROM resting_heart_rate_samples WHERE timestamp >= :since AND bpm BETWEEN 25 AND 250 " +
+            "ORDER BY timestamp",
+    )
+    fun restingHeartRateSince(since: Long): Flow<List<RestingHeartRateSampleEntity>>
+    // endregion
+
     /**
      * The reading immediately before [timestamp], synced or not: converting a cumulative
      * counter into intervals needs the value it started from.

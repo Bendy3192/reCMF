@@ -4,11 +4,17 @@
 package dev.recmf.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
@@ -38,6 +44,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
@@ -66,6 +73,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -116,6 +124,7 @@ fun HomeScreen(
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
     lastSleep: SleepSummary?,
+    charts: HealthCharts,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -160,6 +169,7 @@ fun HomeScreen(
                         hasNotificationAccess = hasNotificationAccess,
                         notificationApps = notificationApps,
                         lastSleep = lastSleep,
+                        charts = charts,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -206,6 +216,7 @@ private fun TabContent(
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
     lastSleep: SleepSummary?,
+    charts: HealthCharts,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -239,7 +250,7 @@ private fun TabContent(
 
         when (tab) {
             HomeTab.HEALTH -> {
-                item { TodayCard(state, lastSleep, onAutoSyncSeconds) }
+                item { TodayCard(state, lastSleep, watchPreferences.stepsGoal, charts, onAutoSyncSeconds) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
                 if (!isBatteryExempt) {
                     item { BackgroundWorkCard(onAllowBackgroundWork) }
@@ -447,49 +458,69 @@ private fun ConnectionCard(
 private fun TodayCard(
     state: HomeUiState,
     sleep: SleepSummary?,
+    goal: Int,
+    charts: HealthCharts,
     onAutoSyncSeconds: (Int) -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.today), style = MaterialTheme.typography.titleMedium)
 
-            Row(verticalAlignment = Alignment.Bottom) {
-                Metric(
-                    value = state.stepsToday.toString(),
-                    label = stringResource(R.string.metric_steps),
-                )
-                Spacer(Modifier.width(32.dp))
-                Metric(
-                    value = state.latestHeartRate?.bpm?.toString() ?: "—",
-                    label = stringResource(R.string.metric_heart_rate),
-                )
+            // Steps get the ring and the rest get tiles, because steps are the one
+            // measurement with a target: a number against a goal is a fraction, and a
+            // fraction is a shape before it is a figure.
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StepsRing(steps = state.stepsToday, goal = goal)
+
+                Column(
+                    Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    MetricRow(
+                        icon = R.drawable.ic_metric_heart,
+                        label = stringResource(R.string.metric_heart_rate),
+                        value = state.latestHeartRate?.bpm?.toString(),
+                    )
+                    MetricRow(
+                        icon = R.drawable.ic_metric_heart,
+                        label = stringResource(R.string.metric_resting_heart_rate),
+                        value = state.restingHeartRate?.bpm?.toString(),
+                    )
+                    MetricRow(
+                        icon = R.drawable.ic_metric_oxygen,
+                        label = stringResource(R.string.metric_spo2),
+                        value = state.spo2?.let { "${it.percent}%" },
+                    )
+                    MetricRow(
+                        icon = R.drawable.ic_metric_stress,
+                        label = stringResource(R.string.metric_stress),
+                        value = state.stress?.level?.toString(),
+                    )
+                }
             }
 
-            // Shown only once the watch has sent one. An em dash next to steps would
-            // suggest reCMF is measuring these and getting nothing, when until now it was
-            // discarding them unread.
-            if (state.spo2 != null || state.stress != null || state.restingHeartRate != null) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    state.restingHeartRate?.let {
-                        Metric(
-                            value = it.bpm.toString(),
-                            label = stringResource(R.string.metric_resting_heart_rate),
-                        )
-                        Spacer(Modifier.width(32.dp))
-                    }
-                    state.spo2?.let {
-                        Metric(
-                            value = "${it.percent}%",
-                            label = stringResource(R.string.metric_spo2),
-                        )
-                        Spacer(Modifier.width(32.dp))
-                    }
-                    state.stress?.let {
-                        Metric(
-                            value = it.level.toString(),
-                            label = stringResource(R.string.metric_stress),
-                        )
-                    }
+            // Each chart is one measurement, so each is named by the line above it and
+            // needs no legend. Nothing is drawn until there are at least two readings —
+            // one point is not a shape, and an axis around it is furniture around a fact.
+            if (charts.heartRate.size >= 2) {
+                ChartSection(stringResource(R.string.chart_heart_rate)) {
+                    LineChart(charts.heartRate, MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            if (charts.stepsByHour.any { it > 0f }) {
+                ChartSection(stringResource(R.string.chart_steps)) {
+                    BarChart(charts.stepsByHour, MaterialTheme.colorScheme.primary)
+                }
+            }
+
+            if (charts.spo2.isNotEmpty()) {
+                ChartSection(stringResource(R.string.chart_spo2)) {
+                    DotChart(charts.spo2, MaterialTheme.colorScheme.tertiary)
                 }
             }
 
@@ -592,14 +623,6 @@ private val AUTO_SYNC_CHOICES = listOf(
     300 to R.string.auto_sync_5m,
     900 to R.string.auto_sync_15m,
 )
-
-@Composable
-private fun Metric(value: String, label: String) {
-    Column {
-        Text(value, style = MaterialTheme.typography.displaySmall)
-        Text(label, style = MaterialTheme.typography.labelLarge)
-    }
-}
 
 @Composable
 private fun HealthConnectCard(
@@ -1365,6 +1388,109 @@ private fun AppIcon(packageName: String) {
 }
 
 private const val ICON_PX = 96
+
+/**
+ * The step count as a fraction of its goal.
+ *
+ * A ring rather than a bar because it holds its own number in the middle, and because a
+ * day's progress is a thing that comes round again. Over-achievement is drawn full rather
+ * than wrapped: past the goal the number is the news, not the geometry.
+ */
+@Composable
+private fun StepsRing(steps: Int, goal: Int) {
+    val fraction = if (goal > 0) (steps.toFloat() / goal).coerceIn(0f, 1f) else 0f
+    val track = MaterialTheme.colorScheme.surfaceVariant
+    val fill = MaterialTheme.colorScheme.primary
+
+    Box(Modifier.size(RING_SIZE), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(RING_SIZE)) {
+            val stroke = RING_STROKE.toPx()
+            val inset = stroke / 2f
+            val box = Size(size.width - stroke, size.height - stroke)
+
+            drawArc(
+                color = track,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = box,
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+
+            if (fraction > 0f) {
+                // From the top, clockwise, like every other progress ring anyone has met.
+                drawArc(
+                    color = fill,
+                    startAngle = -90f,
+                    sweepAngle = 360f * fraction,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset),
+                    size = box,
+                    style = Stroke(width = stroke, cap = StrokeCap.Round),
+                )
+            }
+        }
+
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(steps.toString(), style = MaterialTheme.typography.headlineSmall)
+            Text(
+                stringResource(R.string.metric_steps),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/**
+ * One measurement: what it is, and what it reads.
+ *
+ * An em dash for a measurement the watch has not sent yet, rather than the row vanishing.
+ * A row that disappears makes the card jump every time a reading lands, and leaves the
+ * wearer unsure whether reCMF cannot read stress or simply has not yet.
+ */
+@Composable
+private fun MetricRow(@DrawableRes icon: Int, label: String, value: String?) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(18.dp),
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            value ?: "—",
+            style = MaterialTheme.typography.titleMedium,
+        )
+    }
+}
+
+/** A chart under the name of the thing it draws. */
+@Composable
+private fun ChartSection(title: String, chart: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        chart()
+    }
+}
+
+private val RING_SIZE = 116.dp
+private val RING_STROKE = 10.dp
 
 /**
  * The recent protocol exchange.
