@@ -672,9 +672,15 @@ class WatchService : LifecycleService() {
 
         // Last night, if there was one. Sleep is the one measurement the watch does not
         // volunteer: everything else arrives with the activity fetch, and a whole night of
-        // it was missing simply because nobody had ever asked. Once per connection is
-        // plenty for something that happens once a day.
+        // it was missing simply because nobody had ever asked.
+        //
+        // Asked twice, on purpose, for one build. The bare question was answered — the
+        // opcode pair is right — but answered with nothing at all, and there is no telling
+        // from an empty reply whether the watch has no sleep to give or wants an argument
+        // it did not get. The activity fetch takes 0xa5 for "everything you have", so that
+        // is the argument worth trying, and the log shows which of the two produced bytes.
         connection.send(CmfCommand.SLEEP_DATA_GET)
+        connection.send(CmfCommand.SLEEP_DATA_GET, CmfFrame.A5)
     }
 
     /**
@@ -984,7 +990,11 @@ class WatchService : LifecycleService() {
             // been there. Storage follows confirmation, not the other way round.
             CmfCommand.SLEEP_DATA -> {
                 val session = CmfParsers.parseSleep(message.payload)
-                if (session == null) {
+                if (message.payload.isEmpty()) {
+                    // Not the same as unreadable, and saying so saves looking for a bug in
+                    // the parser when the watch simply had nothing to send.
+                    ProtocolLog.note("Sleep: the watch answered with nothing")
+                } else if (session == null) {
                     ProtocolLog.note("Sleep frame did not fit the expected layout")
                 } else {
                     ProtocolLog.note(
