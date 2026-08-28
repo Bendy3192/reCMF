@@ -122,7 +122,12 @@ Done and confirmed against a real watch, byte for byte:
 - **Resting heart rate** — 5 bytes, not 8: a timestamp and a *single byte* of bpm. Not
   ported, because Gadgetbridge leaves this payload as a TODO. Read out of a capture.
 
-**Sleep** is written but unverified: a session header (`start:int`, `wakeup:int`, 10
+**Sleep has to be asked for.** Everything else arrives with `ACTIVITY_FETCH_2` — steps,
+heart rate, SpO₂, stress — and a whole night of sleep was missing for the plainest reason
+there is: nothing ever sent `SLEEP_DATA_GET`. The same `0x0002` asks, `0x0001` answers pair
+as the rest of this watch. It goes out once per connection, since sleep happens once a day.
+
+The parser is written but unverified: a session header (`start:int`, `wakeup:int`, 10
 unidentified bytes) then 8-byte stages. The stage duration's unit is not confirmed, so
 nothing is stored — the log states reCMF's reading in clock times and stage letters, which
 someone who slept through the night can check at a glance. Storage follows confirmation.

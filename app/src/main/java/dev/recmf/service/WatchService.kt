@@ -669,6 +669,12 @@ class WatchService : LifecycleService() {
         // reCMF must not offer an alarm UI until it can read what is already there —
         // otherwise the first save deletes whatever the wearer set up in the stock app.
         connection.send(CmfCommand.ALARMS_GET)
+
+        // Last night, if there was one. Sleep is the one measurement the watch does not
+        // volunteer: everything else arrives with the activity fetch, and a whole night of
+        // it was missing simply because nobody had ever asked. Once per connection is
+        // plenty for something that happens once a day.
+        connection.send(CmfCommand.SLEEP_DATA_GET)
     }
 
     /**

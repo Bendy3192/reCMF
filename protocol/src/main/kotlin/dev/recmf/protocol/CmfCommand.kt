@@ -84,7 +84,17 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     MUSIC_INFO_SET(0xffff, 0x905c),
     SERIAL_NUMBER_GET(0x00de, 0x0002),
     SERIAL_NUMBER_RET(0x00de, 0x0001),
+    /** The answer. Nothing sends it unasked — see [SLEEP_DATA_GET]. */
     SLEEP_DATA(0x0058, 0x0001),
+
+    /**
+     * The question, and the reason a night of sleep never appeared.
+     *
+     * `ACTIVITY_FETCH_2` brings the day's steps, heart rate, SpO₂ and stress without being
+     * asked for each; sleep is not among them. It has to be asked for by name, the same
+     * `0x0002`-asks-`0x0001`-answers pair as every other readable thing on this watch.
+     */
+    SLEEP_DATA_GET(0x0058, 0x0002),
     SPO2(0x0055, 0x0001),
     SPORTS_SET(0x00dc, 0x0001),
     SPORTS_GET(0x00dc, 0x0002),
