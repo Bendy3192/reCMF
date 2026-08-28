@@ -99,7 +99,12 @@ object ProtocolLog {
         "$size B: ${copyOf(MAX_PAYLOAD_BYTES).toHex()}…"
     }
 
-    private const val CAPACITY = 200
+    /**
+     * Two hundred entries was a couple of hours on a phone syncing every five minutes,
+     * which is short enough that a frame arriving at six in the morning was gone before
+     * anyone looked at it. That is how a night of sleep went unexamined.
+     */
+    private const val CAPACITY = 600
     /**
      * Enough to hold an unidentified frame whole. The first unknown command to arrive was
      * 28 bytes and the preview cut it at 24 — losing exactly the tail that would say what

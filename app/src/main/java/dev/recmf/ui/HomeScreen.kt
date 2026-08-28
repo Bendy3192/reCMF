@@ -96,6 +96,7 @@ import androidx.annotation.StringRes
 import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
+import dev.recmf.data.SleepSummary
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import java.time.Instant
@@ -114,6 +115,7 @@ fun HomeScreen(
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
+    lastSleep: SleepSummary?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -157,6 +159,7 @@ fun HomeScreen(
                         onWatchPreferences = onWatchPreferences,
                         hasNotificationAccess = hasNotificationAccess,
                         notificationApps = notificationApps,
+                        lastSleep = lastSleep,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -202,6 +205,7 @@ private fun TabContent(
     onWatchPreferences: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
+    lastSleep: SleepSummary?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -235,7 +239,7 @@ private fun TabContent(
 
         when (tab) {
             HomeTab.HEALTH -> {
-                item { TodayCard(state, onAutoSyncSeconds) }
+                item { TodayCard(state, lastSleep, onAutoSyncSeconds) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
                 if (!isBatteryExempt) {
                     item { BackgroundWorkCard(onAllowBackgroundWork) }
@@ -440,7 +444,11 @@ private fun ConnectionCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
+private fun TodayCard(
+    state: HomeUiState,
+    sleep: SleepSummary?,
+    onAutoSyncSeconds: (Int) -> Unit,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.today), style = MaterialTheme.typography.titleMedium)
@@ -483,6 +491,20 @@ private fun TodayCard(state: HomeUiState, onAutoSyncSeconds: (Int) -> Unit) {
                         )
                     }
                 }
+            }
+
+            // Shown here and not written to Health Connect: the reading has never been
+            // checked against the watch's own screen, and a night recorded wrongly in a
+            // health record is worse than one that is missing.
+            sleep?.let {
+                Text(
+                    stringResource(
+                        R.string.metric_sleep,
+                        CLOCK_TIME.format(Instant.ofEpochSecond(it.startSeconds)),
+                        CLOCK_TIME.format(Instant.ofEpochSecond(it.wakeSeconds)),
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             }
 
             // The watch's own clock, as the app can best see it. A zero above means

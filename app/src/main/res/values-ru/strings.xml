@@ -114,6 +114,7 @@
     <string name="action_allow_background">Разрешить работу в фоне</string>
     <string name="metric_spo2">кислород</string>
     <string name="metric_stress">стресс</string>
+    <string name="metric_sleep">Прошлая ночь: %1$s → %2$s</string>
     <string name="action_copy">Копировать</string>
     <plurals name="log_copied">
         <item quantity="one">Скопирована %d строка</item>

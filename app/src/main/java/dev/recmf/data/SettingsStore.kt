@@ -23,6 +23,19 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "recmf-settings")
 
+/**
+ * A night the watch reported.
+ *
+ * @param raw the frame as it arrived, so a reading that turns out wrong can be checked
+ *   against the bytes rather than against another night's sleep.
+ */
+data class SleepSummary(
+    val startSeconds: Long,
+    val wakeSeconds: Long,
+    val stages: Int,
+    val raw: String,
+)
+
 /** What the user paired with, and how far the sync has got. */
 data class WatchSettings(
     val address: String? = null,
@@ -394,6 +407,36 @@ class SettingsStore(private val context: Context) {
         }
     }
 
+    /**
+     * The last night the watch reported, kept across restarts.
+     *
+     * The protocol log is a ring buffer of a couple of hundred entries, which on a phone
+     * syncing every five minutes is a couple of hours — so a sleep frame that arrives at
+     * six in the morning is gone before anyone looks. This is not that: it is written down
+     * and stays, and the raw bytes stay with it so a parse that turns out wrong can be
+     * re-read against what the watch actually sent.
+     */
+    val lastSleep: Flow<SleepSummary?> = context.dataStore.data.map { prefs ->
+        val start = prefs[KEY_SLEEP_START] ?: return@map null
+        val wake = prefs[KEY_SLEEP_WAKE] ?: return@map null
+
+        SleepSummary(
+            startSeconds = start,
+            wakeSeconds = wake,
+            stages = prefs[KEY_SLEEP_STAGES] ?: 0,
+            raw = prefs[KEY_SLEEP_RAW].orEmpty(),
+        )
+    }
+
+    suspend fun setLastSleep(summary: SleepSummary) {
+        context.dataStore.edit { prefs ->
+            prefs[KEY_SLEEP_START] = summary.startSeconds
+            prefs[KEY_SLEEP_WAKE] = summary.wakeSeconds
+            prefs[KEY_SLEEP_STAGES] = summary.stages
+            prefs[KEY_SLEEP_RAW] = summary.raw
+        }
+    }
+
     /** When the app last asked GitHub anything, so opening it does not ask every time. */
     val lastUpdateCheckSeconds: Flow<Long> =
         context.dataStore.data.map { it[KEY_LAST_UPDATE_CHECK] ?: 0L }
@@ -422,6 +465,10 @@ class SettingsStore(private val context: Context) {
         val KEY_LAST_ANNOUNCED_VERSION = intPreferencesKey("last_announced_version_code")
         val KEY_LAST_UPDATE_CHECK = longPreferencesKey("last_update_check_epoch_seconds")
         val KEY_NOTIFICATION_BLOCKED = stringSetPreferencesKey("notification_blocked_packages")
+        val KEY_SLEEP_START = longPreferencesKey("last_sleep_start")
+        val KEY_SLEEP_WAKE = longPreferencesKey("last_sleep_wake")
+        val KEY_SLEEP_STAGES = intPreferencesKey("last_sleep_stages")
+        val KEY_SLEEP_RAW = stringPreferencesKey("last_sleep_raw")
 
 
         val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")

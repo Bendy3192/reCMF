@@ -27,6 +27,7 @@ import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.ReconnectBackoff
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
+import dev.recmf.data.SleepSummary
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
 import dev.recmf.notifications.OutgoingNotifications
@@ -42,6 +43,7 @@ import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.protocol.CmfWeather
+import dev.recmf.protocol.toHex
 import dev.recmf.protocol.MonitoringChannel
 import dev.recmf.protocol.ActivityFetchState
 import kotlinx.coroutines.CoroutineScope
@@ -121,6 +123,9 @@ class WatchService : LifecycleService() {
 
     private val media by lazy { MediaWatcher(this) }
     private val ringer by lazy { PhoneRinger(this) }
+
+    /** So an empty sleep reply is reported once a connection rather than every refresh. */
+    private var emptySleepReported = false
 
     /** What the watch was last told is playing, so an unchanged track is not resent. */
     private var lastSentNowPlaying: NowPlaying? = null
@@ -614,6 +619,8 @@ class WatchService : LifecycleService() {
     private suspend fun initializeWatch() {
         val nowMillis = System.currentTimeMillis()
 
+        emptySleepReported = false
+
         connection.send(
             CmfCommand.TIME,
             CmfParsers.buildTimePayload(
@@ -670,17 +677,6 @@ class WatchService : LifecycleService() {
         // otherwise the first save deletes whatever the wearer set up in the stock app.
         connection.send(CmfCommand.ALARMS_GET)
 
-        // Last night, if there was one. Sleep is the one measurement the watch does not
-        // volunteer: everything else arrives with the activity fetch, and a whole night of
-        // it was missing simply because nobody had ever asked.
-        //
-        // Asked twice, on purpose, for one build. The bare question was answered — the
-        // opcode pair is right — but answered with nothing at all, and there is no telling
-        // from an empty reply whether the watch has no sleep to give or wants an argument
-        // it did not get. The activity fetch takes 0xa5 for "everything you have", so that
-        // is the argument worth trying, and the log shows which of the two produced bytes.
-        connection.send(CmfCommand.SLEEP_DATA_GET)
-        connection.send(CmfCommand.SLEEP_DATA_GET, CmfFrame.A5)
     }
 
     /**
@@ -992,8 +988,13 @@ class WatchService : LifecycleService() {
                 val session = CmfParsers.parseSleep(message.payload)
                 if (message.payload.isEmpty()) {
                     // Not the same as unreadable, and saying so saves looking for a bug in
-                    // the parser when the watch simply had nothing to send.
-                    ProtocolLog.note("Sleep: the watch answered with nothing")
+                    // the parser when the watch simply had nothing to send. Said once per
+                    // connection: it is now asked on every refresh, and a line every few
+                    // minutes saying nothing happened is a line nobody reads.
+                    if (!emptySleepReported) {
+                        emptySleepReported = true
+                        ProtocolLog.note("Sleep: the watch answered with nothing")
+                    }
                 } else if (session == null) {
                     ProtocolLog.note("Sleep frame did not fit the expected layout")
                 } else {
@@ -1003,6 +1004,18 @@ class WatchService : LifecycleService() {
                             session.stages.joinToString(" ") {
                                 "${it.stage.name.first()}${it.duration}"
                             },
+                    )
+
+                    // Kept, with the bytes. Still not sent to Health Connect: the reading
+                    // has never been checked against a watch's own screen, and a night
+                    // written wrong into a health record is worse than a night missing.
+                    settings.setLastSleep(
+                        SleepSummary(
+                            startSeconds = session.startTimestamp,
+                            wakeSeconds = session.wakeTimestamp,
+                            stages = session.stages.size,
+                            raw = message.payload.toHex(),
+                        ),
                     )
                 }
             }
@@ -1064,6 +1077,15 @@ class WatchService : LifecycleService() {
         // 0x0001 half was sent as a request for one build to settle which was which; it
         // drew nothing, and is gone.
         connection.send(CmfCommand.BATTERY_GET)
+
+        // Every refresh, not once per connection. Both forms of the question — bare and
+        // with the activity fetch's 0xa5 — were answered with nothing, which leaves the
+        // possibility that the watch has sleep to give only at some moment of its own
+        // choosing. Asking every few minutes costs one small frame and removes the timing
+        // from the question entirely; the empty answer is logged once per connection so
+        // that does not become a stream of nothing.
+        connection.send(CmfCommand.SLEEP_DATA_GET)
+
         connection.send(CmfCommand.ACTIVITY_FETCH_1, dev.recmf.protocol.CmfFrame.A5)
     }
 

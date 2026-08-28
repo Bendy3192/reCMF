@@ -15,6 +15,7 @@ import dev.recmf.ble.WatchScanner
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
+import dev.recmf.data.SleepSummary
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
 import dev.recmf.data.WatchSettings
@@ -344,6 +345,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun setNotificationBlocked(packageNames: List<String>, blocked: Boolean) {
         viewModelScope.launch { settingsStore.setNotificationBlocked(packageNames, blocked) }
     }
+
+    /** The last night the watch reported, or null until it reports one. */
+    val lastSleep: StateFlow<SleepSummary?> = settingsStore.lastSleep
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     private val updater = Updater(application)
 
