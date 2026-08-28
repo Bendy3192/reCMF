@@ -528,13 +528,14 @@ private fun TodayCard(
             // checked against the watch's own screen, and a night recorded wrongly in a
             // health record is worse than one that is missing.
             sleep?.let {
-                Text(
-                    stringResource(
-                        R.string.metric_sleep,
+                MetricRow(
+                    icon = R.drawable.ic_metric_sleep,
+                    label = stringResource(R.string.metric_sleep),
+                    value = stringResource(
+                        R.string.metric_sleep_value,
                         CLOCK_TIME.format(Instant.ofEpochSecond(it.startSeconds)),
                         CLOCK_TIME.format(Instant.ofEpochSecond(it.wakeSeconds)),
                     ),
-                    style = MaterialTheme.typography.bodyMedium,
                 )
             }
 
@@ -1433,6 +1434,12 @@ private fun StepsRing(steps: Int, goal: Int) {
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                painter = painterResource(R.drawable.ic_metric_steps),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
             Text(steps.toString(), style = MaterialTheme.typography.headlineSmall)
             Text(
                 stringResource(R.string.metric_steps),

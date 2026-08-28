@@ -113,7 +113,8 @@
     <string name="action_allow_background">Allow background use</string>
     <string name="metric_spo2">blood oxygen</string>
     <string name="metric_stress">stress</string>
-    <string name="metric_sleep">Last night: %1$s → %2$s</string>
+    <string name="metric_sleep">Last night</string>
+    <string name="metric_sleep_value">%1$s → %2$s</string>
     <string name="chart_heart_rate">Heart rate today</string>
     <string name="chart_steps">Steps by hour</string>
     <string name="chart_spo2">Blood oxygen today</string>
