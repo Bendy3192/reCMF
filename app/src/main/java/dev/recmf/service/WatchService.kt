@@ -677,6 +677,12 @@ class WatchService : LifecycleService() {
         // otherwise the first save deletes whatever the wearer set up in the stock app.
         connection.send(CmfCommand.ALARMS_GET)
 
+        // Kept, though it has never returned a byte. Gadgetbridge does not send it at all
+        // — it waits for sleep to arrive in the fetch stream — and both forms of it were
+        // answered with nothing here, so this is not the road to a night's sleep. It stays
+        // because it costs one frame per connection, and because a watch that has just
+        // been re-paired may answer differently.
+        connection.send(CmfCommand.SLEEP_DATA_GET)
     }
 
     /**
@@ -1077,15 +1083,6 @@ class WatchService : LifecycleService() {
         // 0x0001 half was sent as a request for one build to settle which was which; it
         // drew nothing, and is gone.
         connection.send(CmfCommand.BATTERY_GET)
-
-        // Every refresh, not once per connection. Both forms of the question — bare and
-        // with the activity fetch's 0xa5 — were answered with nothing, which leaves the
-        // possibility that the watch has sleep to give only at some moment of its own
-        // choosing. Asking every few minutes costs one small frame and removes the timing
-        // from the question entirely; the empty answer is logged once per connection so
-        // that does not become a stream of nothing.
-        connection.send(CmfCommand.SLEEP_DATA_GET)
-
         connection.send(CmfCommand.ACTIVITY_FETCH_1, dev.recmf.protocol.CmfFrame.A5)
     }
 
