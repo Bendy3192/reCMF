@@ -177,4 +177,13 @@
     <string name="value_kcal">%1$d ккал</string>
     <string name="value_percent">%1$d%%</string>
     <string name="charts_today">Подробнее за сегодня</string>
+
+    <string name="tab_sleep">Сон</string>
+    <string name="sleep_waiting">Часы передают ночь примерно через двадцать минут после подъёма и только один раз. Пока ничего не пришло.</string>
+    <string name="sleep_stage_deep">Глубокий</string>
+    <string name="sleep_stage_light">Поверхностный</string>
+    <string name="sleep_stage_rem">Быстрый</string>
+    <string name="sleep_stage_unknown">Не распознано</string>
+    <string name="duration_hm">%1$d ч %2$d мин</string>
+    <string name="duration_m">%1$d мин</string>
 </resources>

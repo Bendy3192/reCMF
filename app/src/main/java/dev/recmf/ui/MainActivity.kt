@@ -108,6 +108,7 @@ class MainActivity : ComponentActivity() {
                 val lastSleep by model.lastSleep.collectAsStateWithLifecycle()
                 val charts by model.charts.collectAsStateWithLifecycle()
                 val weekly by model.weekly.collectAsStateWithLifecycle()
+                val sleepSession by model.lastSleepSession.collectAsStateWithLifecycle()
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -124,6 +125,7 @@ class MainActivity : ComponentActivity() {
                     hasNotificationAccess = hasNotificationAccess,
                     notificationApps = notificationApps,
                     lastSleep = lastSleep,
+                    sleepSession = sleepSession,
                     charts = charts,
                     weekly = weekly,
                     onNotificationAppBlocked = model::setNotificationBlocked,

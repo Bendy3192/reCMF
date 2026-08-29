@@ -108,6 +108,7 @@ import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
 import dev.recmf.data.SleepSummary
+import dev.recmf.protocol.SleepSession
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import java.time.Instant
@@ -127,6 +128,7 @@ fun HomeScreen(
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
     lastSleep: SleepSummary?,
+    sleepSession: SleepSession?,
     charts: HealthCharts,
     weekly: WeeklySeries,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -173,6 +175,7 @@ fun HomeScreen(
                         hasNotificationAccess = hasNotificationAccess,
                         notificationApps = notificationApps,
                         lastSleep = lastSleep,
+                        sleepSession = sleepSession,
                         charts = charts,
                         weekly = weekly,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -221,6 +224,7 @@ private fun TabContent(
     hasNotificationAccess: Boolean,
     notificationApps: List<NotificationApp>,
     lastSleep: SleepSummary?,
+    sleepSession: SleepSession?,
     charts: HealthCharts,
     weekly: WeeklySeries,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -273,6 +277,10 @@ private fun TabContent(
                 if (!isBatteryExempt) {
                     item { BackgroundWorkCard(onAllowBackgroundWork) }
                 }
+            }
+
+            HomeTab.SLEEP -> {
+                item { SleepCard(sleepSession) }
             }
 
             HomeTab.DEVICE -> {
@@ -391,7 +399,7 @@ private fun FloatingTabDock(
                         .clip(RoundedCornerShape(percent = 50))
                         .background(background)
                         .clickable { onSelect(index) }
-                        .padding(horizontal = 24.dp, vertical = 12.dp),
+                        .padding(horizontal = 18.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -2032,6 +2040,10 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
  */
 private enum class HomeTab(@param:StringRes val labelRes: Int) {
     HEALTH(R.string.tab_health),
+
+    // Between the two rather than after them: sleep is a measurement, and the watch tab
+    // is where the settings live. The dock reads health, sleep, watch.
+    SLEEP(R.string.tab_sleep),
     DEVICE(R.string.tab_device),
 }
 

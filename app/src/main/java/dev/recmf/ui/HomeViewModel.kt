@@ -27,6 +27,9 @@ import dev.recmf.health.stepDeltas
 import androidx.core.app.NotificationManagerCompat
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
+import dev.recmf.protocol.CmfParsers
+import dev.recmf.protocol.SleepSession
+import dev.recmf.protocol.hexToBytes
 import dev.recmf.BuildConfig
 import dev.recmf.service.WatchService
 import dev.recmf.update.AvailableUpdate
@@ -491,6 +494,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** The last night the watch reported, or null until it reports one. */
     val lastSleep: StateFlow<SleepSummary?> = settingsStore.lastSleep
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
+
+    /**
+     * The same night with its stages, read back out of the bytes that were kept.
+     *
+     * The stages were never stored as stages — only the frame was, on the reasoning that
+     * a parse can be wrong and bytes cannot. That turns out to be all the sleep screen
+     * needs: it re-reads the frame it was given. A frame that no longer parses gives
+     * nothing rather than crashing the screen it is drawn on.
+     */
+    val lastSleepSession: StateFlow<SleepSession?> = settingsStore.lastSleep
+        .map { summary ->
+            summary?.raw
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { runCatching { CmfParsers.parseSleep(it.hexToBytes()) }.getOrNull() }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
     private val updater = Updater(application)
