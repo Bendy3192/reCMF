@@ -10,9 +10,8 @@ stock app does badly: stay connected without being killed, and put the watch's d
 
 > **Status: in daily use against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
 > steps, heart rate, resting heart rate, blood oxygen, stress, weather, notifications,
-> incoming calls, alarms and find-watch are confirmed on hardware. Sleep is parsed but has
-> not yet met a real night, and is not stored until it has. Only one watch on one firmware
-> has ever run it — see [What is verified](#what-is-verified) before trusting it with
+> incoming calls, alarms, find-watch and sleep with its stages are confirmed on hardware.
+> Only one watch on one firmware has ever run it — see [What is verified](#what-is-verified) before trusting it with
 > anything.
 
 ## Installing
@@ -94,7 +93,7 @@ exists because of it.
 |---|---|
 | Pairing | Negotiates its own key over the watch's shell characteristic — no auth key to find |
 | Health | Steps, distance, calories, heart rate, resting heart rate, blood oxygen, stress, battery |
-| Health Connect | Steps, heart rate, resting rate and blood oxygen, deduplicated by client record id |
+| Health Connect | Steps, heart rate, resting rate, blood oxygen and sleep with its stages, deduplicated by client record id |
 | Watch settings | 24/7 heart rate, all-day SpO₂, stress, raise-to-wake, clock format, units, alert thresholds, stand and drink reminders with quiet hours, the visible sport list. Read back from the watch, so the app shows what it actually holds |
 | Daily goals | Shown as the watch reports them. Changing them has to be done on the watch — it accepts a write and keeps what it had |
 | Alarms | Read from the watch and edited here, with repeat days |
@@ -107,8 +106,9 @@ exists because of it.
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
 | UI | Compose, Material 3, dynamic colour, two tabs |
 
-**Not done:** sleep (parsed, unverified, not stored), workouts and their GPS tracks,
-contacts, a call screen with answer and reject, watchfaces, firmware.
+**Not done:** workouts and their GPS tracks, contacts, a call screen with answer and
+reject, watchfaces, firmware. Daily goals are read from the watch but cannot be written
+to it — see the roadmap.
 
 ### About Material 3 Expressive
 
@@ -226,10 +226,11 @@ empty case, weather, notifications, incoming calls with the caller's name, and f
 The `TIME` frame settles the clock question too: the watch takes its UTC offset in
 milliseconds and keeps correct time.
 
-**Written but not yet verified:** sleep. The layout is ported from Gadgetbridge and the
-stage duration's unit is unconfirmed, so nothing is stored — the app states its reading in
-the log as clock times and stage letters, for someone who slept through the night to
-check. Workouts and their GPS tracks are not started.
+**Sleep is verified, and by arithmetic rather than by eye.** A captured night read
+22:06 → 05:09 — 25380 seconds — and its thirty-three stage durations, parsed
+independently, summed to 25380. Thirty-three numbers do not agree with a separate total to
+the second by accident, and that also settles the duration unit Gadgetbridge leaves
+undocumented: seconds. Workouts and their GPS tracks are not started.
 
 **Still unidentified:** the 16 bytes at the tail of each activity record; the eight bytes
 `HEART_MONITORING_ENABLED_GET` answers with, which differ on every connection and so are

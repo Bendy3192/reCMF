@@ -111,10 +111,11 @@ enum class CmfSleepStage {
 /**
  * One stretch of one stage.
  *
- * [duration] is the watch's own figure and its unit is **not confirmed**. Gadgetbridge
- * stores it without saying, and reading a wrong unit into Health Connect would file a
- * night as either forty minutes or forty hours. Until a real night's frame is in hand,
- * the stage boundaries are taken from the timestamps, which are unambiguous.
+ * [duration] is **seconds**, confirmed by a real night rather than assumed. Gadgetbridge
+ * stores the figure without saying what it is, and reading the unit wrong would file a
+ * night as either forty minutes or forty hours. The capture settles it: thirty-three
+ * stages summed to 25380, and the session's own wake-minus-start was 25380 to the second.
+ * Thirty-three numbers do not agree with an independent total by accident.
  */
 data class SleepStageSample(
     val timestamp: Long,

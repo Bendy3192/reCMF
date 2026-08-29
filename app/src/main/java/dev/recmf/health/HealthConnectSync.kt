@@ -10,6 +10,7 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.metadata.Device
@@ -22,6 +23,8 @@ import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RestingHeartRateSampleEntity
 import dev.recmf.data.Spo2SampleEntity
+import dev.recmf.protocol.CmfSleepStage
+import dev.recmf.protocol.SleepSession
 import java.time.Instant
 import java.time.ZoneId
 
@@ -168,6 +171,60 @@ class HealthConnectSync(private val context: Context) {
             restingHeartRateTimestamps =
                 if (restingWritten) restingHeartRate.map { it.timestamp } else emptyList(),
         )
+    }
+
+    /**
+     * Writes one night.
+     *
+     * A sleep session is not staged like the rest. The others arrive as a trickle of
+     * readings that have to be differenced and batched; a night arrives once, complete,
+     * some twenty minutes after the wearer got up, and either goes in whole or not at all.
+     *
+     * The stages are clamped into the session and the empty ones dropped, because Health
+     * Connect refuses a stage that starts before its session or ends after it — and one
+     * bad stage would cost the whole night rather than itself.
+     */
+    suspend fun writeSleep(session: SleepSession): Boolean {
+        val client = this.client ?: return false
+        if (!hasPermissions()) return false
+
+        val start = Instant.ofEpochSecond(session.startTimestamp)
+        val end = Instant.ofEpochSecond(session.wakeTimestamp)
+        if (!end.isAfter(start)) return false
+
+        val stages = session.stages.mapNotNull { stage ->
+            val from = Instant.ofEpochSecond(stage.timestamp).coerceIn(start, end)
+            val to = Instant.ofEpochSecond(stage.timestamp + stage.duration).coerceIn(start, end)
+            if (!to.isAfter(from)) return@mapNotNull null
+
+            SleepSessionRecord.Stage(startTime = from, endTime = to, stage = stage.stage.toHealthConnect())
+        }
+
+        val record = SleepSessionRecord(
+            startTime = start,
+            startZoneOffset = zoneOffsetAt(start),
+            endTime = end,
+            endZoneOffset = zoneOffsetAt(end),
+            stages = stages,
+            // Keyed on when the night began, so the same night delivered twice replaces
+            // itself instead of stacking up.
+            metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-sleep-${session.startTimestamp}",
+            ),
+        )
+
+        return insert(client, listOf(record))
+    }
+
+    private fun CmfSleepStage.toHealthConnect(): Int = when (this) {
+        CmfSleepStage.DEEP -> SleepSessionRecord.STAGE_TYPE_DEEP
+        CmfSleepStage.LIGHT -> SleepSessionRecord.STAGE_TYPE_LIGHT
+        CmfSleepStage.REM -> SleepSessionRecord.STAGE_TYPE_REM
+
+        // A code the watch uses and this app has not seen. Filed as unknown rather than
+        // guessed into one of the three above, where it would quietly bias a night.
+        CmfSleepStage.UNKNOWN -> SleepSessionRecord.STAGE_TYPE_UNKNOWN
     }
 
     private suspend fun insert(
@@ -330,6 +387,8 @@ class HealthConnectSync(private val context: Context) {
             HealthPermission.getReadPermission(HeartRateRecord::class),
             HealthPermission.getReadPermission(OxygenSaturationRecord::class),
             HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+            HealthPermission.getWritePermission(SleepSessionRecord::class),
+            HealthPermission.getReadPermission(SleepSessionRecord::class),
         )
     }
 }

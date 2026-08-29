@@ -17,6 +17,7 @@ import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.stepDeltas
 import dev.recmf.protocol.ActivitySample
 import dev.recmf.protocol.HeartRateSample
+import dev.recmf.protocol.SleepSession
 import dev.recmf.protocol.Spo2Sample
 import java.time.Instant
 import java.time.ZoneId
@@ -50,6 +51,26 @@ class SampleIngest(
                 )
             },
         )
+    }
+
+    /**
+     * Sends a night straight to Health Connect.
+     *
+     * No staging table on the way. The other measurements arrive as a trickle that has to
+     * be differenced and batched; a night arrives once, whole, and there is nothing to
+     * accumulate. If Health Connect is off or unpermitted it is simply not written — the
+     * app keeps its own copy of the last night regardless, which is what the card shows.
+     */
+    suspend fun storeSleep(session: SleepSession) {
+        if (!settings.current().healthConnectEnabled) return
+
+        val hours = (session.wakeTimestamp - session.startTimestamp) / 3600.0
+
+        if (healthConnect.writeSleep(session)) {
+            ProtocolLog.note("Sleep written to Health Connect: %.1f h".format(hours))
+        } else {
+            ProtocolLog.note("Sleep not written: Health Connect would not take it")
+        }
     }
 
     suspend fun storeHeartRate(samples: List<HeartRateSample>) {

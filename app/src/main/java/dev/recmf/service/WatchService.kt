@@ -1012,9 +1012,12 @@ class WatchService : LifecycleService() {
                             },
                     )
 
-                    // Kept, with the bytes. Still not sent to Health Connect: the reading
-                    // has never been checked against a watch's own screen, and a night
-                    // written wrong into a health record is worse than a night missing.
+                    // Kept with the bytes, and now also written to Health Connect. The
+                    // reading held up where it counts: thirty-three stage durations summed
+                    // to 25380 seconds and the session's own wake-minus-start was 25380.
+                    // Independent numbers do not agree to the second by luck.
+                    ingest.storeSleep(session)
+
                     settings.setLastSleep(
                         SleepSummary(
                             startSeconds = session.startTimestamp,

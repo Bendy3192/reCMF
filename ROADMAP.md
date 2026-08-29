@@ -122,47 +122,28 @@ Done and confirmed against a real watch, byte for byte:
 - **Resting heart rate** — 5 bytes, not 8: a timestamp and a *single byte* of bpm. Not
   ported, because Gadgetbridge leaves this payload as a TODO. Read out of a capture.
 
-**Sleep is pushed, not fetched, and the window is why it never arrives.**
+**Sleep works, and the window theory was wrong.**
 
-Checked against Gadgetbridge rather than guessed at further. Its sleep parser is the same
-layout reCMF already had, byte for byte; its command table is a subset of this one, so
-there is no fetch command being missed; and it never asks for sleep at all — it waits for
-`SLEEP_DATA` to turn up in the `ACTIVITY_FETCH_2` stream, alongside the steps and the
-heart rate. `SLEEP_DATA_GET` exists and answers, but always with nothing, in both the bare
-form and with the fetch's own `0xa5`.
+It arrives in the `ACTIVITY_FETCH_2` stream, as Gadgetbridge always said it would — pushed
+once, about twenty minutes after the wearer gets up, not fetched. `SLEEP_DATA_GET` exists
+and answers, always with nothing; it is not the road to a night and never was.
 
-What the stream carries is bounded. `ACTIVITY_FETCH_ACK_2` opens it with *"activity since
-T"*, and on this watch T is the last fetch: a capture at 06:54 read `T = 06:50`. reCMF
-refreshes every five minutes, so its window is always the last five minutes and never
-contains the moment a sleep session began. Gadgetbridge is normally used the other way —
-one fetch after hours disconnected — and its window spans the whole night.
+The theory that a five-minute fetch window was too narrow to contain a session is
+**false**, and a capture killed it: the fetch that carried the night opened with *"activity
+since 05:25"* and the night had begun at 22:06 the evening before. What had actually been
+happening was far duller — the protocol log held two hundred entries, about two hours on a
+phone syncing every five minutes, so a frame that arrived at half past five was gone before
+anyone looked at it. Raising the log to six hundred is what made it visible.
 
-**Re-pairing does not reset it.** Forgetting the watch and pairing again produced a fetch
-whose window was four minutes wide, exactly as before: at 07:54:51 the watch offered
-activity since 07:50:17. Whatever holds that mark lives in the watch and does not care
-about pairings, so there is no way to ask for the past — only to stop asking for a while
-and let the window grow.
+The parse is confirmed, and not by eye. A session read 22:06 → 05:09, which is 25380
+seconds; its thirty-three stage durations, parsed independently, summed to 25380. Thirty
+three numbers do not agree with a separate total to the second by accident. That also
+settles the unit Gadgetbridge never documents: **seconds**. The night broke down as 4h01
+light, 1h59 deep, 1h03 REM.
 
-Which leaves one test, and it needs no code: refresh turned off overnight, one sync in the
-morning. If a window spanning the night carries `SLEEP_DATA`, the mechanism is confirmed
-and the fix is for reCMF to hold the activity fetch through the night — the rest of the
-refresh, weather and battery and music, has no reason to pause with it. Steps would then
-arrive in one lump attributed to the whole night, which for hours nobody is walking is a
-fair price.
-
-Two smaller readings from the same capture, worth keeping:
-
-- The timestamp in `ACTIVITY_FETCH_ACK_2` is the *previous* record's, not an arbitrary
-  mark: 06:45 before a record at 06:47, 06:50 before 06:54, 07:50 before 07:54. The watch
-  writes an activity record every few minutes and offers what is newer than the last one
-  it handed over.
-- A sleep session's own timestamp is when it *started*. With a five-minute window it is
-  always in the past, which is why no amount of asking has ever produced one.
-
-The parser is written but unverified: a session header (`start:int`, `wakeup:int`, 10
-unidentified bytes) then 8-byte stages. The stage duration's unit is not confirmed, so
-nothing is stored — the log states reCMF's reading in clock times and stage letters, which
-someone who slept through the night can check at a glance. Storage follows confirmation.
+Nights now go to Health Connect as a `SleepSessionRecord` with its stages, keyed on when
+the night began so a re-delivery replaces rather than stacks. It needs the sleep
+permission, which is new, so Health Connect will ask once more.
 
 **Workouts and their GPS tracks** are the one thing left here, and the one place where a
 captured log of real bytes is needed rather than a precaution.
