@@ -975,11 +975,10 @@ class WatchService : LifecycleService() {
 
             CmfCommand.SPO2 -> ingest.storeSpo2(CmfParsers.parseSpo2(message.payload))
 
-            // Parsed and reported, not stored. The layout is ported from Gadgetbridge and
-            // has never met a real night, so the log carries reCMF's reading of it in
-            // plain words next to the raw bytes: if the watch says the night ran from
-            // 23:41 to 07:12 in four stages, that is checkable at a glance against having
-            // been there. Storage follows confirmation, not the other way round.
+            // The log still carries reCMF's reading of the night in plain words next to
+            // the raw bytes — the layout was ported from Gadgetbridge and undocumented,
+            // and that line is what confirmed it: a night read 22:06 to 05:09 and its
+            // thirty-three stage durations summed to exactly that span.
             CmfCommand.SLEEP_DATA -> {
                 val session = CmfParsers.parseSleep(message.payload)
                 if (message.payload.isEmpty()) {

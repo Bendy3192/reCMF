@@ -145,6 +145,24 @@ Nights now go to Health Connect as a `SleepSessionRecord` with its stages, keyed
 the night began so a re-delivery replaces rather than stacks. It needs the sleep
 permission, which is new, so Health Connect will ask once more.
 
+**The stage codes are 1 deep, 2 light, 3 REM**, and that was in doubt for a while. Google
+Health's own reading of a night put REM above deep, which is the opposite of what reCMF
+reported, and a swapped mapping would look exactly like that. Nothing X settled it. The
+two apps have not yet covered the same night, so the comparison is of shares rather than
+minutes — but the shares are not close to ambiguous:
+
+| | deep | light | REM |
+| --- | --- | --- | --- |
+| reCMF, 7h03 night | 28% | 57% | 15% |
+| Nothing X, 8h01 night | 31% | 57% | 13% |
+| Google Health, the same night as Nothing X | 22% | 58% | 21% |
+
+reCMF and the vendor's own app agree on the light share to the point and order deep above
+REM the same way. Google Health disagrees with *both* — it is not reading the watch's
+stages at all, it is computing its own from what it has, which is why it also reports six
+minutes awake and twelve restless that neither of the other two knows anything about. The
+mapping ported from Gadgetbridge is right; the disagreement was never with the watch.
+
 **Workouts and their GPS tracks** are the one thing left here, and the one place where a
 captured log of real bytes is needed rather than a precaution.
 

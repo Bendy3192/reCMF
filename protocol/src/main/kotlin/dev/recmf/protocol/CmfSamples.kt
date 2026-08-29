@@ -101,7 +101,16 @@ enum class ActivityFetchState {
     FINISHED,
 }
 
-/** The stages the watch distinguishes. Anything it does not name is [UNKNOWN]. */
+/**
+ * The stages the watch distinguishes. Anything it does not name is [UNKNOWN].
+ *
+ * The codes are Gadgetbridge's, and they were in doubt: Google Health's own reading of a
+ * night put REM above deep, which is what a swapped mapping would look like. Nothing X —
+ * the watch's own app — settled it. Across a night each, it and reCMF agree on the light
+ * share to the point (57% and 57%) and order deep above REM the same way (31/13 against
+ * 28/15). Google Health disagrees with both because it is not reading these stages at
+ * all; it computes its own.
+ */
 enum class CmfSleepStage {
     DEEP,
     LIGHT,
