@@ -17,6 +17,9 @@ import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.stepDeltas
 import dev.recmf.protocol.ActivitySample
 import dev.recmf.protocol.HeartRateSample
+import dev.recmf.protocol.CmfParsers
+import dev.recmf.protocol.hexToBytes
+import kotlinx.coroutines.flow.first
 import dev.recmf.protocol.SleepSession
 import dev.recmf.protocol.Spo2Sample
 import java.time.Instant
@@ -67,10 +70,39 @@ class SampleIngest(
         val hours = (session.wakeTimestamp - session.startTimestamp) / 3600.0
 
         if (healthConnect.writeSleep(session)) {
+            settings.setLastSleepWritten(session.startTimestamp)
             ProtocolLog.note("Sleep written to Health Connect: %.1f h".format(hours))
         } else {
             ProtocolLog.note("Sleep not written: Health Connect would not take it")
         }
+    }
+
+    /**
+     * Sends the last night again, if it never got through the first time.
+     *
+     * The watch hands a night over once and never again, so "Health Connect was off" or
+     * "this version could not write sleep yet" would otherwise mean that night is gone for
+     * good. The raw frame is kept — it was kept to check a doubtful parse against, which
+     * is not what it turned out to be needed for — so it can simply be read again.
+     *
+     * Nothing happens once a night has been written: the mark is by the second the night
+     * began, so this is silent on every sync but the one that matters.
+     */
+    suspend fun flushStoredSleep() {
+        if (!settings.current().healthConnectEnabled) return
+
+        val stored = settings.lastSleep.first() ?: return
+        if (stored.startSeconds == settings.lastSleepWrittenStart.first()) return
+        if (stored.raw.isBlank()) return
+
+        val session = runCatching { CmfParsers.parseSleep(stored.raw.hexToBytes()) }.getOrNull()
+        if (session == null) {
+            ProtocolLog.note("Kept sleep frame could not be re-read")
+            return
+        }
+
+        ProtocolLog.note("Sending the stored night to Health Connect")
+        storeSleep(session)
     }
 
     suspend fun storeHeartRate(samples: List<HeartRateSample>) {
@@ -108,6 +140,10 @@ class SampleIngest(
             Log.i(TAG, "Health Connect permissions not granted; keeping samples pending")
             return
         }
+
+        // A night that arrived while Health Connect was off, or before this app could
+        // write one, is not something the watch will offer again.
+        flushStoredSleep()
 
         var uploaded = 0
 

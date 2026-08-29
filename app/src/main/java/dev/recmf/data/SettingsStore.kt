@@ -428,6 +428,22 @@ class SettingsStore(private val context: Context) {
         )
     }
 
+    /**
+     * The night already sent to Health Connect, by the second it started.
+     *
+     * The watch hands a night over exactly once, twenty minutes or so after the wearer
+     * gets up, and never again — so a night that arrives while Health Connect is off, or
+     * while the app is a version that could not write it yet, is a night nobody can ask
+     * for a second time. The bytes are kept anyway; this is what says whether they still
+     * need sending.
+     */
+    val lastSleepWrittenStart: Flow<Long> =
+        context.dataStore.data.map { it[KEY_SLEEP_WRITTEN_START] ?: 0L }
+
+    suspend fun setLastSleepWritten(startSeconds: Long) {
+        context.dataStore.edit { it[KEY_SLEEP_WRITTEN_START] = startSeconds }
+    }
+
     suspend fun setLastSleep(summary: SleepSummary) {
         context.dataStore.edit { prefs ->
             prefs[KEY_SLEEP_START] = summary.startSeconds
@@ -469,6 +485,7 @@ class SettingsStore(private val context: Context) {
         val KEY_SLEEP_WAKE = longPreferencesKey("last_sleep_wake")
         val KEY_SLEEP_STAGES = intPreferencesKey("last_sleep_stages")
         val KEY_SLEEP_RAW = stringPreferencesKey("last_sleep_raw")
+        val KEY_SLEEP_WRITTEN_START = longPreferencesKey("last_sleep_written_start")
 
 
         val KEY_HR_MONITORING = booleanPreferencesKey("watch_hr_monitoring")
