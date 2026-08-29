@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name" translatable="false">reCMF</string>
 
     <string name="notification_channel_connection">Watch connection</string>
@@ -171,7 +171,9 @@
     <string name="value_bpm">%1$d bpm</string>
     <string name="value_km">%1$s km</string>
     <string name="value_metres">%1$d m</string>
-    <string name="value_kcal">%1$d kcal</string>
+    <!-- A unit symbol, not a word: "kcal" reads the same after every number, in
+         every language this app is translated into. -->
+    <string name="value_kcal" tools:ignore="PluralsCandidate">%1$d kcal</string>
     <string name="value_percent">%1$d%%</string>
     <string name="charts_today">Today in detail</string>
 

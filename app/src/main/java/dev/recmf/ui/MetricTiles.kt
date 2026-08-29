@@ -25,13 +25,13 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLocale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import java.time.LocalDate
 import java.time.format.TextStyle
-import java.util.Locale
 
 /**
  * The two-column grid of measurements on the health screen.
@@ -190,10 +190,16 @@ private fun WeekStrip(days: List<DayValue>, color: Color) {
             }
         }
 
+        // The locale is read from the composition rather than from the process. They are
+        // the same until the moment they are not — a language changed in settings redraws
+        // this row, and Locale.getDefault() would have left it in the old language until
+        // something else happened to recompose it.
+        val locale = LocalLocale.current.platformLocale
+
         Row(Modifier.fillMaxWidth()) {
             days.forEach { day ->
                 Text(
-                    day.date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    day.date.dayOfWeek.getDisplayName(TextStyle.NARROW, locale),
                     style = MaterialTheme.typography.labelSmall,
                     color = color.copy(alpha = if (day.date == today) 1f else FADED),
                     maxLines = 1,
