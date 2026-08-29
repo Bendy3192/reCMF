@@ -32,7 +32,6 @@ import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
 import dev.recmf.service.WeatherProblem
-import dev.recmf.protocol.StressSample
 import dev.recmf.service.WatchStatus
 import dev.recmf.service.WatchdogWorker
 import dev.recmf.weather.WeatherClient
@@ -77,7 +76,9 @@ data class HomeUiState(
     val weather: WeatherStatus = WeatherStatus(),
     /** Percent, from the day's newest stored reading. */
     val spo2: Int? = null,
-    val stress: StressSample? = null,
+
+    /** The watch's own 0-100 scale, from the day's newest stored reading. */
+    val stress: Int? = null,
 
     /** Beats per minute, from the day's newest stored reading. */
     val restingHeartRate: Int? = null,
@@ -111,7 +112,7 @@ private data class Extras(
     val heartRate: HeartRateSampleEntity?,
     val weather: WeatherStatus,
     val spo2: Int?,
-    val stress: StressSample?,
+    val stress: Int?,
     val restingHeartRate: Int?,
 )
 
@@ -174,12 +175,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             weatherStatus,
             // From the table, not from the service's memory. The in-memory value is empty
             // until a sample happens to arrive, so after every restart the card read "—"
-            // for blood oxygen above a chart that was full of it. Stress is the one that
-            // still comes from memory, because stress is the one measurement with nowhere
-            // to be stored: Health Connect has no record type for it and neither has this
-            // app, yet.
+            // for blood oxygen above a chart that was full of it. Stress now reads the
+            // same way: Health Connect still has no record type for it, so reCMF's own
+            // table is the only place it survives a restart.
             dao.latestSpo2Since(startOfToday()).map { it?.percent },
-            WatchStatus.stress,
+            dao.latestStressSince(startOfToday()).map { it?.level },
             dao.latestRestingHeartRateSince(startOfToday()).map { it?.bpm },
             ::Extras,
         ),

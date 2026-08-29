@@ -23,6 +23,17 @@ data class ActivitySample(
     val steps: Int,
     val distanceMeters: Int,
     val calories: Int,
+
+    /**
+     * Flights climbed, as far as anything here can tell.
+     *
+     * Read from the fifth number in the record, which was written off as part of an
+     * unidentified tail until it was watched across a day: 9 in the morning, 11 by
+     * evening, 1 after midnight. It accumulates and it resets with the date. The goal
+     * block counts climbs beside steps and calories, in a number of the same size, which
+     * is what the name rests on — that, and nothing stronger.
+     */
+    val climbs: Int = 0,
 )
 
 data class HeartRateSample(

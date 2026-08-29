@@ -245,11 +245,12 @@ can be compared against them rather than starting over.
   connections.
 - **The reply to `HEART_MONITORING_ENABLED_GET`, 8 bytes.** High-entropy and *different on
   every connection*, which rules out the obvious reading — it is not the monitoring state.
-- **The 16-byte tail of every activity record.** Not always zero after all: its first
+- **The last 12 bytes of every activity record.** The tail used to be sixteen. Its first
   four bytes are a little-endian number that tracks the day — `09` in the morning, `0b`
-  by evening. Climbs are the obvious candidate, since the goal block counts those too and
-  the numbers are the right size. The remaining twelve bytes have been zero in every
-  capture.
+  by evening, `01` after midnight — so it counts something that accumulates and resets
+  with the date. The goal block counts climbs beside steps and calories, in a number of
+  the same size, and the app now reads that field as climbs on that basis and nothing
+  stronger. The remaining twelve bytes have been zero in every capture.
 
 ## Not planned
 

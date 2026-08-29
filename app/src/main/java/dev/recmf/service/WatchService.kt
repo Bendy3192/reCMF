@@ -822,11 +822,8 @@ class WatchService : LifecycleService() {
             CmfCommand.HEART_RATE_MANUAL_AUTO, CmfCommand.HEART_RATE_WORKOUT ->
                 ingest.storeHeartRate(CmfParsers.parseHeartRate(message.payload))
 
-            CmfCommand.HEART_RATE_RESTING -> {
-                val samples = CmfParsers.parseRestingHeartRate(message.payload)
-                samples.lastOrNull { it.isValid }?.let { WatchStatus.restingHeartRate.value = it }
-                ingest.storeRestingHeartRate(samples)
-            }
+            CmfCommand.HEART_RATE_RESTING ->
+                ingest.storeRestingHeartRate(CmfParsers.parseRestingHeartRate(message.payload))
 
             // Informational: the timestamp the watch is sending activity from, plus four
             // bytes nobody has identified. Gadgetbridge logs it and does nothing with it.
@@ -976,14 +973,7 @@ class WatchService : LifecycleService() {
             // it out of the unhandled list.
             CmfCommand.MUSIC_INFO_ACK -> Unit
 
-            // Kept in memory rather than stored: enough to show the newest reading and to
-            // prove the data is arriving. Persistence and Health Connect follow once the
-            // shape has been seen against a real watch rather than only a unit test.
-            CmfCommand.SPO2 -> {
-                val samples = CmfParsers.parseSpo2(message.payload)
-                samples.lastOrNull { it.isValid }?.let { WatchStatus.spo2.value = it }
-                ingest.storeSpo2(samples)
-            }
+            CmfCommand.SPO2 -> ingest.storeSpo2(CmfParsers.parseSpo2(message.payload))
 
             // Parsed and reported, not stored. The layout is ported from Gadgetbridge and
             // has never met a real night, so the log carries reCMF's reading of it in
@@ -1029,12 +1019,9 @@ class WatchService : LifecycleService() {
                 }
             }
 
-            // Not stored: Health Connect has no record type for stress, so there is
-            // nowhere for it to go beyond the screen until reCMF grows its own history.
-            CmfCommand.STRESS ->
-                CmfParsers.parseStress(message.payload)
-                    .lastOrNull { it.isValid }
-                    ?.let { WatchStatus.stress.value = it }
+            // Health Connect has no record type for stress, so reCMF's own table is the
+            // only copy of it outside the watch.
+            CmfCommand.STRESS -> ingest.storeStress(CmfParsers.parseStress(message.payload))
 
             CmfCommand.BATTERY ->
                 CmfParsers.parseBattery(message.payload)?.let { WatchStatus.battery.value = it }

@@ -10,6 +10,7 @@ import dev.recmf.data.ActivitySampleEntity
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RestingHeartRateSampleEntity
 import dev.recmf.data.Spo2SampleEntity
+import dev.recmf.data.StressSampleEntity
 import dev.recmf.data.SampleDao
 import dev.recmf.data.SettingsStore
 import dev.recmf.health.CumulativeReading
@@ -22,6 +23,7 @@ import dev.recmf.protocol.hexToBytes
 import kotlinx.coroutines.flow.first
 import dev.recmf.protocol.SleepSession
 import dev.recmf.protocol.Spo2Sample
+import dev.recmf.protocol.StressSample
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -51,6 +53,7 @@ class SampleIngest(
                     steps = it.steps,
                     distanceMeters = it.distanceMeters,
                     calories = it.calories,
+                    climbs = it.climbs,
                 )
             },
         )
@@ -119,6 +122,20 @@ class SampleIngest(
         if (usable.isEmpty()) return
 
         dao.insertSpo2(usable.map { Spo2SampleEntity(timestamp = it.timestamp, percent = it.percent) })
+    }
+
+    /**
+     * Keeps stress, which nothing else will.
+     *
+     * Health Connect has no record type for it, so this table is not a staging buffer on
+     * the way somewhere — it is where stress lives. Nothing marks these rows synced and
+     * nothing ever will; they are pruned by age alone.
+     */
+    suspend fun storeStress(samples: List<StressSample>) {
+        val usable = samples.filter { it.level > 0 }
+        if (usable.isEmpty()) return
+
+        dao.insertStress(usable.map { StressSampleEntity(timestamp = it.timestamp, level = it.level) })
     }
 
     suspend fun storeRestingHeartRate(samples: List<HeartRateSample>) {
@@ -242,7 +259,7 @@ class SampleIngest(
     suspend fun prune() {
         val cutoff = Instant.now().minusSeconds(RETENTION_SECONDS).epochSecond
         val removed = dao.pruneActivity(cutoff) + dao.pruneHeartRate(cutoff) +
-            dao.pruneSpo2(cutoff) + dao.pruneRestingHeartRate(cutoff)
+            dao.pruneSpo2(cutoff) + dao.pruneRestingHeartRate(cutoff) + dao.pruneStress(cutoff)
         if (removed > 0) Log.i(TAG, "Pruned $removed synced samples")
     }
 

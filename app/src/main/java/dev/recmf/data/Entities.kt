@@ -19,6 +19,10 @@ data class ActivitySampleEntity(
     val steps: Int,
     val distanceMeters: Int,
     val calories: Int,
+
+    /** Flights climbed; see [dev.recmf.protocol.ActivitySample.climbs] for how sure that is. */
+    val climbs: Int = 0,
+
     /** Null until the sample has been written to Health Connect. */
     val syncedAt: Long? = null,
 )
@@ -55,4 +59,18 @@ data class RestingHeartRateSampleEntity(
     @PrimaryKey val timestamp: Long,
     val bpm: Int,
     val syncedAt: Long? = null,
+)
+
+/**
+ * Stress, which has nowhere else to live.
+ *
+ * Every other measurement ends up in Health Connect, which has no record type for stress
+ * — so before this table there was nowhere at all, and the figure vanished with the
+ * process that read it. Kept here, it survives a restart and can be drawn like the rest.
+ * Nothing marks it synced, because there is nothing to sync it to.
+ */
+@Entity(tableName = "stress_samples")
+data class StressSampleEntity(
+    @PrimaryKey val timestamp: Long,
+    val level: Int,
 )

@@ -501,7 +501,7 @@ private fun TodayCard(
                     MetricRow(
                         icon = R.drawable.ic_metric_stress,
                         label = stringResource(R.string.metric_stress),
-                        value = state.stress?.level?.toString(),
+                        value = state.stress?.toString(),
                     )
 
                     // Said once, instead of four times over in dashes: the watch has

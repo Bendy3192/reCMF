@@ -39,7 +39,7 @@ object CmfParsers {
 
     /**
      * `ACTIVITY_DATA`: a run of 32-byte records — timestamp, steps, distance, calories,
-     * then 16 bytes we have not identified.
+     * climbs, then 12 bytes we have not identified.
      */
     fun parseActivity(payload: ByteArray): List<ActivitySample> {
         if (payload.isEmpty() || payload.size % ACTIVITY_RECORD_SIZE != 0) return emptyList()
@@ -53,8 +53,14 @@ object CmfParsers {
                 steps = buf.int,
                 distanceMeters = buf.int,
                 calories = buf.int,
+                // The fifth number was written off as part of an unidentified tail until
+                // it was watched for a day: 9 in the morning, 11 by evening, 1 after
+                // midnight. It counts something that accumulates and resets with the
+                // date, and the goal block counts climbs alongside steps and calories in
+                // the same size of number. Named on that, and on nothing stronger.
+                climbs = buf.int,
             )
-            buf.position(buf.position() + 16) // unidentified tail
+            buf.position(buf.position() + 12) // still unidentified, and always zero so far
             out.add(sample)
         }
 

@@ -17,8 +17,9 @@ import androidx.sqlite.execSQL
         HeartRateSampleEntity::class,
         Spo2SampleEntity::class,
         RestingHeartRateSampleEntity::class,
+        StressSampleEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class RecmfDatabase : RoomDatabase() {
@@ -58,12 +59,36 @@ abstract class RecmfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the stress table and the climb counter.
+         *
+         * Stress had nowhere to live: Health Connect has no record type for it, so it was
+         * held in memory and lost with every restart. Climbs were being read off the watch
+         * all along, inside what the parser called an unidentified tail.
+         *
+         * A default on the new column, because the rows already in the table were written
+         * before anything read that number and there is nothing to back-fill them with.
+         */
+        private val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `stress_samples` (" +
+                        "`timestamp` INTEGER NOT NULL, " +
+                        "`level` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`timestamp`))",
+                )
+                connection.execSQL(
+                    "ALTER TABLE `activity_samples` ADD COLUMN `climbs` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun get(context: Context): RecmfDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 RecmfDatabase::class.java,
                 "recmf.db",
-            ).addMigrations(MIGRATION_1_2).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
         }
     }
 }

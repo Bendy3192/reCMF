@@ -10,9 +10,15 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class CmfParsersTest {
-    private fun activityRecord(ts: Int, steps: Int, distance: Int, calories: Int): ByteArray =
+    private fun activityRecord(
+        ts: Int,
+        steps: Int,
+        distance: Int,
+        calories: Int,
+        climbs: Int = 0,
+    ): ByteArray =
         ByteBuffer.allocate(CmfParsers.ACTIVITY_RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
-            .putInt(ts).putInt(steps).putInt(distance).putInt(calories)
+            .putInt(ts).putInt(steps).putInt(distance).putInt(calories).putInt(climbs)
             .array()
 
     private fun heartRateRecord(ts: Int, bpm: Int): ByteArray =
@@ -160,14 +166,14 @@ class CmfParsersTest {
 
     @Test
     fun `activity records decode in order`() {
-        val payload = activityRecord(1_700_000_000, 120, 90, 5) +
+        val payload = activityRecord(1_700_000_000, 120, 90, 5, climbs = 9) +
             activityRecord(1_700_000_060, 0, 0, 1)
 
         val samples = CmfParsers.parseActivity(payload)
 
         assertEquals(
             listOf(
-                ActivitySample(1_700_000_000, 120, 90, 5),
+                ActivitySample(1_700_000_000, 120, 90, 5, climbs = 9),
                 ActivitySample(1_700_000_060, 0, 0, 1),
             ),
             samples,

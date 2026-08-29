@@ -118,6 +118,19 @@ interface SampleDao {
     )
     fun latestRestingHeartRateSince(since: Long): Flow<RestingHeartRateSampleEntity?>
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStress(samples: List<StressSampleEntity>)
+
+    @Query("SELECT * FROM stress_samples WHERE timestamp >= :since ORDER BY timestamp")
+    fun stressSince(since: Long): Flow<List<StressSampleEntity>>
+
+    @Query("SELECT * FROM stress_samples WHERE timestamp >= :since ORDER BY timestamp DESC LIMIT 1")
+    fun latestStressSince(since: Long): Flow<StressSampleEntity?>
+
+    /** Stress goes to no one, so age is the only reason to drop it. */
+    @Query("DELETE FROM stress_samples WHERE timestamp < :before")
+    suspend fun pruneStress(before: Long): Int
+
     @Query(
         "SELECT * FROM resting_heart_rate_samples WHERE timestamp >= :since AND bpm BETWEEN 25 AND 250 " +
             "ORDER BY timestamp",
