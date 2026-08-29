@@ -63,6 +63,21 @@ interface SampleDao {
     @Query("SELECT COALESCE(MAX(steps), 0) FROM activity_samples WHERE timestamp >= :since")
     fun stepsSince(since: Long): Flow<Int>
 
+    /**
+     * The four counters the watch keeps for the day, in one read.
+     *
+     * Every one of them is cumulative like [stepsSince], so every one is a maximum. Four
+     * separate flows would each wake the screen on the same insert; this wakes it once.
+     */
+    @Query(
+        "SELECT COALESCE(MAX(steps), 0) AS steps, " +
+            "COALESCE(MAX(distanceMeters), 0) AS distanceMeters, " +
+            "COALESCE(MAX(calories), 0) AS calories, " +
+            "COALESCE(MAX(climbs), 0) AS climbs " +
+            "FROM activity_samples WHERE timestamp >= :since",
+    )
+    fun totalsSince(since: Long): Flow<DailyTotals>
+
     @Query("SELECT * FROM heart_rate_samples WHERE bpm BETWEEN 25 AND 250 ORDER BY timestamp DESC LIMIT 1")
     fun latestHeartRate(): Flow<HeartRateSampleEntity?>
 

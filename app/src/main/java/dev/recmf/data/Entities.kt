@@ -74,3 +74,16 @@ data class StressSampleEntity(
     @PrimaryKey val timestamp: Long,
     val level: Int,
 )
+
+/**
+ * What the watch has counted since a given moment — in practice, since midnight.
+ *
+ * Not a table: a projection of [ActivitySampleEntity], four running totals read in one
+ * query rather than four.
+ */
+data class DailyTotals(
+    val steps: Int = 0,
+    val distanceMeters: Int = 0,
+    val calories: Int = 0,
+    val climbs: Int = 0,
+)

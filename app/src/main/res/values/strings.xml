@@ -20,7 +20,7 @@
 
     <string name="today">Today</string>
     <string name="metric_steps">steps</string>
-    <string name="metric_heart_rate">bpm</string>
+    <string name="metric_heart_rate">Heart rate</string>
 
     <string name="health_connect" translatable="false">Health Connect</string>
     <string name="health_connect_available">Steps and heart rate are written to Health Connect, so other apps can read them.</string>
@@ -111,8 +111,8 @@
     <string name="background_work">Background updates are restricted</string>
     <string name="background_work_explainer">Android is allowed to defer reCMF\'s scheduled work while the phone is idle, which is why the forecast and the step count can go hours without refreshing. Allowing unrestricted background use fixes that; reCMF still only wakes on its refresh interval.</string>
     <string name="action_allow_background">Allow background use</string>
-    <string name="metric_spo2">blood oxygen</string>
-    <string name="metric_stress">stress</string>
+    <string name="metric_spo2">Blood oxygen</string>
+    <string name="metric_stress">Stress</string>
     <string name="metrics_waiting">The watch has not sent any measurements yet today.</string>
     <string name="metric_sleep">Last night</string>
     <string name="metric_sleep_value">%1$s → %2$s</string>
@@ -124,7 +124,7 @@
         <item quantity="one">Copied %d line</item>
         <item quantity="other">Copied %d lines</item>
     </plurals>
-    <string name="metric_resting_heart_rate">resting</string>
+    <string name="metric_resting_heart_rate">Resting</string>
     <string name="tab_health">Health</string>
     <string name="tab_device">Watch</string>
     <string name="find_watch">Find the watch</string>
@@ -164,4 +164,14 @@
     <string name="update_notification_text">Open reCMF to install it.</string>
     <string name="action_check_update">Check for updates</string>
     <string name="action_install_update">Download and install</string>
+
+    <string name="metric_distance">Distance</string>
+    <string name="metric_calories">Calories</string>
+    <string name="metric_climbs">Floors</string>
+    <string name="value_bpm">%1$d bpm</string>
+    <string name="value_km">%1$s km</string>
+    <string name="value_metres">%1$d m</string>
+    <string name="value_kcal">%1$d kcal</string>
+    <string name="value_percent">%1$d%%</string>
+    <string name="charts_today">Today in detail</string>
 </resources>

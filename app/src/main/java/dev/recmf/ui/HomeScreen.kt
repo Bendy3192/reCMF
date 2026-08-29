@@ -4,6 +4,7 @@
 package dev.recmf.ui
 
 import androidx.compose.foundation.layout.Box
+import android.content.Context
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -33,6 +34,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
@@ -101,6 +103,7 @@ import dev.recmf.protocol.CmfSettings
 import android.content.ClipData
 import android.os.Build
 import androidx.annotation.StringRes
+import java.util.Locale
 import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
@@ -125,6 +128,7 @@ fun HomeScreen(
     notificationApps: List<NotificationApp>,
     lastSleep: SleepSummary?,
     charts: HealthCharts,
+    weekly: WeeklySeries,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -170,6 +174,7 @@ fun HomeScreen(
                         notificationApps = notificationApps,
                         lastSleep = lastSleep,
                         charts = charts,
+                        weekly = weekly,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -217,6 +222,7 @@ private fun TabContent(
     notificationApps: List<NotificationApp>,
     lastSleep: SleepSummary?,
     charts: HealthCharts,
+    weekly: WeeklySeries,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -250,7 +256,19 @@ private fun TabContent(
 
         when (tab) {
             HomeTab.HEALTH -> {
-                item { TodayCard(state, lastSleep, watchPreferences.stepsGoal, charts, onAutoSyncSeconds) }
+                item { TodayCard(state, lastSleep, watchPreferences.stepsGoal) }
+
+                // Tiles come before the charts: a figure is what gets looked for, and the
+                // shape of the day is what gets looked at once the figure has been read.
+                metricTiles(state, weekly)
+
+                if (charts.heartRate.size >= 2 || charts.stepsByHour.any { it > 0f } ||
+                    charts.spo2.isNotEmpty()
+                ) {
+                    item { ChartsCard(charts) }
+                }
+
+                item { AutoSyncCard(state.settings.autoSyncSeconds, onAutoSyncSeconds) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
                 if (!isBatteryExempt) {
                     item { BackgroundWorkCard(onAllowBackgroundWork) }
@@ -453,62 +471,52 @@ private fun ConnectionCard(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * The day in one card: the one measurement with a target, and last night.
+ *
+ * Steps get the ring because steps are the only figure here with a goal behind them — a
+ * number against a target is a fraction, and a fraction is a shape before it is a figure.
+ * Everything else the watch counts is a tile below, where it comes with its own week.
+ */
 @Composable
 private fun TodayCard(
     state: HomeUiState,
     sleep: SleepSummary?,
     goal: Int,
-    charts: HealthCharts,
-    onAutoSyncSeconds: (Int) -> Unit,
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(stringResource(R.string.today), style = MaterialTheme.typography.titleMedium)
 
-            // Steps get the ring and the rest get tiles, because steps are the one
-            // measurement with a target: a number against a goal is a fraction, and a
-            // fraction is a shape before it is a figure.
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                StepsRing(steps = state.stepsToday, goal = goal)
+                StepsRing(steps = state.today.steps, goal = goal)
 
                 Column(
                     Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    // Only what the watch has actually sent. A column of em dashes is a
-                    // list of things the app cannot tell you, and four of them next to one
-                    // real number read as a broken app rather than a quiet one.
-                    MetricRow(
-                        icon = R.drawable.ic_metric_heart,
-                        label = stringResource(R.string.metric_heart_rate),
-                        value = state.latestHeartRate?.bpm?.toString(),
-                    )
-                    MetricRow(
-                        icon = R.drawable.ic_metric_heart,
-                        label = stringResource(R.string.metric_resting_heart_rate),
-                        value = state.restingHeartRate?.toString(),
-                    )
-                    MetricRow(
-                        icon = R.drawable.ic_metric_oxygen,
-                        label = stringResource(R.string.metric_spo2),
-                        value = state.spo2?.let { "$it%" },
-                    )
-                    MetricRow(
-                        icon = R.drawable.ic_metric_stress,
-                        label = stringResource(R.string.metric_stress),
-                        value = state.stress?.toString(),
-                    )
+                    // Nights go to Health Connect now, so this is a summary of a record
+                    // rather than the only place it exists. The stage breakdown has a
+                    // card of its own.
+                    sleep?.let {
+                        MetricRow(
+                            icon = R.drawable.ic_metric_sleep,
+                            label = stringResource(R.string.metric_sleep),
+                            value = stringResource(
+                                R.string.metric_sleep_value,
+                                CLOCK_TIME.format(Instant.ofEpochSecond(it.startSeconds)),
+                                CLOCK_TIME.format(Instant.ofEpochSecond(it.wakeSeconds)),
+                            ),
+                        )
+                    }
 
-                    // Said once, instead of four times over in dashes: the watch has
+                    // Said once, in words, instead of a column of em dashes: the watch has
                     // connected and has not yet handed anything over.
-                    if (state.latestHeartRate == null && state.restingHeartRate == null &&
-                        state.spo2 == null && state.stress == null
-                    ) {
+                    if (state.today.steps == 0 && sleep == null) {
                         Text(
                             stringResource(R.string.metrics_waiting),
                             style = MaterialTheme.typography.bodySmall,
@@ -518,9 +526,154 @@ private fun TodayCard(
                 }
             }
 
-            // Each chart is one measurement, so each is named by the line above it and
-            // needs no legend. Nothing is drawn until there are at least two readings —
-            // one point is not a shape, and an axis around it is furniture around a fact.
+            // The watch's own clock, as the app can best see it. A zero above means
+            // "nothing recorded under today's date", which happens both when the watch
+            // was not worn and when its calendar has drifted off the phone's — and those
+            // want opposite responses, so the app should not make the user guess which.
+            WatchClockNote(state.watch)
+        }
+    }
+}
+
+/**
+ * The measurements, two to a row, each with the week behind it.
+ *
+ * A tile is only added when there is something to put in it. That is the whole rule, and
+ * it is why the grid is built as a list rather than written out: a fixed grid with three
+ * of its six cells empty is a screen full of things the app cannot tell you, which reads
+ * as broken rather than as quiet.
+ *
+ * A counter survives a zero day — once the watch has reported climbs at any point this
+ * week, the tile stays and honestly says none today. Vanishing on the flat days would make
+ * the grid rearrange itself under the reader.
+ */
+private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) {
+    val tiles = buildList {
+        state.latestHeartRate?.let {
+            add(TileSpec(R.drawable.ic_metric_heart, R.string.metric_heart_rate) { context ->
+                context.getString(R.string.value_bpm, it.bpm)
+            })
+        }
+        state.restingHeartRate?.let { bpm ->
+            add(
+                TileSpec(R.drawable.ic_metric_heart, R.string.metric_resting_heart_rate,
+                    weekly.restingHeartRate) { it.getString(R.string.value_bpm, bpm) },
+            )
+        }
+        state.spo2?.let { percent ->
+            add(
+                TileSpec(R.drawable.ic_metric_oxygen, R.string.metric_spo2, weekly.spo2) {
+                    it.getString(R.string.value_percent, percent)
+                },
+            )
+        }
+        state.stress?.let { level ->
+            add(
+                TileSpec(R.drawable.ic_metric_stress, R.string.metric_stress, weekly.stress) {
+                    level.toString()
+                },
+            )
+        }
+        if (state.today.distanceMeters > 0 || weekly.distanceMeters.hasReadings()) {
+            add(
+                TileSpec(R.drawable.ic_metric_distance, R.string.metric_distance,
+                    weekly.distanceMeters) { it.readableDistance(state.today.distanceMeters) },
+            )
+        }
+        if (state.today.calories > 0 || weekly.calories.hasReadings()) {
+            add(
+                TileSpec(R.drawable.ic_metric_calories, R.string.metric_calories,
+                    weekly.calories) { it.getString(R.string.value_kcal, state.today.calories) },
+            )
+        }
+        if (state.today.climbs > 0 || weekly.climbs.hasReadings()) {
+            add(
+                TileSpec(R.drawable.ic_metric_climbs, R.string.metric_climbs, weekly.climbs) {
+                    state.today.climbs.toString()
+                },
+            )
+        }
+    }
+
+    // Chunked into rows rather than handed to a grid: this sits inside a LazyColumn, and
+    // a lazy grid inside a lazy column is an unbounded height inside an infinite one.
+    tiles.chunked(2).forEachIndexed { row, pair ->
+        item(key = "tiles-$row") {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                val context = LocalContext.current
+
+                pair.forEachIndexed { column, tile ->
+                    MetricTile(
+                        icon = tile.icon,
+                        label = stringResource(tile.label),
+                        value = tile.value(context),
+                        accent = ACCENTS[(row * 2 + column) % ACCENTS.size],
+                        week = tile.week,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+
+                // An odd tile keeps its own column width instead of stretching across
+                // the row, so the grid stays a grid down to its last row.
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * One tile before it knows what colour it is.
+ *
+ * [value] takes a context rather than being a string because these are built outside a
+ * composition, where `stringResource` cannot be called.
+ */
+private class TileSpec(
+    @DrawableRes val icon: Int,
+    @StringRes val label: Int,
+    val week: List<DayValue> = emptyList(),
+    val value: (Context) -> String,
+)
+
+/** True once any day in the week carries a reading above zero. */
+private fun List<DayValue>.hasReadings(): Boolean = any { (it.value ?: 0f) > 0f }
+
+/**
+ * Metres, in the unit that suits the number.
+ *
+ * Below a kilometre, "0,4 km" throws away the only digit that was doing any work.
+ */
+private fun Context.readableDistance(metres: Int): String = if (metres < 1000) {
+    getString(R.string.value_metres, metres)
+} else {
+    getString(R.string.value_km, String.format(Locale.getDefault(), "%.1f", metres / 1000f))
+}
+
+/** Cycled down the grid so neighbours differ; see the note in MetricTiles.kt. */
+private val ACCENTS = listOf(
+    TileAccent.PRIMARY,
+    TileAccent.SECONDARY,
+    TileAccent.TERTIARY,
+    TileAccent.NEUTRAL,
+)
+
+/**
+ * The day itself, drawn.
+ *
+ * Nothing is drawn until there are at least two readings — one point is not a shape, and
+ * an axis around it is furniture around a fact.
+ */
+@Composable
+private fun ChartsCard(charts: HealthCharts) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(
+                stringResource(R.string.charts_today),
+                style = MaterialTheme.typography.titleMedium,
+            )
+
             if (charts.heartRate.size >= 2) {
                 ChartSection(stringResource(R.string.chart_heart_rate)) {
                     // Twenty beats is the narrowest spread worth the full height. A quiet
@@ -552,34 +705,23 @@ private fun TodayCard(
                     )
                 }
             }
+        }
+    }
+}
 
-            // Shown here and not written to Health Connect: the reading has never been
-            // checked against the watch's own screen, and a night recorded wrongly in a
-            // health record is worse than one that is missing.
-            sleep?.let {
-                MetricRow(
-                    icon = R.drawable.ic_metric_sleep,
-                    label = stringResource(R.string.metric_sleep),
-                    value = stringResource(
-                        R.string.metric_sleep_value,
-                        CLOCK_TIME.format(Instant.ofEpochSecond(it.startSeconds)),
-                        CLOCK_TIME.format(Instant.ofEpochSecond(it.wakeSeconds)),
-                    ),
-                )
-            }
+/**
+ * How often to ask the watch for the backlog.
+ *
+ * Each poll is radio time on both sides, so how often is the user's call — including not
+ * at all.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AutoSyncCard(selectedSeconds: Int, onAutoSyncSeconds: (Int) -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.auto_sync), style = MaterialTheme.typography.titleMedium)
 
-            // The watch's own clock, as the app can best see it. A zero above means
-            // "nothing recorded under today's date", which happens both when the watch
-            // was not worn and when its calendar has drifted off the phone's — and those
-            // want opposite responses, so the app should not make the user guess which.
-            WatchClockNote(state.watch)
-
-            HorizontalDivider()
-
-            Text(stringResource(R.string.auto_sync), style = MaterialTheme.typography.labelLarge)
-
-            // Each poll is radio time on both sides, so how often is the user's call —
-            // including not at all.
             // FlowRow, not Row: five chips do not fit a narrow screen, and a Row squeezes
             // the last one into a one-character-wide column rather than wrapping it.
             FlowRow(
@@ -588,7 +730,7 @@ private fun TodayCard(
             ) {
                 AUTO_SYNC_CHOICES.forEach { (seconds, labelRes) ->
                     FilterChip(
-                        selected = state.settings.autoSyncSeconds == seconds,
+                        selected = selectedSeconds == seconds,
                         onClick = { onAutoSyncSeconds(seconds) },
                         label = { Text(stringResource(labelRes)) },
                     )

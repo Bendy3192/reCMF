@@ -1,0 +1,209 @@
+/*
+ * reCMF — Copyright (C) 2026 reCMF contributors. AGPL-3.0-or-later.
+ */
+package dev.recmf.ui
+
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import java.time.LocalDate
+import java.time.format.TextStyle
+import java.util.Locale
+
+/**
+ * The two-column grid of measurements on the health screen.
+ *
+ * A tile answers three questions in the order they get asked: what is this, what does it
+ * read now, and is that usual for me. The last one is the reason the grid exists — a
+ * number on its own is only ever a number, and a week beside it is the cheapest context
+ * there is. Seven days is also exactly what the app keeps, so the strip is not a promise
+ * of history it cannot show.
+ *
+ * Colour is tonal and comes from the wallpaper palette like everything else here, so a
+ * tile's accent is a way of telling neighbours apart and never a way of saying something:
+ * every tile carries an icon and a name, and reads the same in one colour.
+ */
+
+/** How tall a week strip is drawn. Enough to read a shape, not enough to be a chart. */
+private val STRIP_HEIGHT = 28.dp
+
+/** The bar for a day with no reading, so an unworn day is visible as itself. */
+private val EMPTY_BAR_HEIGHT = 2.dp
+
+/** Enough separation to read seven bars as seven, at any width a phone offers. */
+private val STRIP_BAR_GAP = 4.dp
+
+/**
+ * The tonal role a tile wears.
+ *
+ * Four, cycled down the grid, because Material gives four container colours that are
+ * distinguishable at this size in every wallpaper palette. Assignment is by position in
+ * the grid rather than by meaning — see the note above.
+ */
+enum class TileAccent { PRIMARY, SECONDARY, TERTIARY, NEUTRAL }
+
+/** The tile's ground. */
+@Composable
+private fun TileAccent.container(): Color = when (this) {
+    TileAccent.PRIMARY -> MaterialTheme.colorScheme.primaryContainer
+    TileAccent.SECONDARY -> MaterialTheme.colorScheme.secondaryContainer
+    TileAccent.TERTIARY -> MaterialTheme.colorScheme.tertiaryContainer
+    TileAccent.NEUTRAL -> MaterialTheme.colorScheme.surfaceVariant
+}
+
+/** Everything drawn on that ground: text, icon and bars alike. */
+@Composable
+private fun TileAccent.content(): Color = when (this) {
+    TileAccent.PRIMARY -> MaterialTheme.colorScheme.onPrimaryContainer
+    TileAccent.SECONDARY -> MaterialTheme.colorScheme.onSecondaryContainer
+    TileAccent.TERTIARY -> MaterialTheme.colorScheme.onTertiaryContainer
+    TileAccent.NEUTRAL -> MaterialTheme.colorScheme.onSurfaceVariant
+}
+
+/**
+ * One measurement, with its week under it.
+ *
+ * @param value already formatted, because only the caller knows whether its number is
+ *   kilometres to one decimal or a whole count.
+ * @param week seven days oldest first, or empty to draw no strip at all. A single day is
+ *   not a trend and gets no strip either.
+ */
+@Composable
+fun MetricTile(
+    @DrawableRes icon: Int,
+    label: String,
+    value: String,
+    accent: TileAccent,
+    week: List<DayValue>,
+    modifier: Modifier = Modifier,
+) {
+    val content = accent.content()
+
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = accent.container()),
+    ) {
+        Column(
+            Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Icon(
+                    painter = painterResource(icon),
+                    contentDescription = null,
+                    tint = content,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = content,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+
+            Text(
+                value,
+                style = MaterialTheme.typography.headlineSmall,
+                color = content,
+                maxLines = 1,
+            )
+
+            // Two days is the least that can show a direction. One bar under a number is
+            // decoration, and the tile is better without it.
+            if (week.count { it.value != null } >= 2) {
+                Spacer(Modifier.height(2.dp))
+                WeekStrip(week, content)
+            }
+        }
+    }
+}
+
+/**
+ * Seven days as seven bars, oldest on the left, today on the right.
+ *
+ * Scaled to the week's own highest day, so the strip says how today sits against the days
+ * around it and never how it sits against a target — that is the ring's job, and it is the
+ * only measurement here that has a target at all.
+ *
+ * Today is drawn solid and the days behind it are faded. A day the watch reported nothing
+ * for keeps its column and gets a flat line: the difference between "did not move" and
+ * "was not worn" is the whole reason the strip is worth drawing.
+ */
+@Composable
+private fun WeekStrip(days: List<DayValue>, color: Color) {
+    val peak = days.mapNotNull { it.value }.maxOrNull() ?: return
+    val today = LocalDate.now()
+
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Canvas(
+            Modifier
+                .fillMaxWidth()
+                .height(STRIP_HEIGHT),
+        ) {
+            val gap = STRIP_BAR_GAP.toPx()
+            val slot = size.width / days.size
+            val width = (slot - gap).coerceAtLeast(1f)
+            val empty = EMPTY_BAR_HEIGHT.toPx()
+            val radius = CornerRadius(width / 2f, width / 2f)
+
+            days.forEachIndexed { index, day ->
+                // A day of zero and a day of nothing both come out as the flat line; only
+                // a day with a reading above zero gets height. Peak can itself be zero on
+                // a week spent indoors, and dividing by it would put every bar at the top.
+                val fraction = if (peak > 0f) (day.value ?: 0f) / peak else 0f
+                val height = (empty + (size.height - empty) * fraction).coerceAtMost(size.height)
+
+                drawRoundRect(
+                    color = color.copy(alpha = if (day.date == today) 1f else FADED),
+                    topLeft = Offset(index * slot + gap / 2f, size.height - height),
+                    size = Size(width, height),
+                    cornerRadius = radius,
+                )
+            }
+        }
+
+        Row(Modifier.fillMaxWidth()) {
+            days.forEach { day ->
+                Text(
+                    day.date.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = color.copy(alpha = if (day.date == today) 1f else FADED),
+                    maxLines = 1,
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
+}
+
+/** Behind today without disappearing: the past is context, not the subject. */
+private const val FADED = 0.45f

@@ -18,7 +18,7 @@
 
     <string name="today">Сегодня</string>
     <string name="metric_steps">шагов</string>
-    <string name="metric_heart_rate">уд/мин</string>
+    <string name="metric_heart_rate">Пульс</string>
 
     <string name="health_connect_available">Шаги и пульс пишутся в Health Connect — их видят другие приложения.</string>
     <string name="health_connect_update_required">Health Connect нужно обновить, прежде чем reCMF сможет писать данные.</string>
@@ -112,8 +112,8 @@
     <string name="background_work">Работа в фоне ограничена</string>
     <string name="background_work_explainer">Android может откладывать фоновые задачи reCMF, пока телефон простаивает — из-за этого прогноз и шаги обновляются раз в несколько часов. Разрешение на работу в фоне это снимает; reCMF всё так же просыпается только по своему интервалу обновления.</string>
     <string name="action_allow_background">Разрешить работу в фоне</string>
-    <string name="metric_spo2">кислород</string>
-    <string name="metric_stress">стресс</string>
+    <string name="metric_spo2">Кислород</string>
+    <string name="metric_stress">Стресс</string>
     <string name="metrics_waiting">Часы сегодня ещё ничего не прислали.</string>
     <string name="metric_sleep">Прошлая ночь</string>
     <string name="metric_sleep_value">%1$s → %2$s</string>
@@ -127,7 +127,7 @@
         <item quantity="many">Скопировано %d строк</item>
         <item quantity="other">Скопировано %d строки</item>
     </plurals>
-    <string name="metric_resting_heart_rate">пульс покоя</string>
+    <string name="metric_resting_heart_rate">Пульс покоя</string>
     <string name="tab_health">Здоровье</string>
     <string name="tab_device">Часы</string>
     <string name="find_watch">Найти часы</string>
@@ -167,4 +167,14 @@
     <string name="update_notification_text">Откройте reCMF, чтобы установить.</string>
     <string name="action_check_update">Проверить обновления</string>
     <string name="action_install_update">Скачать и установить</string>
+
+    <string name="metric_distance">Расстояние</string>
+    <string name="metric_calories">Калории</string>
+    <string name="metric_climbs">Подъёмы</string>
+    <string name="value_bpm">%1$d уд/мин</string>
+    <string name="value_km">%1$s км</string>
+    <string name="value_metres">%1$d м</string>
+    <string name="value_kcal">%1$d ккал</string>
+    <string name="value_percent">%1$d%%</string>
+    <string name="charts_today">Подробнее за сегодня</string>
 </resources>

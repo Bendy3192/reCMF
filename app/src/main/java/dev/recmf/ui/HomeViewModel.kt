@@ -13,6 +13,7 @@ import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.DiscoveredWatch
 import dev.recmf.ble.WatchScanner
 import dev.recmf.data.ActivitySampleEntity
+import dev.recmf.data.DailyTotals
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
@@ -60,6 +61,35 @@ data class HealthCharts(
     val spo2: List<ChartPoint> = emptyList(),
 )
 
+/**
+ * One day of one measurement.
+ *
+ * [value] is null for a day the watch reported nothing — not zero. A day not worn and a
+ * day spent still are different facts, and a bar of height zero says the second.
+ */
+data class DayValue(val date: LocalDate, val value: Float?)
+
+/** A cumulative counter's figure for a day: the highest reading, never the sum. */
+private fun highest(values: List<Float>): Float = values.max()
+
+/** A measurement's figure for a day, where there is no total to speak of. */
+private fun mean(values: List<Float>): Float = values.average().toFloat()
+
+/**
+ * The last seven days of each measurement, one figure per day, for the strips under the
+ * tiles. Always seven entries, oldest first, whether or not the watch has anything for
+ * them.
+ */
+data class WeeklySeries(
+    val steps: List<DayValue> = emptyList(),
+    val distanceMeters: List<DayValue> = emptyList(),
+    val calories: List<DayValue> = emptyList(),
+    val climbs: List<DayValue> = emptyList(),
+    val restingHeartRate: List<DayValue> = emptyList(),
+    val spo2: List<DayValue> = emptyList(),
+    val stress: List<DayValue> = emptyList(),
+)
+
 /** One app in the notification list, as the settings screen shows it. */
 data class NotificationApp(
     val packageName: String,
@@ -71,7 +101,8 @@ data class HomeUiState(
     val connection: ConnectionState = ConnectionState.IDLE,
     val settings: WatchSettings = WatchSettings(),
     val watch: WatchInfo = WatchInfo(),
-    val stepsToday: Int = 0,
+    /** Steps, distance, calories and climbs since midnight, as the watch counts them. */
+    val today: DailyTotals = DailyTotals(),
     val latestHeartRate: HeartRateSampleEntity? = null,
     val weather: WeatherStatus = WeatherStatus(),
     /** Percent, from the day's newest stored reading. */
@@ -169,7 +200,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         watchInfo,
         // Bound at construction, so a screen left open across midnight keeps counting
         // into yesterday until it is recreated.
-        dao.stepsSince(startOfToday()),
+        dao.totalsSince(startOfToday()),
         combine(
             dao.latestHeartRate(),
             weatherStatus,
@@ -183,12 +214,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             dao.latestRestingHeartRateSince(startOfToday()).map { it?.bpm },
             ::Extras,
         ),
-    ) { connection, settings, watch, steps, extras ->
+    ) { connection, settings, watch, today, extras ->
         HomeUiState(
             connection = connection,
             settings = settings,
             watch = watch,
-            stepsToday = steps,
+            today = today,
             latestHeartRate = extras.heartRate,
             weather = extras.weather,
             spo2 = extras.spo2,
@@ -384,6 +415,57 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), HealthCharts())
 
     /**
+     * The last seven days, one figure per measurement per day.
+     *
+     * Read from the same staging table as the day's charts, over a wider window. The
+     * table keeps a week and no more, which is exactly what these strips draw — so this
+     * asks for everything there is and nothing that has been pruned.
+     *
+     * Counters take the day's maximum, because the watch reports them cumulatively and a
+     * sum would multiply the day by the number of syncs. Measurements take the day's
+     * mean, because a heart rate has no daily total to speak of.
+     */
+    val weekly: StateFlow<WeeklySeries> = combine(
+        dao.activitySince(startOfWeek()),
+        dao.restingHeartRateSince(startOfWeek()),
+        dao.spo2Since(startOfWeek()),
+        dao.stressSince(startOfWeek()),
+    ) { activity, resting, spo2, stress ->
+        WeeklySeries(
+            steps = activity.byDay({ it.timestamp }, { it.steps.toFloat() }, ::highest),
+            distanceMeters =
+                activity.byDay({ it.timestamp }, { it.distanceMeters.toFloat() }, ::highest),
+            calories = activity.byDay({ it.timestamp }, { it.calories.toFloat() }, ::highest),
+            climbs = activity.byDay({ it.timestamp }, { it.climbs.toFloat() }, ::highest),
+            restingHeartRate = resting.byDay({ it.timestamp }, { it.bpm.toFloat() }, ::mean),
+            spo2 = spo2.byDay({ it.timestamp }, { it.percent.toFloat() }, ::mean),
+            stress = stress.byDay({ it.timestamp }, { it.level.toFloat() }, ::mean),
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), WeeklySeries())
+
+    /**
+     * Groups readings into the seven days ending today, in the phone's own time zone.
+     *
+     * A day the watch said nothing about comes back null rather than absent, so the strip
+     * keeps its seven columns and a gap stays a gap. Grouping is done here and not in SQL
+     * because a local calendar day is not something epoch seconds know about.
+     */
+    private fun <T> List<T>.byDay(
+        at: (T) -> Long,
+        value: (T) -> Float,
+        summarise: (List<Float>) -> Float,
+    ): List<DayValue> {
+        val zone = ZoneId.systemDefault()
+        val byDate = groupBy { Instant.ofEpochSecond(at(it)).atZone(zone).toLocalDate() }
+        val today = LocalDate.now()
+
+        return (DAYS_IN_STRIP - 1L downTo 0L).map { back ->
+            val date = today.minusDays(back)
+            DayValue(date, byDate[date]?.map(value)?.takeIf { it.isNotEmpty() }?.let(summarise))
+        }
+    }
+
+    /**
      * The day's steps, split into the hour each one was taken in.
      *
      * The table holds a cumulative counter, so this is the same differencing that feeds
@@ -478,7 +560,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         const val HOURS_IN_DAY = 24
 
+        /** A week, which is also everything the staging table keeps. */
+        const val DAYS_IN_STRIP = 7
+
         fun startOfToday(): Long =
             LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond()
+
+        /** Midnight at the start of the oldest day the seven-day strips show. */
+        fun startOfWeek(): Long = LocalDate.now()
+            .minusDays(DAYS_IN_STRIP - 1L)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toEpochSecond()
     }
 }
