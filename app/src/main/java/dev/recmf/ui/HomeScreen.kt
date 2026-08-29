@@ -639,8 +639,8 @@ private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) 
  * composition, where `stringResource` cannot be called.
  */
 private class TileSpec(
-    @DrawableRes val icon: Int,
-    @StringRes val label: Int,
+    @param:DrawableRes val icon: Int,
+    @param:StringRes val label: Int,
     val week: List<DayValue> = emptyList(),
     val value: (Context) -> String,
 )
