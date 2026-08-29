@@ -137,20 +137,27 @@ fun BarChart(
  *
  * A line through four points pretends to know what happened between them. Blood oxygen is
  * measured now and then, not continuously, and dots say so.
+ *
+ * The scale is the day's own, widened to [minimumSpan] so that readings a percent apart
+ * do not land at opposite edges. A fixed 90-100 was tried first and was worse: a day that
+ * never left 97-99 came out as a straight row of dots across the middle, which is a chart
+ * saying nothing at all. The caller prints the range it drew, so the dots have a scale.
  */
 @Composable
 fun DotChart(
     points: List<ChartPoint>,
     color: Color,
     modifier: Modifier = Modifier,
-    range: ClosedFloatingPointRange<Float>? = null,
+    minimumSpan: Float = 0f,
 ) {
     if (points.isEmpty()) return
 
-    val minValue = range?.start ?: points.minOf { it.value }
-    val span = range?.let { it.endInclusive - it.start }
-        ?: (points.maxOf { it.value } - points.minOf { it.value }).takeIf { it > 0f }
-        ?: 1f
+    val low = points.minOf { it.value }
+    val high = points.maxOf { it.value }
+    val padding = ((minimumSpan - (high - low)) / 2f).coerceAtLeast(0f)
+
+    val minValue = low - padding
+    val span = (high + padding - minValue).takeIf { it > 0f } ?: 1f
 
     val firstTime = points.first().atSeconds.toFloat()
     val timeSpan = (points.last().atSeconds - points.first().atSeconds).toFloat().takeIf { it > 0f } ?: 1f

@@ -186,4 +186,5 @@
     <string name="sleep_stage_unknown">Не распознано</string>
     <string name="duration_hm">%1$d ч %2$d мин</string>
     <string name="duration_m">%1$d мин</string>
+    <string name="chart_range_percent">%1$d–%2$d %%</string>
 </resources>

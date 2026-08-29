@@ -84,6 +84,7 @@ private fun mean(values: List<Float>): Float = values.average().toFloat()
  * them.
  */
 data class WeeklySeries(
+    val heartRate: List<DayValue> = emptyList(),
     val steps: List<DayValue> = emptyList(),
     val distanceMeters: List<DayValue> = emptyList(),
     val calories: List<DayValue> = emptyList(),
@@ -430,11 +431,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     val weekly: StateFlow<WeeklySeries> = combine(
         dao.activitySince(startOfWeek()),
+        dao.heartRateSince(startOfWeek()),
         dao.restingHeartRateSince(startOfWeek()),
         dao.spo2Since(startOfWeek()),
         dao.stressSince(startOfWeek()),
-    ) { activity, resting, spo2, stress ->
+    ) { activity, heartRate, resting, spo2, stress ->
         WeeklySeries(
+            heartRate = heartRate.byDay({ it.timestamp }, { it.bpm.toFloat() }, ::mean),
             steps = activity.byDay({ it.timestamp }, { it.steps.toFloat() }, ::highest),
             distanceMeters =
                 activity.byDay({ it.timestamp }, { it.distanceMeters.toFloat() }, ::highest),

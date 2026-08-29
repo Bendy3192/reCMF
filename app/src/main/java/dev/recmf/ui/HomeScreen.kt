@@ -30,6 +30,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -505,20 +507,35 @@ private fun TodayCard(
 
                 Column(
                     Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Nights go to Health Connect now, so this is a summary of a record
-                    // rather than the only place it exists. The stage breakdown has a
-                    // card of its own.
+                    // The name above the times rather than beside them. Squeezed into one
+                    // row next to the ring, "Last night" wrapped mid-word, which is a
+                    // layout deciding for itself that a two-word label is a paragraph.
                     sleep?.let {
-                        MetricRow(
-                            icon = R.drawable.ic_metric_sleep,
-                            label = stringResource(R.string.metric_sleep),
-                            value = stringResource(
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_metric_sleep),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Text(
+                                stringResource(R.string.metric_sleep),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            stringResource(
                                 R.string.metric_sleep_value,
                                 CLOCK_TIME.format(Instant.ofEpochSecond(it.startSeconds)),
                                 CLOCK_TIME.format(Instant.ofEpochSecond(it.wakeSeconds)),
                             ),
+                            style = MaterialTheme.typography.titleMedium,
                         )
                     }
 
@@ -557,10 +574,12 @@ private fun TodayCard(
  */
 private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) {
     val tiles = buildList {
-        state.latestHeartRate?.let {
-            add(TileSpec(R.drawable.ic_metric_heart, R.string.metric_heart_rate) { context ->
-                context.getString(R.string.value_bpm, it.bpm)
-            })
+        state.latestHeartRate?.let { latest ->
+            add(
+                TileSpec(R.drawable.ic_metric_heart, R.string.metric_heart_rate, weekly.heartRate) {
+                    it.getString(R.string.value_bpm, latest.bpm)
+                },
+            )
         }
         state.restingHeartRate?.let { bpm ->
             add(
@@ -607,8 +626,13 @@ private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) 
     // a lazy grid inside a lazy column is an unbounded height inside an infinite one.
     tiles.chunked(2).forEachIndexed { row, pair ->
         item(key = "tiles-$row") {
+            // Both tiles take the height of the taller one. Without this a pair where only
+            // one has a week strip sits with a step in its bottom edge, and the grid reads
+            // as broken rather than as two cards of different content.
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 val context = LocalContext.current
@@ -620,7 +644,9 @@ private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) 
                         value = tile.value(context),
                         accent = ACCENTS[(row * 2 + column) % ACCENTS.size],
                         week = tile.week,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
                     )
                 }
 
@@ -701,15 +727,20 @@ private fun ChartsCard(charts: HealthCharts) {
             }
 
             if (charts.spo2.isNotEmpty()) {
-                ChartSection(stringResource(R.string.chart_spo2)) {
-                    // A fixed scale, because blood oxygen has one. Ninety to a hundred is
-                    // the range the number means something in, and drawn against the day's
-                    // own minimum and maximum instead, two readings a percent apart sat at
-                    // opposite edges of the chart — which is what the first version did.
+                val low = charts.spo2.minOf { it.value }.toInt()
+                val high = charts.spo2.maxOf { it.value }.toInt()
+
+                ChartSection(
+                    stringResource(R.string.chart_spo2),
+                    note = stringResource(R.string.chart_range_percent, low, high),
+                ) {
+                    // Four percent is the narrowest scale worth the full height: a day
+                    // that never leaves 97-99 still shows which readings were the low
+                    // ones. A fixed 90-100 was tried and drew that day as a flat row.
                     DotChart(
                         charts.spo2,
                         MaterialTheme.colorScheme.tertiary,
-                        range = 90f..100f,
+                        minimumSpan = 4f,
                     )
                 }
             }
@@ -1630,49 +1661,30 @@ private fun StepsRing(steps: Int, goal: Int) {
 }
 
 /**
- * One measurement: what it is, and what it reads. Absent when there is nothing to read.
+ * A chart under the name of the thing it draws.
  *
- * This used to hold its place with an em dash, on the reasoning that a row appearing and
- * disappearing makes the card jump. In front of a real watch that reasoning lost: most of
- * these arrive only when the wearer sits still for a measurement, so the ordinary state of
- * the card was a column of dashes with one number in it, which reads as an app that cannot
- * do anything rather than one waiting for something. The whole block says "nothing yet"
- * once, in words, and that is the case the dashes were there for.
+ * [note] is the range the chart was drawn against, when it has one. Marks without a scale
+ * are a picture of a shape, not a reading — and blood oxygen spends whole days inside two
+ * percent, where the shape is the only thing the dots can show.
  */
 @Composable
-private fun MetricRow(@DrawableRes icon: Int, label: String, value: String?) {
-    if (value == null) return
-
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(18.dp),
-        )
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.weight(1f),
-        )
-        Text(value, style = MaterialTheme.typography.titleMedium)
-    }
-}
-
-/** A chart under the name of the thing it draws. */
-@Composable
-private fun ChartSection(title: String, chart: @Composable () -> Unit) {
+private fun ChartSection(title: String, note: String? = null, chart: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            title,
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                title,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+            )
+            note?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
         chart()
     }
 }
