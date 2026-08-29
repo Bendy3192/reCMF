@@ -145,23 +145,26 @@ Nights now go to Health Connect as a `SleepSessionRecord` with its stages, keyed
 the night began so a re-delivery replaces rather than stacks. It needs the sleep
 permission, which is new, so Health Connect will ask once more.
 
-**The stage codes are 1 deep, 2 light, 3 REM**, and that was in doubt for a while. Google
-Health's own reading of a night put REM above deep, which is the opposite of what reCMF
-reported, and a swapped mapping would look exactly like that. Nothing X settled it. The
-two apps have not yet covered the same night, so the comparison is of shares rather than
-minutes — but the shares are not close to ambiguous:
+**The stage codes are 1 deep, 2 light, 3 REM**, and that was in doubt for a while. A
+Fitbit Air, read through Google Health, put REM above deep on a night the CMF was also on
+the wrist — the opposite of what reCMF reported, and exactly what a swapped mapping would
+look like. Nothing X, the CMF's own app, settled it. reCMF and Nothing X have not yet
+covered the same night, so their comparison is of shares rather than minutes:
 
 | | deep | light | REM |
 | --- | --- | --- | --- |
 | reCMF, 7h03 night | 28% | 57% | 15% |
 | Nothing X, 8h01 night | 31% | 57% | 13% |
-| Google Health, the same night as Nothing X | 22% | 58% | 21% |
+| Fitbit Air, the same night as the Nothing X row | 22% | 58% | 21% |
 
-reCMF and the vendor's own app agree on the light share to the point and order deep above
-REM the same way. Google Health disagrees with *both* — it is not reading the watch's
-stages at all, it is computing its own from what it has, which is why it also reports six
-minutes awake and twelve restless that neither of the other two knows anything about. The
-mapping ported from Gadgetbridge is right; the disagreement was never with the watch.
+reCMF and the vendor's own app agree on the light share to the point and order deep well
+above REM the same way. The odd row out is a *different device*: the Fitbit sat on the
+same night as the CMF and the two agree closely on what matters least here — the night
+ran 22:18-06:17 against 22:17-06:18, and light came out 4h33 against 4h32 — then split
+the rest differently, which is the ordinary disagreement between two vendors' staging
+algorithms, and also where the Fitbit's six waking and twelve restless minutes come from.
+It was never evidence about the CMF's codes. The mapping ported from Gadgetbridge is
+right.
 
 **Workouts and their GPS tracks** are the one thing left here, and the one place where a
 captured log of real bytes is needed rather than a precaution.
