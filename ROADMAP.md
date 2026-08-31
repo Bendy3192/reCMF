@@ -255,8 +255,26 @@ though still short of a test.
 
 Getting a face file to try needs the official app's copy of one: they land in
 `/data/data/com.nothing.smartcenter/app_flutter/dial/market/dial_file/` as
-`watchface_<hash>.bin`, which is a private directory and needs root to reach. This is the
-one place in the whole project where root buys something ADB cannot.
+`watchface_<hash>.bin`, which is a private directory and needs root to reach.
+
+**Somebody has already put third-party faces on this watch, and not over BLE.** An
+r/CMFTech post from five months ago (u/WaltzExisting, "Custom Watchfaces for Watch Pro 2")
+reports finding the ODM behind the watch, which ships its own companion app with its own
+catalogue of faces, and sideloading those onto a Pro 2 — most work, some crash. How it was
+done is the part worth reading: *"gadgetbridge upload didn't work for me so I just wrote a
+small mitmproxy script that would serve the other app's watchface bin instead of nothing's
+when downloading via the CMF Watch app."* Nothing X is out because of certificate pinning;
+the older CMF Watch app is not.
+
+So the BLE upload is still unsolved in public — it was **bypassed**, not fixed. The
+official app did the transfer over its own working protocol and only the bytes it fetched
+were swapped. Which leaves the id field at step 3 exactly where Gadgetbridge left it, and
+leaves `ffff/a055` still the only list of ids either project has.
+
+That also points at the cheapest way to finish this: install a face through the **CMF
+Watch** app with the Bluetooth HCI snoop log running, then pull `btsnoop_hci.log` out of
+`adb bugreport`. The `ffff/9063` frame in it carries the length and the id the app really
+sent, and the file it was sending. No root, no proxy, and it settles step 3 outright.
 
 **Switching between the faces already on the watch is a separate and much smaller
 question**, and it is not in this phase. It needs no file transfer at all.
