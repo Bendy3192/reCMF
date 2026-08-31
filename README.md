@@ -18,7 +18,8 @@ stock app does badly: stay connected without being killed, and put the watch's d
 
 > **Status: in daily use against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
 > steps, heart rate, resting heart rate, blood oxygen, stress, weather, notifications,
-> incoming calls, alarms, find-watch and sleep with its stages are confirmed on hardware.
+> incoming calls, alarms, find-watch, switching the watch face, and sleep with its stages
+> are confirmed on hardware.
 > Only one watch on one firmware has ever run it — see [What is verified](#what-is-verified) before trusting it with
 > anything.
 
@@ -112,11 +113,12 @@ exists because of it.
 | Find phone | The watch's own button rings the phone, on the alarm stream so a silent phone still answers |
 | Updates | Checks this repository's releases once a day, says what changed, and installs them |
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
-| UI | Compose, Material 3, dynamic colour, two tabs |
+| Watch face | Lists the six the watch holds, says which is on, and switches between them |
+| UI | Compose, Material 3, dynamic colour, three tabs |
 
 **Not done:** workouts and their GPS tracks, contacts, a call screen with answer and
-reject, watchfaces, firmware. Daily goals are read from the watch but cannot be written
-to it — see the roadmap.
+reject, *installing* watchfaces, firmware. Daily goals are read from the watch but cannot
+be written to it — see the roadmap.
 
 ### About Material 3 Expressive
 

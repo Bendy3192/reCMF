@@ -373,6 +373,9 @@ reCMF sends everything except the active byte back untouched, including the two 
 bytes nobody has explained: the one thing known about this frame is that the watch accepts
 its own list, and a byte improved on the way out is a byte no capture supports.
 
+**Confirmed on hardware.** The picker switches faces on a real Watch Pro 2, firmware
+1.0.0.73.
+
 **Installing a face replaces a slot rather than adding one.** Before: 274, **273**, 275,
 276, 277, 280. After installing "Combo": 274, **366**, 275, 276, 277, 280 — still six, with
 the new id in the second slot, and the active byte pointing at it. So the watch holds a
