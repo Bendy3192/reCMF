@@ -393,9 +393,24 @@ fringes on white glyphs are tinted, so it is one or the other and a photograph o
 settles it — and the meaning of the placement bytes after each element, which is where a
 picture goes rather than what it is.
 
-**So building a face is now a matter of writing the format rather than reading it.** The
-first useful thing to do with that is not a whole editor: it is swapping one picture in a
-face somebody already has for a photograph of their own.
+**And the format can be written as well as read.** `tools/watchface.py` now carries an LZ4
+compressor and a rebuilder: it takes a face apart, puts it back together, and checks that
+every picture in the result still decodes to the same pixels. Both known faces survive that
+round trip, coming out a little larger than they went in — our compressor is greedy where
+theirs is not — but pixel for pixel identical.
+
+Rebuilding is less work than it sounds, because the element table keeps its shape: only the
+offsets and the sizes inside it move. The one trap is that several elements can point at the
+*same* run of pictures — the hours and the minutes share a set of digits — so every record
+naming a run has to be moved, not just the first one found.
+
+**One picture cannot exceed 65535 bytes**, because that is what the element table has to say
+its size with. A 466 by 466 background is 651468 bytes of RGB888 before compression, so a
+photograph will not fit as it is; flat artwork will, easily. A generated gradient across the
+whole screen comes to 8225 bytes.
+
+The first useful thing to build on this is not an editor: it is swapping one picture in a
+face somebody already has for one of their own.
 
 The feedback loop for cracking it is slow but real: build a file, send it, look at the watch.
 A minute an attempt, and the answer is on the screen.

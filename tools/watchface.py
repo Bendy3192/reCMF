@@ -139,6 +139,162 @@ def rgb(pixels: bytes, tag: int) -> bytes:
     return bytes(out)
 
 
+
+def lz4_compress(src: bytes) -> bytes:
+    """A plain LZ4 block, good enough to be smaller than the input and correct enough for
+    a decoder that is not ours.
+
+    Greedy: hash four bytes, remember where they were, take the first match that verifies.
+    The spec's two end rules are kept because the watch's decoder is not ours to test —
+    the last five bytes are always literals, and no match starts within twelve of the end.
+    """
+    out = bytearray()
+    table: dict[int, int] = {}
+    at = 0
+    anchor = 0
+    end = len(src)
+    last_match = max(0, end - 12)
+
+    def emit(literals: bytes, match_length: int, offset: int) -> None:
+        # A match of the minimum four bytes has a length field of nought, which is not the
+        # same as having no match at all. The offset is what says which it is.
+        out.append((min(len(literals), 15) << 4) | min(match_length, 15))
+        if len(literals) >= 15:
+            spill = len(literals) - 15
+            while spill >= 255:
+                out.append(255)
+                spill -= 255
+            out.append(spill)
+        out.extend(literals)
+        if offset:
+            out.append(offset & 0xFF)
+            out.append(offset >> 8)
+            if match_length >= 15:
+                spill = match_length - 15
+                while spill >= 255:
+                    out.append(255)
+                    spill -= 255
+                out.append(spill)
+
+    while at < last_match:
+        key = int.from_bytes(src[at:at + 4], "little")
+        found = table.get(key, -1)
+        table[key] = at
+
+        if found < 0 or at - found > 0xFFFF or src[found:found + 4] != src[at:at + 4]:
+            at += 1
+            continue
+
+        length = 4
+        while (at + length < last_match
+               and src[found + length] == src[at + length]
+               and length < 0xFFFF):
+            length += 1
+
+        emit(src[anchor:at], length - 4, at - found)
+        for step in range(at + 1, at + length):
+            if step + 4 <= end:
+                table[int.from_bytes(src[step:step + 4], "little")] = step
+        at += length
+        anchor = at
+
+    emit(src[anchor:], 0, 0)
+    return bytes(out)
+
+
+def encode(pixels: bytes, tag: int) -> bytes:
+    """Three bytes a pixel back into whatever the picture stores."""
+    if tag == 5:
+        return pixels
+    out = bytearray()
+    for at in range(0, len(pixels), 3):
+        red, green, blue = pixels[at] >> 3, pixels[at + 1] >> 2, pixels[at + 2] >> 3
+        value = (red << 11) | (green << 5) | blue
+        out += bytes((value & 0xFF, value >> 8))
+    return bytes(out)
+
+
+def picture(tag: int, width: int, height: int, pixels: bytes) -> bytes:
+    """One picture, header and all, ready to sit in the resource blob."""
+    body = lz4_compress(encode(pixels, tag))
+    word = (width * 4) | ((height * 2) << 12)
+    return (bytes((tag, word & 0xFF, (word >> 8) & 0xFF, (word >> 16) & 0xFF))
+            + struct.pack("<I", len(body)) + body)
+
+
+def all_records(face: bytes, table: int) -> list[tuple[int, int, int, list[int]]]:
+    """Every element record in the table, as (offset, count, start, sizes).
+
+    A face can hold several elements pointing at the *same* run of pictures — the hours and
+    the minutes share one set of digits — so a rewrite has to move every record that names
+    a run, not just the first one found.
+    """
+    out = []
+    for at in range(TABLE_START, table - 7):
+        if face[at] != 0x61 or face[at + 2] != 0:
+            continue
+        count = face[at + 1]
+        if not 1 <= count <= 16 or at + 7 + 2 * count > table:
+            continue
+        start = struct.unpack_from("<I", face, at + 3)[0]
+        sizes = list(struct.unpack_from(f"<{count}H", face, at + 7))
+        if 0 in sizes or not 0 < start <= len(face) or start + sum(sizes) > len(face):
+            continue
+        out.append((at, count, start, sizes))
+    return out
+
+
+def rebuild(face: bytes, replaced: dict[tuple[int, int], bytes]) -> bytes:
+    """Writes the face back out, with any pictures in [replaced] swapped in.
+
+    Everything before the resources keeps its bytes — the element table is the same shape,
+    only the offsets and sizes inside it move — so this touches as little as a rewrite can.
+    """
+    content, resources = struct.unpack_from("<II", face, CONTENT_SIZE_OFFSET)
+    table = content - resources
+    out = bytearray(face[:table])
+
+    records = all_records(face, table)
+    blob = bytearray()
+    moved: dict[int, tuple[int, list[int]]] = {}
+
+    for index, (start, _count, sizes) in enumerate(elements(face)):
+        where = table + len(blob)
+        built_sizes = []
+        at = start
+        for which, size in enumerate(sizes):
+            tag = face[at]
+            word = face[at + 1] | (face[at + 2] << 8) | (face[at + 3] << 16)
+            width, height = dimensions(word)
+            pixels = replaced.get((index, which))
+            if pixels is None:
+                pixels = rgb(lz4_block(face[at + 8:at + size])[0], tag)
+            built = picture(tag, width, height, pixels)
+            if len(built) > 0xFFFF:
+                raise ValueError(
+                    f"picture {index}.{which} comes to {len(built)} bytes, and the element "
+                    "table has sixteen bits to say so — it has to fit in 65535")
+            built_sizes.append(len(built))
+            blob += built
+            at += size
+        moved[start] = (where, built_sizes)
+
+    for at, _count, start, _sizes in records:
+        if start not in moved:
+            continue
+        where, built_sizes = moved[start]
+        struct.pack_into("<I", out, at + 3, where)
+        for which, size in enumerate(built_sizes):
+            struct.pack_into("<H", out, at + 7 + 2 * which, size)
+
+    out += blob
+    # Everything before the closing copy, and the pictures alone: the two lengths the header
+    # carries. Their difference is the table, which has not moved.
+    struct.pack_into("<I", out, CONTENT_SIZE_OFFSET, len(out))
+    struct.pack_into("<I", out, RESOURCE_SIZE_OFFSET, len(blob))
+    return bytes(out) + bytes(out[:HEADER_BYTES])
+
+
 def write_png(path: str, width: int, height: int, pixels: bytes) -> None:
     rows = b"".join(
         b"\x00" + pixels[y * width * 3:(y + 1) * width * 3] for y in range(height)
@@ -155,10 +311,25 @@ def write_png(path: str, width: int, height: int, pixels: bytes) -> None:
         out.write(chunk(b"IEND", b""))
 
 
+def pictures_of(face: bytes) -> list[bytes]:
+    """Every picture in a face as plain RGB, for comparing one face against another."""
+    out = []
+    for start, _count, sizes in elements(face):
+        at = start
+        for size in sizes:
+            tag = face[at]
+            out.append(rgb(lz4_block(face[at + 8:at + size])[0], tag))
+            at += size
+    return out
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("face")
     parser.add_argument("--png", metavar="DIR", help="write every picture here as a PNG")
+    parser.add_argument("--rebuild", metavar="FILE",
+                        help="write the face back out, recompressed, and check that every "
+                             "picture in it still decodes to the same pixels")
     args = parser.parse_args()
 
     face = open(args.face, "rb").read()
@@ -176,6 +347,17 @@ def main() -> None:
 
     if args.png:
         os.makedirs(args.png, exist_ok=True)
+
+    if args.rebuild:
+        rebuilt = rebuild(face, {})
+        before = [pictures_of(face)]
+        after = [pictures_of(rebuilt)]
+        if before != after:
+            print("the rebuilt face does not decode to the same pixels", file=sys.stderr)
+            raise SystemExit(1)
+        open(args.rebuild, "wb").write(rebuilt)
+        print(f"  rebuilt: {len(rebuilt)} bytes, every picture identical")
+        return
 
     for index, (start, count, sizes) in enumerate(elements(face)):
         kinds = {1: "static", 2: "two-state", 7: "days of the week", 10: "digits 0-9"}
