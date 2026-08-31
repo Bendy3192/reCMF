@@ -8,12 +8,17 @@ rather than halfway through a Bluetooth transfer.
 
     file      header 36 | name block | element table | resources | header again, 36
     element   61 | count:u8 | 00 | start:u32 | count sizes:u16 | placement
-    image     tag:u8 | dimensions:u24 | length:u32 | LZ4 block
+    image     lv_img_header_t:u32 | length:u32 | LZ4 block
 
 `count` is how many pictures an element cycles through: 1 is a static image, 10 a digit
-place, 7 the days of the week, 2 a two-state icon. The dimensions are packed oddly — the low
-twelve bits are the width times four and the high twelve the height times two — and the tag
-is the pixel format: 4 is RGB565, 5 is RGB888.
+place, 7 the days of the week, 2 a two-state icon.
+
+The image header is **LVGL's own** — the watch runs Zephyr and LVGL — so it is one
+little-endian word: colour format in the low 5 bits, three bits that are always zero, two
+reserved, then width in 11 bits and height in 11. Only two colour formats appear:
+`LV_IMG_CF_TRUE_COLOR` (4), which is RGB565 at two bytes a pixel, and
+`LV_IMG_CF_TRUE_COLOR_ALPHA` (5), which is RGB565 followed by one byte of alpha — three
+bytes a pixel, and *not* RGB888.
 
 The pictures are LZ4 blocks. Their match offsets are usually exactly one row, which is a
 compressor saying "this row is the last one again" and is what makes a watchface with large
@@ -37,7 +42,9 @@ CONTENT_SIZE_OFFSET = 24
 RESOURCE_SIZE_OFFSET = 28
 TABLE_START = 120
 
-BYTES_PER_PIXEL = {4: 2, 5: 3}
+TRUE_COLOR = 4
+TRUE_COLOR_ALPHA = 5
+BYTES_PER_PIXEL = {TRUE_COLOR: 2, TRUE_COLOR_ALPHA: 3}
 
 
 def lz4_block(src: bytes) -> tuple[bytes, int]:
@@ -93,9 +100,13 @@ def extend(src: bytes, at: int, value: int) -> tuple[int, int]:
             return value, at
 
 
-def dimensions(word: int) -> tuple[int, int]:
-    """Width times four in the low twelve bits, height times two in the high twelve."""
-    return (word & 0xFFF) // 4, (word >> 12) // 2
+def header(word: int) -> tuple[int, int, int]:
+    """LVGL's image header: colour format, width, height."""
+    return word & 0x1F, (word >> 10) & 0x7FF, (word >> 21) & 0x7FF
+
+
+def header_word(cf: int, width: int, height: int) -> int:
+    return cf | (width << 10) | (height << 21)
 
 
 def elements(face: bytes) -> list[tuple[int, int, list[int]]]:
@@ -127,15 +138,23 @@ def elements(face: bytes) -> list[tuple[int, int, list[int]]]:
     return walked
 
 
-def rgb(pixels: bytes, tag: int) -> bytes:
-    """Whatever the picture stores, as three bytes a pixel."""
-    if tag == 5:
-        return pixels
+def rgba(pixels: bytes, cf: int) -> bytes:
+    """Whatever the picture stores, as four bytes a pixel.
+
+    One representation for both formats keeps everything above this honest: a picture that
+    carries transparency keeps it through a rebuild instead of being flattened onto black.
+    """
+    step = BYTES_PER_PIXEL[cf]
     out = bytearray()
-    for at in range(0, len(pixels), 2):
+    for at in range(0, len(pixels), step):
         value = pixels[at] | (pixels[at + 1] << 8)
-        red, green, blue = (value >> 11) & 0x1F, (value >> 5) & 0x3F, value & 0x1F
-        out += bytes((red * 255 // 31, green * 255 // 63, blue * 255 // 31))
+        alpha = pixels[at + 2] if cf == TRUE_COLOR_ALPHA else 255
+        out += bytes((
+            ((value >> 11) & 0x1F) * 255 // 31,
+            ((value >> 5) & 0x3F) * 255 // 63,
+            (value & 0x1F) * 255 // 31,
+            alpha,
+        ))
     return bytes(out)
 
 
@@ -202,24 +221,25 @@ def lz4_compress(src: bytes) -> bytes:
     return bytes(out)
 
 
-def encode(pixels: bytes, tag: int) -> bytes:
-    """Three bytes a pixel back into whatever the picture stores."""
-    if tag == 5:
-        return pixels
+def encode(pixels: bytes, cf: int) -> bytes:
+    """Four bytes a pixel back into whatever the picture stores.
+
+    Round trips exactly: expanding five bits to eight and taking the top five again gives
+    back what was there, so a rebuilt picture is the same picture.
+    """
     out = bytearray()
-    for at in range(0, len(pixels), 3):
-        red, green, blue = pixels[at] >> 3, pixels[at + 1] >> 2, pixels[at + 2] >> 3
-        value = (red << 11) | (green << 5) | blue
+    for at in range(0, len(pixels), 4):
+        value = ((pixels[at] >> 3) << 11) | ((pixels[at + 1] >> 2) << 5) | (pixels[at + 2] >> 3)
         out += bytes((value & 0xFF, value >> 8))
+        if cf == TRUE_COLOR_ALPHA:
+            out.append(pixels[at + 3])
     return bytes(out)
 
 
-def picture(tag: int, width: int, height: int, pixels: bytes) -> bytes:
+def picture(cf: int, width: int, height: int, pixels: bytes) -> bytes:
     """One picture, header and all, ready to sit in the resource blob."""
-    body = lz4_compress(encode(pixels, tag))
-    word = (width * 4) | ((height * 2) << 12)
-    return (bytes((tag, word & 0xFF, (word >> 8) & 0xFF, (word >> 16) & 0xFF))
-            + struct.pack("<I", len(body)) + body)
+    body = lz4_compress(encode(pixels, cf))
+    return struct.pack("<II", header_word(cf, width, height), len(body)) + body
 
 
 def all_records(face: bytes, table: int) -> list[tuple[int, int, int, list[int]]]:
@@ -263,13 +283,11 @@ def rebuild(face: bytes, replaced: dict[tuple[int, int], bytes]) -> bytes:
         built_sizes = []
         at = start
         for which, size in enumerate(sizes):
-            tag = face[at]
-            word = face[at + 1] | (face[at + 2] << 8) | (face[at + 3] << 16)
-            width, height = dimensions(word)
+            cf, width, height = header(struct.unpack_from("<I", face, at)[0])
             pixels = replaced.get((index, which))
             if pixels is None:
-                pixels = rgb(lz4_block(face[at + 8:at + size])[0], tag)
-            built = picture(tag, width, height, pixels)
+                pixels = rgba(lz4_block(face[at + 8:at + size])[0], cf)
+            built = picture(cf, width, height, pixels)
             if len(built) > 0xFFFF:
                 raise ValueError(
                     f"picture {index}.{which} comes to {len(built)} bytes, and the element "
@@ -296,8 +314,9 @@ def rebuild(face: bytes, replaced: dict[tuple[int, int], bytes]) -> bytes:
 
 
 def write_png(path: str, width: int, height: int, pixels: bytes) -> None:
+    """RGBA, so a picture's transparency survives being looked at."""
     rows = b"".join(
-        b"\x00" + pixels[y * width * 3:(y + 1) * width * 3] for y in range(height)
+        b"\x00" + pixels[y * width * 4:(y + 1) * width * 4] for y in range(height)
     )
 
     def chunk(kind: bytes, body: bytes) -> bytes:
@@ -306,7 +325,7 @@ def write_png(path: str, width: int, height: int, pixels: bytes) -> None:
 
     with open(path, "wb") as out:
         out.write(b"\x89PNG\r\n\x1a\n")
-        out.write(chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)))
+        out.write(chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0)))
         out.write(chunk(b"IDAT", zlib.compress(rows, 9)))
         out.write(chunk(b"IEND", b""))
 
@@ -317,8 +336,8 @@ def pictures_of(face: bytes) -> list[bytes]:
     for start, _count, sizes in elements(face):
         at = start
         for size in sizes:
-            tag = face[at]
-            out.append(rgb(lz4_block(face[at + 8:at + size])[0], tag))
+            cf = header(struct.unpack_from("<I", face, at)[0])[0]
+            out.append(rgba(lz4_block(face[at + 8:at + size])[0], cf))
             at += size
     return out
 
@@ -364,20 +383,18 @@ def main() -> None:
         print(f"  element {index}: {count} picture(s), {kinds.get(count, 'unknown')}")
         at = start
         for which, size in enumerate(sizes):
-            tag = face[at]
-            word = face[at + 1] | (face[at + 2] << 8) | (face[at + 3] << 16)
-            width, height = dimensions(word)
+            cf, width, height = header(struct.unpack_from("<I", face, at)[0])
             pixels, used = lz4_block(face[at + 8:at + size])
 
-            wanted = width * height * BYTES_PER_PIXEL.get(tag, 0)
+            wanted = width * height * BYTES_PER_PIXEL.get(cf, 0)
             state = "ok" if used == size - 8 and len(pixels) == wanted else "MISMATCH"
-            depth = {4: "RGB565", 5: "RGB888"}.get(tag, f"tag {tag:02x}")
+            depth = {TRUE_COLOR: "RGB565", TRUE_COLOR_ALPHA: "RGB565+A"}.get(cf, f"cf {cf}")
             print(f"      [{which}] {width:4d} x {height:<4d} {depth:7s} "
                   f"{size:6d} B -> {len(pixels):8d}  {state}")
 
             if args.png and state == "ok":
                 write_png(os.path.join(args.png, f"{index:02d}-{which}.png"),
-                          width, height, rgb(pixels, tag))
+                          width, height, rgba(pixels, cf))
             at += size
 
 

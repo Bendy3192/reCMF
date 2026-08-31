@@ -371,7 +371,23 @@ match length, with both lengths extended 255 at a time. All 113 pictures in the 
 decompress with the payload consumed to the byte and the output landing exactly on
 `width × height × bytes-per-pixel`, without one exception.
 
-The tag in the image header is the pixel format: **`04` is RGB565 and `05` is RGB888.**
+**The image header is LVGL's own.** The watch runs Zephyr and LVGL, which is the thing that
+explains it: the four bytes are one little-endian `lv_img_header_t` — colour format in the low
+five bits, three bits that are always zero, two reserved, then width in eleven bits and height
+in eleven. All 113 images have those three zero bits at zero.
+
+That also corrects a reading. The dimensions had been unpacked as "the low twelve bits are the
+width times four and the high twelve the height times two", which gives the same numbers
+because it is the same bits split in the wrong place. And the colour format is not what it
+looked like: `4` is `LV_IMG_CF_TRUE_COLOR`, RGB565 at two bytes a pixel, but `5` is
+`LV_IMG_CF_TRUE_COLOR_ALPHA` — RGB565 **followed by a byte of alpha**, three bytes a pixel and
+not RGB888.
+
+Reading the alpha as a blue channel is why a face's background came out of the decoder as a
+blue disc with pink rings when it is really four thin grey circles on nothing. And it is why
+the first hand-made background never appeared on the watch: RGB888 was written where alpha was
+expected, so every pixel's transparency came out of the low byte of a blue and the picture was
+installed invisible.
 
 It took a wrong turn to get there. The recurring token `0f 8d 00` in a 47-wide digit looked
 like a run of 141 bytes — one row — and so did `0f 1e 00` in a 10-wide image, which is 30.
