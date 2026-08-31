@@ -466,10 +466,26 @@ It is still wrong in the details — a stack of rings lands in the top-left corn
 has none, and a downloaded face places only 9 of its 14 elements. So the coordinates are found
 and the way they are addressed is nearly found.
 
-The next thing to look at is what makes the blocks different shapes. They are not one layout:
-some open `30 2c 00 01 1b 00`, others `81 32 00 01 1b 00` or `02 0b 00 02 …`, and the pattern
-follows what the element is — a static picture, a digit place, a ring, a hand. Reading that is
-reading the rest of the face.
+**The descriptor comes before its element, not after it.** Slicing the table the other way —
+each block belonging to the record that follows it rather than the one before — is better on
+every face tried, in both the number of elements it places and how close the composite lands to
+that face's own preview:
+
+| | placed, block after | placed, block before | error after → before |
+|---|---|---|---|
+| Multifunction | 83/87 | **84/87** | 89 → **87** |
+| Combo | 9/14 | **12/14** | 231 → **204** |
+| Dash | 18/24 | **22/24** | 136 → **112** |
+
+**And what still lands wrong is exactly what the watch draws itself.** In the composite the three
+ring *outlines* sit correctly along the bottom, while the three *coloured* rings pile up in the
+middle — and those are the progress arcs, the ones that stayed orange when every picture in a
+face was recoloured. So an arc's descriptor is not a picture at a position: more likely a centre
+and a radius, which is why reading two u16 out of it puts it somewhere meaningless.
+
+That splits the remaining work in two. Elements that are pictures are nearly read. Elements the
+watch renders — arcs, hands, and whatever else survives a recolour — are a second kind of
+descriptor that has not been looked at yet.
 
 ### Where the stock faces are
 
