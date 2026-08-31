@@ -224,6 +224,16 @@ Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and fir
 chunked upload protocol, and firmware flashing is the one operation here that can brick a
 watch — so it comes last and stays behind a warning.
 
+**Switching between the faces already on the watch is a separate and much smaller
+question**, and it is not in this phase. It needs one opcode, `WATCHFACE` (`009f/0001`),
+and no file transfer at all. reCMF now sends `009f/0002` on every connection and logs
+whatever comes back, because the read-back rule — a `<cmd1>/0x0002` GET answered under
+`<cmd1>/0x0001` — has held for the serial number, both reminders, raise-to-wake, the clock
+format, sports, Do Not Disturb, the goals and the alarms. If it holds here, the reply says
+which face is active and probably how many exist, and a picker follows from that. If
+nothing comes back, this firmware does not serve the opcode and there is nothing to build
+a picker on. Either way the log answers it, and the frame costs one write per connection.
+
 ## Known and fixed, worth not repeating
 
 **Steps landing on the wrong day.** The watch counts cumulatively and zeroes at local

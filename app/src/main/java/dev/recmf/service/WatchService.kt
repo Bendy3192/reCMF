@@ -672,6 +672,13 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.SPORTS_GET)
         connection.send(CmfCommand.DO_NOT_DISTURB_GET)
 
+        // Asked purely to find out whether it answers. The watchface opcode is ported
+        // from Gadgetbridge and has never been sent to this firmware; if the read-back
+        // rule holds here as it has for every other setting, the reply says which face
+        // is on the watch and how many it knows about. That is the whole question
+        // between a picker reCMF can build and one it cannot.
+        connection.send(CmfCommand.WATCHFACE_GET)
+
         // The one that unblocks alarms. The watch keeps exactly the list it is sent, so
         // reCMF must not offer an alarm UI until it can read what is already there —
         // otherwise the first save deletes whatever the wearer set up in the stock app.
@@ -889,6 +896,14 @@ class WatchService : LifecycleService() {
                 describe = { "Sports on the watch: " + it.joinToString(", ") { type -> type.name } },
                 adopt = { settings.adoptSportTypesFromWatch(it) },
             )
+
+            // Raw, because nothing is known about the shape yet: the log is the
+            // experiment. A single byte would most likely be the active face's index,
+            // which is all a picker needs; anything longer probably lists what is
+            // installed. Silence answers the question too — it would mean this firmware
+            // does not serve the opcode and a picker has nothing to be built on.
+            CmfCommand.WATCHFACE ->
+                ProtocolLog.note("Watchface reply: ${message.payload.toHex()}")
 
             // Nothing here writes Do Not Disturb, so this is read and reported and that
             // is all — there is no preference for it to disagree with.
