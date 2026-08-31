@@ -271,10 +271,14 @@ official app did the transfer over its own working protocol and only the bytes i
 were swapped. Which leaves the id field at step 3 exactly where Gadgetbridge left it, and
 leaves `ffff/a055` still the only list of ids either project has.
 
-That also points at the cheapest way to finish this: install a face through the **CMF
-Watch** app with the Bluetooth HCI snoop log running, then pull `btsnoop_hci.log` out of
-`adb bugreport`. The `ffff/9063` frame in it carries the length and the id the app really
-sent, and the file it was sending. No root, no proxy, and it settles step 3 outright.
+That also points at the cheapest way to finish this, and the certificate pinning that
+stopped the mitmproxy trick does not stand in its way. Pinning is about the network; the
+transfer is Bluetooth. **Install a face from Nothing X's own catalogue with the Bluetooth
+HCI snoop log running, then pull `btsnoop_hci.log` out of `adb bugreport`.** The
+`ffff/9063` frame carries the length and the id the app really sent, and the `ffff/9064`
+chunks after it are the file itself — the id question and the file format from one
+capture, with no root and no proxy. The older CMF Watch app is not needed and appears to
+be discontinued anyway.
 
 **Switching between the faces already on the watch is a separate and much smaller
 question**, and it is not in this phase. It needs no file transfer at all.
@@ -288,6 +292,11 @@ end of the read-back batch, where an unattributed frame lands anyway, and a055 f
 and a055 moved with it, arriving ahead of the heart-rate, reminder, goal, clock, sports,
 Do Not Disturb and alarm replies that all used to precede it. It follows the request
 because it answers the request.
+
+**The watch also sends this list unprompted when the face is changed on the wrist.** One
+arrived at 12:57:27 with no request ahead of it, reporting the second face where the
+previous read had reported the first — the wearer had just changed it by hand. So the list
+is both a reply and a notification, and a picker built on it stays correct without polling.
 
 Its content is a four-byte header, `01 05 06 07`, then six little-endian 32-bit ids: 274,
 273, 275, 276, 277, 280. The header's third byte is 6, which is how many ids follow, and
