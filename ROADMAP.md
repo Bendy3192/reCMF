@@ -237,32 +237,40 @@ sent" over a rejection. Fixed: the verdict is read, the code reported, the insta
 The **new id** was the leading suspect and is no longer. It is not in the file — searched
 the whole of both — so the official app takes it from its catalogue. reCMF's first guess was
 a number above everything the watch holds; the second reused the id of the face being
-displaced, a number the watch issued itself into the slot being written. Both were refused
-with the same `0a`, which is as close to ruling the id out as two attempts can get.
+displaced. Both were refused with the same `0a`.
 
-**The file being sent was the wrong shape.** Two files were to hand: the one the official
-app installed, read byte for byte off the wire, and the one downloaded from a watchface site
-that reCMF has been refused with. Laid side by side they are packaged differently.
+**A control run was set up and then wasted by a bad file.** The idea was sound: send back
+the bytes the watch had already accepted, rebuilt from the capture of the official app
+installing them, and the answer separates a wrong file from a wrong protocol. The face came
+back refused, which read as proof that the protocol was at fault.
 
-At offset 24 the header carries a length. On the accepted file it reads 76068 against a file
-of 76104 — the whole file bar its 36-byte header, exactly. On the downloaded file it reads
-57137 against 58217, which is 1044 bytes too many. And the downloaded file **ends with its
-own first 36 bytes repeated**, followed by four more; the accepted file has no such thing
-and simply stops.
+It was not. The reassembly had copied one message without stripping its CRC32, so the file
+was the right length, opened as a watchface, named itself correctly — and was wrong from
+byte 224 onwards. `tools/btsnoop.py --extract` now checks every message's CRC32 before
+stripping it and says loudly when one does not verify. The correctly rebuilt file differs
+from the one that was sent in 65403 of its 76104 bytes.
 
-So the download is a wrapper around the file the watch is sent, and reCMF was sending the
-wrapper. The four bytes after the repeat are not a CRC32 of the file with them, without
-them, of the content, or of anything else tried — they are the wrapper's business.
+**What the correct rebuild showed is the layout of the whole file:**
 
-This also explains a check in Gadgetbridge that never made sense: it requires the name
-repeated 28 bytes from the end. That is this wrapper. Gadgetbridge is validating the
-distributed file and then sending it whole, which is the same mistake.
+```
+header 36 | name block | element table | resources | header again, 36
+```
 
-reCMF now cuts a file back to the length its own header declares, but only when the repeated
-header is there to say where the file inside stops. One accepted file and one refused one is
-thin evidence for a rule, so a file matching neither shape is sent as it came and said to be
-unrecognised, rather than trimmed on a guess that would destroy a face that might have
-installed.
+A file **ends with its own first 36 bytes repeated**. The length at offset 24 is everything
+before that closing copy and the length at offset 28 is the resources alone, so their
+difference is the element table — and the first element's offset is that same number. On the
+accepted file all of it agrees exactly: 76068 and 74796 in a file of 76104, closing copy at
+76068, first element at 1272.
+
+The downloaded face agrees with none of it. Its closing copy sits at 58177 with four more
+bytes after it, while its header still claims the file stops at 57137. So it is a device file
+with a checksum stuck on the end and two lengths nobody updated. reCMF now cuts a file to
+just after its closing copy and rewrites both lengths from where that copy was found, keeping
+their difference so the element table still lines up. A file that carries no closing copy is
+sent as it came, because there is then nothing to measure from.
+
+An earlier version of this cut the file at the length its header declared instead, which
+would have thrown away a thousand real bytes. That reading came from the corrupt rebuild.
 
 The **mode byte** is always `03`. `02` is reported elsewhere as "add rather than replace",
 but this watch holds six slots and no seventh, and an untried mode is not worth sending to

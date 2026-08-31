@@ -18,22 +18,27 @@ class CmfWatchfaceFileTest {
         name: String,
         version: ByteArray = CmfWatchfaceFile.VERSION_WATCH_PRO_2,
         size: Int = 256,
-        declared: Int = size - HEADER_BYTES,
+        declared: Int = size,
+        resources: Int = declared - 120,
     ): ByteArray {
         val bytes = ByteArray(size)
         // Four bytes that differ between files and are not a CRC of anything else in them.
         "d3879fb9".hexToBytes().copyInto(bytes, 0)
         version.copyInto(bytes, 4)
         name.toByteArray().copyInto(bytes, 8)
-        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putInt(24, declared)
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(24, declared)
+            .putInt(28, resources)
         // Filler that is not zero, so trimming is visible as something other than padding.
         for (i in HEADER_BYTES until size) bytes[i] = (i and 0x7f).toByte()
         return bytes
     }
 
-    /** What a watchface site hands out: a device file with its own header stuck on the end. */
-    private fun wrapped(inside: ByteArray, extra: Int = 0): ByteArray =
-        inside + ByteArray(extra) { 0x5a } + inside.copyOf(HEADER_BYTES) + "ced23cc5".hexToBytes()
+    /** Closes a file the way a real one closes: its own first 36 bytes, again. */
+    private fun closed(bytes: ByteArray): ByteArray = bytes + bytes.copyOf(HEADER_BYTES)
+
+    private fun resourceSize(bytes: ByteArray): Int =
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getInt(28)
 
     private companion object {
         const val HEADER_BYTES = 36
@@ -106,65 +111,56 @@ class CmfWatchfaceFileTest {
     }
 
     @Test
-    fun `a file whose header accounts for every byte after it is sent as it is`() {
-        // The one face known to have been accepted was 76104 bytes and said 76068, which
-        // is the whole file bar its 36 byte header.
-        val bytes = file("Dash", size = 76104, declared = 76068)
+    fun `a file that ends with its own header and says so is sent untouched`() {
+        // The accepted face, to its real numbers: 76104 bytes, 76068 at offset 24, and
+        // its own first 36 bytes again at exactly 76068.
+        val bytes = closed(file("Dash", size = 76068, declared = 76068, resources = 74796))
 
         val packaging = CmfWatchfaceFile.prepare(bytes)
 
+        assertEquals(76104, bytes.size)
         assertInstanceOf(CmfWatchfaceFile.Packaging.Device::class.java, packaging)
         assertArrayEquals(bytes, packaging.bytes)
     }
 
     @Test
-    fun `a downloaded face is cut back to the device file inside its wrapper`() {
-        // The refused one: 58217 bytes declaring 57137, with the first 36 bytes repeated
-        // at the end. 57137 + 36 = 57173 is the file the watch is meant to receive.
-        val inside = file("Combo", size = 57173, declared = 57137)
-        val bytes = wrapped(inside, extra = 1004)
+    fun `a downloaded face is cut to its closing header and its lengths rewritten`() {
+        // The refused one, to its real numbers: 58217 bytes with four stuck on the end, so
+        // the closing copy sits at 58177 where the header claims the file stops at 57137.
+        val bytes = closed(file("Combo", size = 58177, declared = 57137, resources = 56214)) +
+            "ced23cc5".hexToBytes()
 
         val packaging = CmfWatchfaceFile.prepare(bytes)
 
-        assertInstanceOf(CmfWatchfaceFile.Packaging.Trimmed::class.java, packaging)
         assertEquals(58217, bytes.size)
-        assertArrayEquals(inside, packaging.bytes)
+        assertInstanceOf(CmfWatchfaceFile.Packaging.Repaired::class.java, packaging)
+        assertEquals(58213, packaging.bytes.size)
+        assertEquals(58177, CmfWatchfaceFile.declaredContentSize(packaging.bytes))
+        // The table is the difference between the two lengths, and the first element's
+        // offset is that same number, so the gap has to survive the rewrite.
+        assertEquals(923, 58177 - resourceSize(packaging.bytes))
     }
 
     @Test
-    fun `a length that fits neither shape is sent whole rather than trimmed on a guess`() {
-        // Trimming rests on one accepted file and one refused one. A file that matches
-        // neither is not evidence for the rule, and cutting it would destroy a face that
-        // might have installed.
-        val bytes = file("Odd", size = 4096, declared = 1234)
+    fun `a file with no closing header is sent whole rather than cut on a guess`() {
+        val bytes = file("Odd", size = 4096, declared = 1234, resources = 1000)
 
         val packaging = CmfWatchfaceFile.prepare(bytes)
 
         assertInstanceOf(CmfWatchfaceFile.Packaging.Unexplained::class.java, packaging)
         assertArrayEquals(bytes, packaging.bytes)
-        assertEquals(1234, (packaging as CmfWatchfaceFile.Packaging.Unexplained).declared)
     }
 
     @Test
-    fun `a wrapper is only recognised by the header it repeats`() {
-        // Same lengths, different bytes at the end. Without the repeat there is nothing
-        // saying where the file inside stops, so nothing is cut.
-        val inside = file("Combo", size = 57173, declared = 57137)
-        val bytes = inside + ByteArray(1044) { 0x11 }
+    fun `lengths that leave no room for an element table are not rewritten`() {
+        // Rewriting keeps the gap between the two, and a gap that is nought or wider than
+        // the file would point the first element outside it.
+        val bytes = closed(file("Combo", size = 4096, declared = 900, resources = 900)) +
+            "00000000".hexToBytes()
 
         assertInstanceOf(
             CmfWatchfaceFile.Packaging.Unexplained::class.java,
             CmfWatchfaceFile.prepare(bytes),
         )
-    }
-
-    @Test
-    fun `a header claiming more than the file holds is never trusted with a length`() {
-        val bytes = file("Combo", size = 256, declared = 1 shl 30)
-
-        val packaging = CmfWatchfaceFile.prepare(bytes)
-
-        assertInstanceOf(CmfWatchfaceFile.Packaging.Unexplained::class.java, packaging)
-        assertArrayEquals(bytes, packaging.bytes)
     }
 }

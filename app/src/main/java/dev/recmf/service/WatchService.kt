@@ -746,22 +746,22 @@ class WatchService : LifecycleService() {
                 )
         }
 
-        // What actually goes on the wire. A file downloaded from a watchface site is a
-        // wrapper around the file the watch is sent, and the two attempts that ended in
-        // `0a` both sent the wrapper. See CmfWatchfaceFile.prepare.
+        // What actually goes on the wire. A file ends with its own first 36 bytes repeated,
+        // and a download can carry four more after that with the lengths in front left
+        // stale. See CmfWatchfaceFile.prepare.
         val packaging = CmfWatchfaceFile.prepare(bytes)
         val sending = packaging.bytes
 
         when (packaging) {
             is CmfWatchfaceFile.Packaging.Device -> Unit
-            is CmfWatchfaceFile.Packaging.Trimmed -> ProtocolLog.note(
-                "Watchface: \"$name\" came wrapped — sending the ${sending.size} bytes " +
-                    "inside it, not the ${packaging.from} the file has",
+            is CmfWatchfaceFile.Packaging.Repaired -> ProtocolLog.note(
+                "Watchface: \"$name\" ends at ${sending.size} where the file runs to " +
+                    "${packaging.from} and its header claimed ${packaging.declared} — " +
+                    "cut to the closing header and the lengths rewritten",
             )
             is CmfWatchfaceFile.Packaging.Unexplained -> ProtocolLog.note(
-                "Watchface: \"$name\" is packaged in a way reCMF has not seen — its header " +
-                    "claims ${packaging.declared} bytes of content in a file of " +
-                    "${sending.size}. Sending it whole",
+                "Watchface: \"$name\" does not end with its own header, so reCMF cannot " +
+                    "tell where it stops. Sending it whole",
             )
         }
 

@@ -22,11 +22,8 @@ import java.nio.charset.StandardCharsets
  * Watch, and refuses a Pro 2 file before it transmits anything. The first four bytes differ
  * between files and are not a CRC32 of the rest; they are carried and not interpreted.
  *
- * At offset 24 there is a length. On the one file known to have been accepted — read byte
- * for byte off the wire while the official app installed it — it is 76068 against a file of
- * 76104, exactly [HEADER_BYTES] short of the whole. A file downloaded from a watchface site
- * says 57137 against 58217 and ends with its own first 36 bytes repeated, which the accepted
- * file does not. See [prepare].
+ * A file **ends with its own first 36 bytes repeated**. That closing copy is where the file
+ * stops, and the two lengths at offsets 24 and 28 are measured against it. See [prepare].
  *
  * Nothing here parses the *contents*. reCMF sends a file the watch will accept or refuses
  * one it will not; drawing a watchface is the watch's business.
@@ -138,81 +135,101 @@ object CmfWatchfaceFile {
     }
 
     /**
-     * The fixed part at the front, before anything that varies with the face.
+     * The fixed part at the front, and the same 36 bytes again at the very end.
      *
-     * Thirty-six bytes: the four unexplained ones, the version, the name in twelve, four
-     * zeroes, a `0a`, and then two lengths and three words that differ per file. The name
-     * appears a second time at offset 45, which is why a face can be recognised without
-     * knowing any of this.
+     * The whole layout, confirmed against the one file known to have been accepted:
+     *
+     * ```
+     * header 36 | name block | element table | resources | header again, 36
+     * ```
+     *
+     * So the length at [CONTENT_SIZE_OFFSET] is everything before that closing copy, the
+     * length at [RESOURCE_SIZE_OFFSET] is the resources alone, and their difference is the
+     * element table. On the accepted file all three agree exactly: 76068 and 74796 in a file
+     * of 76104, with the closing copy at 76068 and the first element pointing at 1272.
      */
     private const val HEADER_BYTES = 36
 
-    /** Where the header says how much file follows it. */
+    /** Where the header says how much file precedes its closing copy. */
     private const val CONTENT_SIZE_OFFSET = 24
 
+    /** Where it says how much of that is images. */
+    private const val RESOURCE_SIZE_OFFSET = 28
+
     /** The length at [CONTENT_SIZE_OFFSET], or null from something too short to hold one. */
-    fun declaredContentSize(bytes: ByteArray): Int? =
-        if (bytes.size < HEADER_BYTES) {
+    fun declaredContentSize(bytes: ByteArray): Int? = readInt(bytes, CONTENT_SIZE_OFFSET)
+
+    private fun readInt(bytes: ByteArray, at: Int): Int? =
+        if (bytes.size < at + 4) {
             null
         } else {
-            ByteBuffer.wrap(bytes, CONTENT_SIZE_OFFSET, 4).order(ByteOrder.LITTLE_ENDIAN).int
+            ByteBuffer.wrap(bytes, at, 4).order(ByteOrder.LITTLE_ENDIAN).int
         }
 
     /**
-     * What a file's length says about how it is packaged, and the bytes to send because of it.
+     * What shape a file is in, and the bytes to send because of it.
      *
-     * A face installed by the official app was [HEADER_BYTES] longer than the length in its
-     * own header — header plus content, and nothing after. A face downloaded from a site was
-     * 1044 bytes longer than that, and those bytes end with the file's own first 36 repeated
-     * and four more; the accepted file carries no such thing. So the download is a wrapper
-     * around a device file, and the wrapper is what the watch was never sent.
+     * A face downloaded from a watchface site turned out to be a device file with four
+     * bytes stuck on the end and two stale lengths in its header — its closing header copy
+     * sits 40 bytes from the end rather than 36, and the length at offset 24 is a thousand
+     * bytes short of where that copy actually is. The closing copy is the reliable mark of
+     * where the file ends, because it is the one thing both files carry in the same form.
      *
-     * This is one known-good file against one known-refused one, which is why the third case
-     * exists: a file that matches neither shape is sent whole and said to be unrecognised,
-     * rather than trimmed on a rule that has been seen to hold exactly once.
+     * So a file is cut to end just after its closing copy, and the two lengths are rewritten
+     * from where that copy was found — keeping their difference, which is the element table
+     * and is what the first element's offset has to agree with. A file already in that shape
+     * comes through untouched, which is what the accepted one does.
      */
     sealed interface Packaging {
         /** The bytes to put on the wire. */
         val bytes: ByteArray
 
-        /** Header plus the content it declares, which is the shape the watch was sent. */
+        /** Already the shape the watch was sent: nothing to do. */
         class Device(override val bytes: ByteArray) : Packaging
 
-        /** A wrapper recognised by its repeated header and cut back to the file inside. */
-        class Trimmed(override val bytes: ByteArray, val from: Int) : Packaging
+        /** Cut to its closing header copy, with the lengths in front rewritten to match. */
+        class Repaired(override val bytes: ByteArray, val from: Int, val declared: Int) : Packaging
 
-        /** Neither shape. Sent as it came, because guessing at it would be worse. */
-        class Unexplained(override val bytes: ByteArray, val declared: Int) : Packaging
+        /** No closing copy to measure from. Sent as it came, because guessing is worse. */
+        class Unexplained(override val bytes: ByteArray) : Packaging
     }
 
     fun prepare(bytes: ByteArray): Packaging {
-        val declared = declaredContentSize(bytes) ?: return Packaging.Unexplained(bytes, 0)
-        if (declared < 0 || declared > bytes.size) return Packaging.Unexplained(bytes, declared)
+        if (bytes.size < MINIMUM_SIZE) return Packaging.Unexplained(bytes)
 
-        val whole = declared + HEADER_BYTES
-        if (whole == bytes.size) return Packaging.Device(bytes)
+        val declared = declaredContentSize(bytes) ?: return Packaging.Unexplained(bytes)
+        val resources = readInt(bytes, RESOURCE_SIZE_OFFSET) ?: return Packaging.Unexplained(bytes)
+        val table = declared - resources
 
-        return if (whole in MINIMUM_SIZE until bytes.size && carriesWrapper(bytes)) {
-            Packaging.Trimmed(bytes.copyOf(whole), bytes.size)
-        } else {
-            Packaging.Unexplained(bytes, declared)
+        val closing = closingCopy(bytes)
+        if (closing < 0) return Packaging.Unexplained(bytes)
+
+        if (closing == declared && closing + HEADER_BYTES == bytes.size) {
+            return Packaging.Device(bytes)
         }
+
+        // The table has to survive the rewrite: the first element's offset is the table's
+        // own length, so moving the two figures without keeping their difference would
+        // point the watch at the wrong byte.
+        if (table <= 0 || table >= closing) return Packaging.Unexplained(bytes)
+
+        val repaired = bytes.copyOf(closing + HEADER_BYTES)
+        ByteBuffer.wrap(repaired).order(ByteOrder.LITTLE_ENDIAN)
+            .putInt(CONTENT_SIZE_OFFSET, closing)
+            .putInt(RESOURCE_SIZE_OFFSET, closing - table)
+        return Packaging.Repaired(repaired, from = bytes.size, declared = declared)
     }
 
     /**
-     * Whether the file ends with its own header again.
-     *
-     * Four bytes follow that repeat, and they are not a CRC32 of the file with or without
-     * them, of the content, or of anything else tried. They are the wrapper's business and
-     * are dropped with it. Gadgetbridge looks for the same repeat — it expects the name 28
-     * bytes from the end — which says the wrapper is what watchface sites hand out.
+     * Where the file's own first 36 bytes appear again, at or after the last place they
+     * could be. The last such position is taken, so four bytes of somebody's checksum
+     * stuck on the end move the answer rather than hide it.
      */
-    private fun carriesWrapper(bytes: ByteArray): Boolean {
-        val end = bytes.size - WRAPPER_BYTES
-        if (end < HEADER_BYTES) return false
-        return bytes.copyOfRange(end, end + HEADER_BYTES).contentEquals(bytes.copyOf(HEADER_BYTES))
+    private fun closingCopy(bytes: ByteArray): Int {
+        val head = bytes.copyOf(HEADER_BYTES)
+        for (at in bytes.size - HEADER_BYTES downTo HEADER_BYTES) {
+            if (bytes.copyOfRange(at, at + HEADER_BYTES).contentEquals(head)) return at
+        }
+        return -1
     }
-
-    /** The repeated header and the four bytes after it. */
-    private const val WRAPPER_BYTES = HEADER_BYTES + 4
 }

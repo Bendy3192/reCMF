@@ -25,6 +25,11 @@ Usage:
     python3 tools/btsnoop.py btsnoop_hci.log --secret d61272b0...
     python3 tools/btsnoop.py btsnoop_hci.log --extract 9064 face.bin
 
+--extract checks and strips the CRC32 every bulk message ends with, and says so loudly
+if any message did not carry one: a file rebuilt through an unchecked message comes out
+the right length and wrong from that byte onwards, which is not something you notice by
+looking at it.
+
 Needs openssl on PATH, and nothing else.
 """
 
@@ -124,6 +129,21 @@ def plaintext(raw: bytes) -> bytes | None:
     return payload
 
 
+def uncrc(body: bytes) -> bytes | None:
+    """Drops the CRC32 a bulk-transfer message ends with, or None if it is not one.
+
+    Chunks of a watchface travel unencrypted, but each message still carries a
+    little-endian CRC32 of what precedes it. Stripping four bytes without checking them
+    is how a reassembled file comes out the right length and wrong from the middle on.
+    """
+    if len(body) < 5:
+        return None
+    payload, crc = body[:-4], body[-4:]
+    if struct.unpack("<I", crc)[0] != zlib.crc32(payload) & 0xFFFFFFFF:
+        return None
+    return payload
+
+
 def app_secret(blob: bytes) -> bytes | None:
     """The watch answers GETSECRET on its shell characteristic, in the clear."""
     found = re.search(rb"GETSECRET:([0-9a-fA-F]{32}),OK", blob)
@@ -173,6 +193,7 @@ def main() -> None:
     wanted = {int(x, 16) for x in args.only.split(",")} if args.only else None
     extract = int(args.extract[0], 16) if args.extract else None
     extracted = bytearray()
+    unverified = 0
 
     secret = bytes.fromhex(args.secret) if args.secret else None
     k1 = long_term_key(blob, secret)
@@ -201,7 +222,11 @@ def main() -> None:
             continue
 
         if cmd2 == extract:
-            extracted += body
+            piece = uncrc(body)
+            if piece is None:
+                unverified += 1
+                piece = body
+            extracted += piece
 
         if not body:
             shown = ""
@@ -218,6 +243,13 @@ def main() -> None:
     if extract is not None:
         open(args.extract[1], "wb").write(extracted)
         print(f"\n# wrote {len(extracted)} bytes to {args.extract[1]}", file=sys.stderr)
+        if unverified:
+            # Worth stopping for. A file reassembled through even one unverified message
+            # is wrong from that byte on, and it will still be the right length and still
+            # open as a watchface — which is exactly how a corrupt copy of a known-good
+            # face got sent to a watch and read as evidence about the protocol.
+            print(f"# WARNING: {unverified} message(s) carried no valid CRC32 and were "
+                  "copied whole. The file is not trustworthy.", file=sys.stderr)
 
 
 if __name__ == "__main__":
