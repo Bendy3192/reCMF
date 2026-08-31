@@ -243,6 +243,36 @@ repeats that name 28 bytes from the end — Gadgetbridge checks both and refuses
 they disagree. Reports elsewhere say faces built for the **Pro 2** start `01 00 00 00`
 instead, which that December snapshot does not know about.
 
+**The official app does not send `9063` at all.** A capture of Nothing X installing a
+face — HCI snoop log, no root — shows the sequence as:
+
+```
+TX ffff/8052   16 B   init 1
+RX ffff/0052   16 B
+TX ffff/9075   32 B   init 2, and this is NOT 9063
+RX ffff/a075   16 B
+TX ffff/9064   x261   the file, unencrypted, in 19 messages the watch asks for by offset
+RX ffff/a064   x19    each request encrypted
+RX ffff/a065   16 B   finished
+```
+
+That is very likely the whole of Gadgetbridge's issue #4581: it sends `9063`, and this
+firmware wants `9075`. Its body is 32 bytes of ciphertext — two AES blocks — where
+Gadgetbridge's `9063` carries nine plaintext bytes, so the step wants more than a length
+and an id.
+
+**The file itself came out of that capture**, because the chunks are not encrypted. 58217
+bytes, and its first sixteen read:
+
+```
+d3 87 9f b9 | 01 00 00 00 | "Combo\0" ...
+```
+
+`01 00 00 00` at offset 4 is the Pro 2 version marker, against the `01 00 00 02`
+Gadgetbridge checks for at offset 0 — a second reason it refuses these files. The name sits
+at offset 8 as Gadgetbridge expects, but is *not* repeated 28 bytes from the end, which is
+a third. The first four bytes are not a CRC32 of anything else in the file.
+
 **Step 3 is where it stalls.** Gadgetbridge writes `new Random().nextInt()` there, under a
 comment reading `FIXME watchface ID?` — nobody knew what the field wanted. Which is
 interesting, because `ffff/a055` — the frame this watch answers `WATCHFACE_GET` with, and
@@ -315,6 +345,13 @@ the watch and the byte should read `00`.** Until that is done the log prints the
 beside the reading of it, so the moment the two stop agreeing is visible.
 
 `07` is unexplained and is not an index into six entries. `01` is unexplained.
+
+**`ffff/9055` is how the official app asks for the list**, and reads as a request rather
+than a selection: identical ciphertext both times it was sent, sixteen bytes, which is what
+a bare `a5` marker plus its CRC comes to. It is the vendor twin of `009f/0002`, not the
+write half. **The capture does not contain a face being selected** — only one being
+installed — so the select command is still unfound, and the new face becoming active is
+explained by the install rather than by any command.
 
 **Selecting a face does not work yet.** `WATCHFACE` (`009f/0001`) was sent with a
 four-byte little-endian id — the shape the list reports ids in, and the width the upload

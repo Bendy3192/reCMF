@@ -61,6 +61,18 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     DATA_TRANSFER_WATCHFACE_INIT_1_REPLY(0xffff, 0x0052),
     DATA_TRANSFER_WATCHFACE_INIT_2_REPLY(0xffff, 0xa063),
     DATA_TRANSFER_WATCHFACE_INIT_2_REQUEST(0xffff, 0x9063),
+
+    /**
+     * What the official app actually sends as the second init, in place of `9063`.
+     *
+     * Captured from Nothing X installing a face: `8052` → `0052` → **`9075`** → `a075` →
+     * the chunks → `a065`. Gadgetbridge sends `9063` at that step and its upload does not
+     * work, which is the whole of issue #4581. Its body is 32 bytes of ciphertext where
+     * `9063` would carry nine plaintext bytes, so this step wants more than the length
+     * and id Gadgetbridge puts in it.
+     */
+    DATA_TRANSFER_WATCHFACE_INIT_2_ALT_REQUEST(0xffff, 0x9075),
+    DATA_TRANSFER_WATCHFACE_INIT_2_ALT_REPLY(0xffff, 0xa075),
     DO_NOT_DISTURB(0x0099, 0x0001),
     DO_NOT_DISTURB_GET(0x0099, 0x0002),
     FACTORY_RESET(0x009a, 0x0001),
@@ -110,6 +122,16 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     WAKE_ON_WRIST_RAISE_GET(0x0062, 0x0002),
     WATCHFACE(0x009f, 0x0001),
     WATCHFACE_GET(0x009f, 0x0002),
+
+    /**
+     * How the official app asks for the watchface list.
+     *
+     * The vendor half of the same question `WATCHFACE_GET` asks: Nothing X sends this and
+     * gets `a055` back. Both times it was captured the ciphertext was identical, and one
+     * AES block is what a bare `a5` marker plus its CRC comes to — so this reads as a
+     * request carrying no argument rather than a command that selects anything.
+     */
+    WATCHFACE_LIST_GET(0xffff, 0x9055),
 
     /**
      * What `WATCHFACE_GET` is actually answered with.
