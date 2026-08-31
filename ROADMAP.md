@@ -409,6 +409,19 @@ its size with. A 466 by 466 background is 651468 bytes of RGB888 before compress
 photograph will not fit as it is; flat artwork will, easily. A generated gradient across the
 whole screen comes to 8225 bytes.
 
+**And a face written here draws on the watch.** Every picture in a downloaded face was
+recoloured, the face rebuilt, sent over Bluetooth and accepted — and the watch shows the
+recoloured artwork. That closes the loop end to end: read the format, change the pixels,
+write the format, install it, see it on the wrist.
+
+What that experiment also showed is that **the pictures are not the whole face.** The two
+sub-dials turned the colour they were given, and so did the icons drawn from images — but
+the two arcs on the right stayed orange and the moon turned light blue, neither of which is
+a colour anything in the file was set to. So the watch draws part of a face itself: the
+progress arcs at least, and probably the icons beside them, taking their colour from
+somewhere other than the pictures. The obvious candidate is the placement block after each
+element, which is the part still unread.
+
 The first useful thing to build on this is not an editor: it is swapping one picture in a
 face somebody already has for one of their own.
 
