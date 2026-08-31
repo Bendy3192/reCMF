@@ -441,6 +441,27 @@ element, which is the part still unread.
 The first useful thing to build on this is not an editor: it is swapping one picture in a
 face somebody already has for one of their own.
 
+### Reading the placement block
+
+The corpus made this attackable, because **a face carries a 270 by 270 picture of itself**.
+That is ground truth: slide an element's own picture over that preview and the best match says
+where the element really sits, without a watch in the loop.
+
+Done for one face, it lines up with the bytes. A group of 24 by 24 icons matched the preview at
+(193, 14), and their placement blocks all end `30 2c 00 01 1b 00 | c2 00 | 0e 00` — 194 and 14.
+So **the position is a pair of little-endian u16, and it follows a marker** rather than sitting
+at a fixed offset; the blocks are not all the same shape, which is why no fixed offset fits more
+than about two thirds of them.
+
+Taking the pair after the first `01 ?? 00` in a block and compositing every element onto a 466
+by 466 canvas places 73 of that face's 87 elements, and what comes out is recognisably the face:
+the sun's arc across the top, the coloured progress rings, the battery and sleep icons, the
+words SUNRISE and SUNSET. Wrong in the details — several rings land in the wrong quarter, and
+the same rule places only 3 of 14 elements on a downloaded face — so the marker is close but not
+yet the right one.
+
+That is where this stands: the coordinates are found, the way they are addressed is not.
+
 ### Where the stock faces are
 
 Two faces is a thin corpus for reading the placement bytes, and the watch will not hand its
