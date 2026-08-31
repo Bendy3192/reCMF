@@ -746,22 +746,22 @@ class WatchService : LifecycleService() {
                 )
         }
 
-        // What actually goes on the wire. A file ends with its own first 36 bytes repeated,
-        // and a download can carry four more after that with the lengths in front left
-        // stale. See CmfWatchfaceFile.prepare.
+        // What actually goes on the wire. A file ends with its own first 36 bytes repeated
+        // and its header accounts for every byte before that; a download rebuilt out of a
+        // capture carries the transfer's own checksums as well. See CmfWatchfaceFile.prepare.
         val packaging = CmfWatchfaceFile.prepare(bytes)
         val sending = packaging.bytes
 
         when (packaging) {
             is CmfWatchfaceFile.Packaging.Device -> Unit
             is CmfWatchfaceFile.Packaging.Repaired -> ProtocolLog.note(
-                "Watchface: \"$name\" ends at ${sending.size} where the file runs to " +
-                    "${packaging.from} and its header claimed ${packaging.declared} — " +
-                    "cut to the closing header and the lengths rewritten",
+                "Watchface: \"$name\" was rebuilt from a capture with the transfer's own " +
+                    "checksums left in — ${packaging.from - sending.size} bytes of them " +
+                    "pulled back out, leaving ${sending.size}",
             )
             is CmfWatchfaceFile.Packaging.Unexplained -> ProtocolLog.note(
-                "Watchface: \"$name\" does not end with its own header, so reCMF cannot " +
-                    "tell where it stops. Sending it whole",
+                "Watchface: \"$name\" does not account for itself and no repair lands on a " +
+                    "sound file. Sending it whole",
             )
         }
 

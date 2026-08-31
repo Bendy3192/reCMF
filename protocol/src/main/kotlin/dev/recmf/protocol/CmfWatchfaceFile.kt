@@ -6,6 +6,7 @@ package dev.recmf.protocol
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
+import java.util.zip.CRC32
 
 /**
  * A watchface file, as far as it needs to be understood to send one.
@@ -137,16 +138,15 @@ object CmfWatchfaceFile {
     /**
      * The fixed part at the front, and the same 36 bytes again at the very end.
      *
-     * The whole layout, confirmed against the one file known to have been accepted:
+     * The whole layout, confirmed against the file the watch accepted:
      *
      * ```
      * header 36 | name block | element table | resources | header again, 36
      * ```
      *
-     * So the length at [CONTENT_SIZE_OFFSET] is everything before that closing copy, the
-     * length at [RESOURCE_SIZE_OFFSET] is the resources alone, and their difference is the
-     * element table. On the accepted file all three agree exactly: 76068 and 74796 in a file
-     * of 76104, with the closing copy at 76068 and the first element pointing at 1272.
+     * So the length at [CONTENT_SIZE_OFFSET] is everything before that closing copy, and the
+     * length at [RESOURCE_SIZE_OFFSET] is the resources alone; their difference is the
+     * element table, which is also the offset the first element points at.
      */
     private const val HEADER_BYTES = 36
 
@@ -157,28 +157,39 @@ object CmfWatchfaceFile {
     private const val RESOURCE_SIZE_OFFSET = 28
 
     /** The length at [CONTENT_SIZE_OFFSET], or null from something too short to hold one. */
-    fun declaredContentSize(bytes: ByteArray): Int? = readInt(bytes, CONTENT_SIZE_OFFSET)
-
-    private fun readInt(bytes: ByteArray, at: Int): Int? =
-        if (bytes.size < at + 4) {
+    fun declaredContentSize(bytes: ByteArray): Int? =
+        if (bytes.size < CONTENT_SIZE_OFFSET + 4) {
             null
         } else {
-            ByteBuffer.wrap(bytes, at, 4).order(ByteOrder.LITTLE_ENDIAN).int
+            ByteBuffer.wrap(bytes, CONTENT_SIZE_OFFSET, 4).order(ByteOrder.LITTLE_ENDIAN).int
         }
+
+    /**
+     * Whether a file's own header accounts for it exactly.
+     *
+     * Two things have to agree, and both are cheap: the length at offset 24 has to leave
+     * room for the closing copy and nothing else, and that copy has to actually be there.
+     * The accepted file satisfies both; so does a repaired download; nothing else seen does.
+     */
+    private fun wellFormed(bytes: ByteArray): Boolean {
+        val declared = declaredContentSize(bytes) ?: return false
+        if (declared < HEADER_BYTES || declared + HEADER_BYTES != bytes.size) return false
+        return bytes.copyOfRange(declared, bytes.size).contentEquals(bytes.copyOf(HEADER_BYTES))
+    }
 
     /**
      * What shape a file is in, and the bytes to send because of it.
      *
-     * A face downloaded from a watchface site turned out to be a device file with four
-     * bytes stuck on the end and two stale lengths in its header — its closing header copy
-     * sits 40 bytes from the end rather than 36, and the length at offset 24 is a thousand
-     * bytes short of where that copy actually is. The closing copy is the reliable mark of
-     * where the file ends, because it is the one thing both files carry in the same form.
+     * A face going around as a download turned out to be 1044 bytes too long, and the extra
+     * bytes were not on the end: they were **the CRC32 that every message of a Bluetooth
+     * transfer ends with**, left in when somebody rebuilt the file out of a capture. 261
+     * messages, four bytes each. reCMF made the same mistake reassembling a file of its own,
+     * which is the only reason it was recognisable.
      *
-     * So a file is cut to end just after its closing copy, and the two lengths are rewritten
-     * from where that copy was found — keeping their difference, which is the element table
-     * and is what the first element's offset has to agree with. A file already in that shape
-     * comes through untouched, which is what the accepted one does.
+     * So a file that does not account for itself is walked message by message and its
+     * checksums pulled out — and the result is only used if it then accounts for itself
+     * exactly. That last check is what makes this safe to do at all: the repair either lands
+     * on a file shaped like the one the watch accepted, or it is thrown away.
      */
     sealed interface Packaging {
         /** The bytes to put on the wire. */
@@ -187,49 +198,69 @@ object CmfWatchfaceFile {
         /** Already the shape the watch was sent: nothing to do. */
         class Device(override val bytes: ByteArray) : Packaging
 
-        /** Cut to its closing header copy, with the lengths in front rewritten to match. */
-        class Repaired(override val bytes: ByteArray, val from: Int, val declared: Int) : Packaging
+        /** A capture's leftover checksums pulled back out. */
+        class Repaired(override val bytes: ByteArray, val from: Int) : Packaging
 
-        /** No closing copy to measure from. Sent as it came, because guessing is worse. */
+        /** Neither, and no repair that lands on a sound file. Sent as it came. */
         class Unexplained(override val bytes: ByteArray) : Packaging
     }
 
     fun prepare(bytes: ByteArray): Packaging {
         if (bytes.size < MINIMUM_SIZE) return Packaging.Unexplained(bytes)
+        if (wellFormed(bytes)) return Packaging.Device(bytes)
 
-        val declared = declaredContentSize(bytes) ?: return Packaging.Unexplained(bytes)
-        val resources = readInt(bytes, RESOURCE_SIZE_OFFSET) ?: return Packaging.Unexplained(bytes)
-        val table = declared - resources
-
-        val closing = closingCopy(bytes)
-        if (closing < 0) return Packaging.Unexplained(bytes)
-
-        if (closing == declared && closing + HEADER_BYTES == bytes.size) {
-            return Packaging.Device(bytes)
+        val stripped = withoutMessageChecksums(bytes)
+        return if (stripped != null && wellFormed(stripped)) {
+            Packaging.Repaired(stripped, from = bytes.size)
+        } else {
+            Packaging.Unexplained(bytes)
         }
-
-        // The table has to survive the rewrite: the first element's offset is the table's
-        // own length, so moving the two figures without keeping their difference would
-        // point the watch at the wrong byte.
-        if (table <= 0 || table >= closing) return Packaging.Unexplained(bytes)
-
-        val repaired = bytes.copyOf(closing + HEADER_BYTES)
-        ByteBuffer.wrap(repaired).order(ByteOrder.LITTLE_ENDIAN)
-            .putInt(CONTENT_SIZE_OFFSET, closing)
-            .putInt(RESOURCE_SIZE_OFFSET, closing - table)
-        return Packaging.Repaired(repaired, from = bytes.size, declared = declared)
     }
 
     /**
-     * Where the file's own first 36 bytes appear again, at or after the last place they
-     * could be. The last such position is taken, so four bytes of somebody's checksum
-     * stuck on the end move the answer rather than hide it.
+     * Reads the file as the sequence of messages it once was and drops each one's checksum,
+     * or gives up.
+     *
+     * Message lengths are not fixed — the watch asks for the file in 3072-byte stretches and
+     * those do not divide by the 224 bytes a full message carries, so every stretch ends
+     * short and so does the file. Rather than model that, each message's length is found by
+     * extending a CRC32 a byte at a time and watching for the four bytes that follow to be
+     * it. The longest length that matches is taken: a shorter accidental match is possible
+     * once in four billion, and preferring the longer one costs nothing.
      */
-    private fun closingCopy(bytes: ByteArray): Int {
-        val head = bytes.copyOf(HEADER_BYTES)
-        for (at in bytes.size - HEADER_BYTES downTo HEADER_BYTES) {
-            if (bytes.copyOfRange(at, at + HEADER_BYTES).contentEquals(head)) return at
+    private fun withoutMessageChecksums(bytes: ByteArray): ByteArray? {
+        val out = ByteArray(bytes.size)
+        var read = 0
+        var written = 0
+
+        while (read < bytes.size) {
+            val room = minOf(MAX_MESSAGE_BYTES, bytes.size - read - CHECKSUM_BYTES)
+            if (room <= 0) return null
+
+            val crc = CRC32()
+            var length = -1
+            for (candidate in 1..room) {
+                crc.update(bytes[read + candidate - 1].toInt())
+                if (checksumAt(bytes, read + candidate) == crc.value) length = candidate
+            }
+            if (length < 0) return null
+
+            bytes.copyInto(out, written, read, read + length)
+            written += length
+            read += length + CHECKSUM_BYTES
         }
-        return -1
+
+        return out.copyOf(written)
     }
+
+    private fun checksumAt(bytes: ByteArray, at: Int): Long =
+        ByteBuffer.wrap(bytes, at, CHECKSUM_BYTES)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .int
+            .toLong() and 0xffffffffL
+
+    /** The most a single message of a transfer was seen to carry. */
+    private const val MAX_MESSAGE_BYTES = 244
+
+    private const val CHECKSUM_BYTES = 4
 }

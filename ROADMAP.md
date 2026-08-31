@@ -278,11 +278,26 @@ difference is the element table — and the first element's offset is that same 
 accepted file all of it agrees exactly: 76068 and 74796 in a file of 76104, closing copy at
 76068, first element at 1272.
 
-The downloaded face agrees with none of it. Its closing copy sits at 58177 with four more
-bytes after it, while its header still claims the file stops at 57137. reCMF cuts a file to
-just after its closing copy and rewrites both lengths from where that copy was found, keeping
-their difference so the element table still lines up. A file that carries no closing copy is
-sent as it came, because there is then nothing to measure from.
+**The downloaded face was a bad rebuild of a capture, and now that is provable.** It ran
+1044 bytes over what its header accounts for, and those bytes were not on the end: they were
+**the CRC32 that every message of a Bluetooth transfer ends with**, left in when somebody
+reassembled the file out of a capture. 261 messages, four bytes each. Pulled back out, the
+file is 57173 bytes, its closing copy lands exactly where offset 24 says, and its element
+table chains from the first resource to the last without a gap — the same checks the accepted
+file passes.
+
+That is the same mistake reCMF made rebuilding a file of its own, which is the only reason it
+was recognisable at a glance.
+
+The message lengths are not fixed, so the repair does not model them: it extends a CRC32 a
+byte at a time and watches for the four bytes that follow to be it, taking the longest length
+that matches. Run lengths of 224, 160 and 85 came out of the real file, which is exactly the
+watch asking for 3072-byte stretches that do not divide by 224. The repaired bytes are only
+used if the file then accounts for itself exactly; otherwise the original is sent unchanged.
+
+An earlier version of this cut the file at its closing copy and rewrote the two lengths. It
+happened to produce the right *length* and the wrong bytes, because the surplus was spread
+through the file rather than sitting at the end.
 
 **The mode byte** is always `03`. `02` is reported elsewhere as "add rather than replace",
 but this watch holds six slots and no seventh, and an untried mode is not worth sending to a

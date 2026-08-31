@@ -37,9 +37,6 @@ class CmfWatchfaceFileTest {
     /** Closes a file the way a real one closes: its own first 36 bytes, again. */
     private fun closed(bytes: ByteArray): ByteArray = bytes + bytes.copyOf(HEADER_BYTES)
 
-    private fun resourceSize(bytes: ByteArray): Int =
-        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).getInt(28)
-
     private companion object {
         const val HEADER_BYTES = 36
     }
@@ -110,6 +107,22 @@ class CmfWatchfaceFileTest {
         assertNull(CmfWatchfaceFile.parseChunkRequest("0000".hexToBytes()))
     }
 
+    /** Puts back the CRC32 a Bluetooth transfer's messages carry, as a bad rebuild leaves them. */
+    private fun asRebuiltFromACapture(bytes: ByteArray, run: Int = 224): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        var at = 0
+        while (at < bytes.size) {
+            val take = minOf(run, bytes.size - at)
+            val piece = bytes.copyOfRange(at, at + take)
+            val crc = java.util.zip.CRC32().apply { update(piece) }.value
+            out.write(piece)
+            out.write(ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN)
+                .putInt(crc.toInt()).array())
+            at += take
+        }
+        return out.toByteArray()
+    }
+
     @Test
     fun `a file that ends with its own header and says so is sent untouched`() {
         // The accepted face, to its real numbers: 76104 bytes, 76068 at offset 24, and
@@ -124,26 +137,38 @@ class CmfWatchfaceFileTest {
     }
 
     @Test
-    fun `a downloaded face is cut to its closing header and its lengths rewritten`() {
-        // The refused one, to its real numbers: 58217 bytes with four stuck on the end, so
-        // the closing copy sits at 58177 where the header claims the file stops at 57137.
-        val bytes = closed(file("Combo", size = 58177, declared = 57137, resources = 56214)) +
-            "ced23cc5".hexToBytes()
+    fun `a face rebuilt from a capture has its leftover checksums pulled back out`() {
+        // What was going round as a download: the file the watch wants, with every
+        // message's CRC32 still in it. 1044 bytes of them, spread through the file
+        // rather than sitting on the end.
+        val sound = closed(file("Combo", size = 57137, declared = 57137, resources = 56214))
+        val bytes = asRebuiltFromACapture(sound)
 
         val packaging = CmfWatchfaceFile.prepare(bytes)
 
-        assertEquals(58217, bytes.size)
+        assertEquals(57173, sound.size)
         assertInstanceOf(CmfWatchfaceFile.Packaging.Repaired::class.java, packaging)
-        assertEquals(58213, packaging.bytes.size)
-        assertEquals(58177, CmfWatchfaceFile.declaredContentSize(packaging.bytes))
-        // The table is the difference between the two lengths, and the first element's
-        // offset is that same number, so the gap has to survive the rewrite.
-        assertEquals(923, 58177 - resourceSize(packaging.bytes))
+        assertArrayEquals(sound, packaging.bytes)
     }
 
     @Test
-    fun `a file with no closing header is sent whole rather than cut on a guess`() {
-        val bytes = file("Odd", size = 4096, declared = 1234, resources = 1000)
+    fun `messages of uneven length are still found`() {
+        // The watch asks for the file in 3072-byte stretches, which do not divide by the
+        // 224 a full message carries, so every stretch ends short and so does the file.
+        val sound = closed(file("Combo", size = 20000, declared = 20000, resources = 19000))
+
+        val packaging = CmfWatchfaceFile.prepare(asRebuiltFromACapture(sound, run = 160))
+
+        assertInstanceOf(CmfWatchfaceFile.Packaging.Repaired::class.java, packaging)
+        assertArrayEquals(sound, packaging.bytes)
+    }
+
+    @Test
+    fun `a file that no repair lands on soundly is sent as it came`() {
+        // The repair is only used when what comes out accounts for itself exactly. Random
+        // length on the end is not a checksum, so nothing is found and nothing is cut.
+        val bytes = closed(file("Odd", size = 4096, declared = 4096, resources = 3000)) +
+            ByteArray(64) { 0x11 }
 
         val packaging = CmfWatchfaceFile.prepare(bytes)
 
@@ -152,11 +177,9 @@ class CmfWatchfaceFileTest {
     }
 
     @Test
-    fun `lengths that leave no room for an element table are not rewritten`() {
-        // Rewriting keeps the gap between the two, and a gap that is nought or wider than
-        // the file would point the first element outside it.
-        val bytes = closed(file("Combo", size = 4096, declared = 900, resources = 900)) +
-            "00000000".hexToBytes()
+    fun `a file whose header does not account for it is not called sound`() {
+        // Right closing copy, wrong length in front of it.
+        val bytes = closed(file("Odd", size = 4096, declared = 3000, resources = 2000))
 
         assertInstanceOf(
             CmfWatchfaceFile.Packaging.Unexplained::class.java,
