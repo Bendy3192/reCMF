@@ -366,33 +366,36 @@ which is what a dial ring or a round icon is. And the compression ratio, which r
 absurd 200 pixels per byte before, now sits between 1.6 and 28.6 across every distinct size
 in both files, which is the range an RLE over small images actually lives in.
 
-**The compressed data is half open.** It is not PNG, JPEG, WebP, GIF, BMP, gzip or zlib —
-no magic for any of them appears anywhere — and what it turned out to be is a small
-run-length format over **RGB888**, three bytes to the pixel.
+**The pictures are LZ4.** Plain LZ4 block format — token, literals, two-byte match offset,
+match length, with both lengths extended 255 at a time. All 113 pictures in the two files
+decompress with the payload consumed to the byte and the output landing exactly on
+`width × height × bytes-per-pixel`, without one exception.
 
-Two things gave it away. Three images in one file are the same picture at three heights —
-10 by 28, 10 by 44 and 10 by 140 — and differ *only* in a run of `ff` bytes followed by one
-other byte. Read as `255 × (number of ff) + that byte`, the three values are 671, 1151 and
-4031, and against the three pixel counts they sit on a straight line of **exactly three units
-per pixel**, twice over. So lengths are counted in output bytes and a pixel is three of them.
+The tag in the image header is the pixel format: **`04` is RGB565 and `05` is RGB888.**
 
-The other is a token that turns up again and again in the digits: `0f 8d 00`. The digit box is
-47 pixels wide, and `0x008d` is 141, which is 47 × 3 — one row. So **`0f` followed by a
-little-endian u16 is a run of that many bytes**, and the lengths land on whole rows. In the
-simplest digit, twelve of them are exactly one row, one is two rows and one is three; in the
-weekday strip, fourteen are one row; in a background, twenty-four. That is what the blank
-space above and below a glyph looks like from inside a codec.
+It took a wrong turn to get there. The recurring token `0f 8d 00` in a 47-wide digit looked
+like a run of 141 bytes — one row — and so did `0f 1e 00` in a 10-wide image, which is 30.
+They are not lengths. They are LZ4 **match offsets**, and an offset of exactly one row is a
+compressor saying "this row is the last one again". Which is the same observation seen from
+the other side, and why a watchface with large flat areas comes to a few kilobytes.
 
-The same reading holds at every width tried: the 10-wide images carry `0f 1e 00`, and
-`0x001e` is 30, which is 10 × 3.
+The `ff` chains that started all this are LZ4's own length extension, which is why the three
+images that differ only in height differ only in the length of a chain — and why the values
+sat on a line of exactly three units per pixel: those images are RGB888.
 
-What is still unknown: the other opcodes, whether the `0f` run means transparent or repeat,
-and what the tag byte in the image header (`04` or `05`) selects. Every image's data opens
-with `1f 00 01 00`, which is not yet explained either.
+**It is proved by looking at it.** `tools/watchface.py` takes a face apart and writes every
+picture as a PNG. Out of one file come three rings on black; out of the other a dial of four
+circles; out of a seven-picture element come "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
+in that order, which is what the element table said a count of seven would be.
 
-The best cribs remain the digit sets: a ten-image element is the digits nought to nine in
-order, and it reads like it — in one set the smallest image by far is index 1 and the second
-smallest is index 7, exactly the order of how much ink a digit takes.
+What is left is small: whether RGB888 is stored red-first or blue-first — the anti-aliasing
+fringes on white glyphs are tinted, so it is one or the other and a photograph of the watch
+settles it — and the meaning of the placement bytes after each element, which is where a
+picture goes rather than what it is.
+
+**So building a face is now a matter of writing the format rather than reading it.** The
+first useful thing to do with that is not a whole editor: it is swapping one picture in a
+face somebody already has for a photograph of their own.
 
 The feedback loop for cracking it is slow but real: build a file, send it, look at the watch.
 A minute an attempt, and the answer is on the screen.

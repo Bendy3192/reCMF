@@ -122,6 +122,9 @@ exists because of it.
 reject, firmware. Daily goals are read from the watch but cannot be written to it — see the
 roadmap.
 
+`tools/watchface.py` takes a watchface file apart and writes every picture in it as a PNG —
+the format is LZ4 over RGB565 or RGB888, and ROADMAP.md says how that was worked out.
+
 reCMF installs a watchface file; it does not supply one. Where a `.bin` comes from is the
 wearer's business, and none ship here — see the note at the top.
 
