@@ -225,12 +225,24 @@ known — `8052`, `9075` with its four decrypted fields, the chunks the watch as
 offset, `a065`/`9065` to close — and reCMF now walks it, reading a `.bin` through the
 system file picker and answering each ask from it.
 
-Two things about it are guesses rather than readings, and both are marked as such in the
-code. The **new id** is not in the file: the official app takes it from its catalogue, so
-reCMF picks one above everything the watch already holds. And the **mode byte** is always
-`03`; `02` is reported elsewhere as "add rather than replace", but this watch holds six
-slots and no seventh, and an untried mode is not worth sending to a device that has to be
-re-paired when it sulks.
+**First run against a watch: the transfer completes and the watch then refuses it.** Both
+faces crossed to their last byte — the final chunk request lands exactly on the announced
+size, twice — and `a065` came back `0a` where the official app is answered `01`. So the
+bytes arrive; something about the frame that announced them does not satisfy the watch.
+
+`0a` is unexplained. What is known is that it is not `01` — and the first version of this
+code treated any reply to the finish frame as success, which is how the log said "Combo
+sent" over a rejection. Fixed: the verdict is read, the code reported, the install failed.
+
+The **new id** is the leading suspect. It is not in the file — searched the whole of both —
+so the official app takes it from its catalogue, and reCMF's first guess was a number above
+everything the watch holds. The second reuses the id of the face being displaced: the watch
+issued that number itself, the slot it belongs to is the slot being written, and nothing
+can collide with it.
+
+The **mode byte** is always `03`. `02` is reported elsewhere as "add rather than replace",
+but this watch holds six slots and no seventh, and an untried mode is not worth sending to
+a device that has to be re-paired when it sulks.
 
 
 Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and firmware. These use the second GATT service and a
