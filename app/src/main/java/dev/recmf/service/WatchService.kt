@@ -196,6 +196,11 @@ class WatchService : LifecycleService() {
                 if (_status.value == ConnectionState.READY) connection.send(CmfCommand.FIND_WATCH)
             }
 
+            ACTION_SET_WATCHFACE -> lifecycleScope.launch {
+                val index = intent.getIntExtra(EXTRA_WATCHFACE_INDEX, -1)
+                if (_status.value == ConnectionState.READY && index >= 0) selectWatchface(index)
+            }
+
             // From the notification the ringing itself posts. It has to come through the
             // service rather than a receiver of its own because the ringer is the
             // service's, and a second instance would silence nothing.
@@ -662,6 +667,36 @@ class WatchService : LifecycleService() {
      * asks "what does the watch actually say", and until this ran there, checking whether
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
+    /**
+     * Switches the face by handing the watch its own list back, with a different one active.
+     *
+     * The watch takes no argument here. A capture of the official app shows it sending the
+     * whole twenty-eight byte block it was given, active byte moved, and the watch echoing
+     * those exact bytes and switching — which is why five shapes of single id and single
+     * index were all acknowledged and all ignored.
+     *
+     * The read afterwards is kept from that failed round: this watch acknowledges writes
+     * it does not act on, so nothing here is believed until the list says so.
+     */
+    private suspend fun selectWatchface(index: Int) {
+        val listed = WatchStatus.watchfaces.value
+        val payload = listed?.let { CmfSettings.watchfaceSelection(it, index) }
+
+        if (listed == null || payload == null) {
+            ProtocolLog.note("Watchface: nothing to select — the watch has not sent its list")
+            return
+        }
+
+        ProtocolLog.note("Watchface: selecting #${index + 1}, id ${listed.ids[index]}")
+        connection.send(CmfCommand.WATCHFACE_LIST_SET, payload)
+
+        // The watch echoes the block it accepted, so a read is usually redundant — but a
+        // watch that ignored the write answers this too, and silence is what distinguishes
+        // them.
+        delay(WATCHFACE_SETTLE_MILLIS)
+        connection.send(CmfCommand.WATCHFACE_GET)
+    }
+
     private suspend fun readBackSettings() {
         // First, and it stays first: this is what tied `ffff/a055` to it. That frame had
         // been arriving unattributed for months, and it kept arriving right behind this
@@ -1202,6 +1237,11 @@ class WatchService : LifecycleService() {
         const val ACTION_STOP = "dev.recmf.action.STOP"
         const val ACTION_SYNC_NOW = "dev.recmf.action.SYNC_NOW"
         const val ACTION_FIND_WATCH = "dev.recmf.action.FIND_WATCH"
+        const val ACTION_SET_WATCHFACE = "dev.recmf.action.SET_WATCHFACE"
+        const val EXTRA_WATCHFACE_INDEX = "dev.recmf.extra.WATCHFACE_INDEX"
+
+        /** Long enough for the watch to have acted before it is asked what it did. */
+        private const val WATCHFACE_SETTLE_MILLIS = 600L
         const val ACTION_STOP_RINGING = "dev.recmf.action.STOP_RINGING"
 
         fun start(context: Context) {
@@ -1222,6 +1262,15 @@ class WatchService : LifecycleService() {
         fun findWatch(context: Context) {
             context.startForegroundService(
                 Intent(context, WatchService::class.java).setAction(ACTION_FIND_WATCH),
+            )
+        }
+
+        /** Asks the watch to show the face at this position in its own list. */
+        fun setWatchface(context: Context, index: Int) {
+            context.startForegroundService(
+                Intent(context, WatchService::class.java)
+                    .setAction(ACTION_SET_WATCHFACE)
+                    .putExtra(EXTRA_WATCHFACE_INDEX, index),
             )
         }
 

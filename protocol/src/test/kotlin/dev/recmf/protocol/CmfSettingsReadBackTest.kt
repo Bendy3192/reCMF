@@ -157,4 +157,38 @@ class CmfSettingsReadBackTest {
         assertNull(CmfSettings.parseWatchfaceList(bytes("010506071201")))
         assertNull(CmfSettings.parseWatchfaceList(bytes("010506")))
     }
+
+    @Test
+    fun `selecting a face sends the list back with a different active byte`() {
+        // The official app does not name a face: it returns the twenty-eight bytes the
+        // watch gave it, with the active byte moved, and the watch echoes them and
+        // switches. So this rebuilds the captured list asking for the fourth face.
+        val list = CmfSettings.parseWatchfaceList(
+            bytes("01010607120100006e01000013010000140100001501000018010000"),
+        )!!
+
+        val selection = CmfSettings.watchfaceSelection(list, 3)!!
+
+        assertEquals(
+            "01030607120100006e01000013010000140100001501000018010000",
+            selection.toHex(),
+        )
+
+        // What goes out must read back as the same list with the new face active — the
+        // ids untouched, and the header bytes nobody has explained returned as given.
+        val echoed = CmfSettings.parseWatchfaceList(selection)
+        assertEquals(list.ids, echoed?.ids)
+        assertEquals(3, echoed?.active)
+        assertEquals(276, echoed?.activeId)
+    }
+
+    @Test
+    fun `a face outside the list cannot be selected`() {
+        val list = CmfSettings.parseWatchfaceList(
+            bytes("01010607120100006e01000013010000140100001501000018010000"),
+        )!!
+
+        assertNull(CmfSettings.watchfaceSelection(list, 6))
+        assertNull(CmfSettings.watchfaceSelection(list, -1))
+    }
 }

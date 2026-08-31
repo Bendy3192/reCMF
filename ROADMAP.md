@@ -353,16 +353,25 @@ write half. **The capture does not contain a face being selected** — only one 
 installed — so the select command is still unfound, and the new face becoming active is
 explained by the install rather than by any command.
 
-**Selecting a face is not solved, and `009f/0001` was probably never the place.** Five
-payload shapes were sent to it — an index byte, a big-endian id, a big-endian index, a
-count-then-index like the sport list, and a two-byte id. The watch acknowledged every one
-and kept the face it had, which is what goal writes do too. Suspecting the payload was
-reasonable while the opcode looked settled; the capture of the official app then showed
-watchfaces living entirely on the vendor channel (`8052`, `9075`, `9064`, `9055`), so the
-generic opcode is now the thing to doubt.
+**Selecting a face: `ffff/9055`, carrying the whole list.** A capture of the official app
+switching between installed faces settled it, and the frame is the same one that reads the
+list — what it carries decides which it is:
 
-The picker is gone and the card is a reading. Buttons that do nothing cost a wrong belief,
-and these also cost twenty log lines a tap.
+```
+TX ffff/9055  16 B  identical every time      → a request; a055 answers with the list
+TX ffff/9055  48 B  ciphertext of the list    → a selection
+RX ffff/a055  48 B  the same ciphertext back  → accepted, and the face changes
+```
+
+The app names no face. It returns the twenty-eight plaintext bytes it was given with the
+active byte pointing somewhere else, and the watch echoes exactly those bytes. Five
+attempts at `009f/0001` — an index byte, a big-endian id, a big-endian index, a
+count-then-index, a two-byte id — were acknowledged and ignored, because the watch does
+not take an argument here at all. It takes its list.
+
+reCMF sends everything except the active byte back untouched, including the two header
+bytes nobody has explained: the one thing known about this frame is that the watch accepts
+its own list, and a byte improved on the way out is a byte no capture supports.
 
 **Installing a face replaces a slot rather than adding one.** Before: 274, **273**, 275,
 276, 277, 280. After installing "Combo": 274, **366**, 275, 276, 277, 280 — still six, with

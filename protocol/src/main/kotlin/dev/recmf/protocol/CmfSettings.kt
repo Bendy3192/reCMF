@@ -278,6 +278,30 @@ object CmfSettings {
 
     /** The position of the active face, confirmed across two captures. */
     private const val WATCHFACE_ACTIVE_BYTE = 1
+
+    /**
+     * `WATCHFACE_LIST_SET`: the list as the watch gave it, with a different face active.
+     *
+     * The official app sends the whole block back rather than naming a face, and the watch
+     * echoes those exact bytes and switches. Everything except the active byte is returned
+     * untouched — including the two header bytes nobody has explained — because the one
+     * thing known about this frame is that the watch accepts its own list, and a byte
+     * "improved" on the way out is a byte no capture supports.
+     */
+    fun watchfaceSelection(list: WatchfaceList, index: Int): ByteArray? {
+        if (index !in list.ids.indices) return null
+
+        val buffer = ByteBuffer
+            .allocate(list.header.size + list.ids.size * 4)
+            .order(ByteOrder.LITTLE_ENDIAN)
+
+        list.header.forEachIndexed { at, byte ->
+            buffer.put(if (at == WATCHFACE_ACTIVE_BYTE) index.toByte() else byte.toByte())
+        }
+        list.ids.forEach { buffer.putInt(it) }
+
+        return buffer.array()
+    }
 }
 
 /**

@@ -124,14 +124,18 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     WATCHFACE_GET(0x009f, 0x0002),
 
     /**
-     * How the official app asks for the watchface list.
+     * The watchface list, written or asked for, depending on what it carries.
      *
-     * The vendor half of the same question `WATCHFACE_GET` asks: Nothing X sends this and
-     * gets `a055` back. Both times it was captured the ciphertext was identical, and one
-     * AES block is what a bare `a5` marker plus its CRC comes to — so this reads as a
-     * request carrying no argument rather than a command that selects anything.
+     * A capture of the official app switching faces settled this. With a bare `a5` it is
+     * a request and `a055` answers with the list. With the **whole list** as its payload
+     * it is a selection: the app sends back the twenty-eight bytes it was given, with the
+     * active byte pointing somewhere else, and the watch echoes exactly those bytes under
+     * `a055` and changes the face.
+     *
+     * Which is why single ids and single indices were acknowledged and ignored. The watch
+     * does not take an argument here; it takes the list.
      */
-    WATCHFACE_LIST_GET(0xffff, 0x9055),
+    WATCHFACE_LIST_SET(0xffff, 0x9055),
 
     /**
      * What `WATCHFACE_GET` is actually answered with.

@@ -504,6 +504,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     val watchfaces: StateFlow<WatchfaceList?> = WatchStatus.watchfaces
 
+    /** Hands the watch its own list back with a different face marked active. */
+    fun selectWatchface(index: Int) {
+        WatchService.setWatchface(getApplication(), index)
+    }
+
     /** The last night the watch reported, or null until it reports one. */
     val lastSleep: StateFlow<SleepSummary?> = settingsStore.lastSleep
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)

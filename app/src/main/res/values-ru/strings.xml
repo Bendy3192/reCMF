@@ -188,6 +188,6 @@
     <string name="duration_m">%1$d мин</string>
     <string name="chart_range_percent">%1$d–%2$d %%</string>
     <string name="watchfaces">Циферблат</string>
-    <string name="watchfaces_explainer">Часы не дают своим циферблатам названий, поэтому они просто посчитаны в том порядке, в каком приходят. Часы сами сообщают, когда циферблат меняют на запястье. Выбрать отсюда пока нельзя: пять форм команды перебраны, и часы подтвердили каждую, не сдвинувшись — так же, как с дневными целями.</string>
-    <string name="watchface_active">Циферблат %1$d из %2$d</string>
+    <string name="watchfaces_explainer">Часы не дают своим циферблатам названий, поэтому они просто посчитаны в том порядке, в каком приходят. Часы сами сообщают, когда циферблат меняют на запястье.</string>
+    <string name="watchface_number">Циферблат %1$d</string>
 </resources>
