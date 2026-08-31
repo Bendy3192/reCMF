@@ -250,6 +250,34 @@ byte 224 onwards. `tools/btsnoop.py --extract` now checks every message's CRC32 
 stripping it and says loudly when one does not verify. The correctly rebuilt file differs
 from the one that was sent in 65403 of its 76104 bytes.
 
+**With a correct file the control run finally ran, and it says the protocol is at fault.**
+The bytes the watch accepted from the official app were sent back to it by reCMF and refused
+with the same `0a`. So the file is not the objection.
+
+**And the official install has now been decrypted end to end**, using a long-term key carried
+over from another capture of the same app — `tools/btsnoop.py --k1` takes one, for a capture
+that holds no pairing of its own. Laid against reCMF's own log the two are the same frames in
+the same order with the same payloads:
+
+```
+TX 8052  a5                                RX 0052  01
+TX 9075  03 6e010000 43010000 48290100     RX a075  01
+RX a064  0000000000000c0000  ... twenty-five asks, identical offsets, lengths and percents
+RX a065  01                                          <- reCMF is answered 0a here
+```
+
+The watch even asks for the file in exactly the same steps. **The only field that differs in
+the whole exchange is `9075`'s pair of ids**: the official app replaced 366 with 323, an id
+the watch was not holding. reCMF has tried an unused id against a broken file, and the
+displaced face's own id against a good one. The remaining combination — an unused id and a
+file the watch has already accepted — is what the two failures never tested together, and is
+what it now sends.
+
+If that is refused too, the ids are exonerated and what is left is the bytes themselves: the
+watch reassembles the file from `9064` messages, and nothing in the exchange proves reCMF's
+messages carry the same bytes as the official app's. That takes a capture of reCMF's own
+transfer, to be diffed against the one already in hand.
+
 **What the correct rebuild showed is the layout of the whole file:**
 
 ```

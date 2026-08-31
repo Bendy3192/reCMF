@@ -183,6 +183,9 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("capture")
     parser.add_argument("--only", help="comma-separated cmd2 values in hex, e.g. 9055,a055")
+    parser.add_argument("--k1", help="a long-term key in hex, for a capture that holds no "
+                                     "pairing to derive one from. Wrong keys are obvious: "
+                                     "every frame comes out undecipherable.")
     parser.add_argument("--secret", help="the watch's app secret in hex, when the capture "
                                          "has a pairing but no GETSECRET in it")
     parser.add_argument("--extract", nargs=2, metavar=("CMD2", "FILE"),
@@ -196,7 +199,7 @@ def main() -> None:
     unverified = 0
 
     secret = bytes.fromhex(args.secret) if args.secret else None
-    k1 = long_term_key(blob, secret)
+    k1 = bytes.fromhex(args.k1) if args.k1 else long_term_key(blob, secret)
     if k1 is None:
         print("Could not recover a key from this capture.", file=sys.stderr)
         print("It needs a pairing (ffff/8047 and ffff/0048) and the watch's app secret.",
@@ -204,6 +207,8 @@ def main() -> None:
         print("If the pairing is here but GETSECRET is not, pass --secret: the secret is",
               file=sys.stderr)
         print("the watch's own and does not change between pairings.\n", file=sys.stderr)
+    elif args.k1:
+        print("# using the supplied long-term key\n", file=sys.stderr)
     elif secret is not None:
         print("# key recovered using the supplied secret\n", file=sys.stderr)
     else:

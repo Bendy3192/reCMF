@@ -766,16 +766,18 @@ class WatchService : LifecycleService() {
         }
 
         // The id the new face gets. Nothing in the file says what it should be — the
-        // official app takes that from its catalogue — and a number invented above
-        // everything the watch holds was tried first: the transfer ran to its last byte
-        // and the watch then answered `0a` instead of `01`.
+        // official app takes that from its catalogue — so it has to be invented, and the
+        // shape of the frame the watch accepted says what kind of number to invent: it
+        // replaced 366 with 323, an id the watch was not already holding.
         //
-        // So reuse the id of the face being displaced. The watch already knows that
-        // number, the slot it belongs to is the slot being written, and nothing else can
-        // collide with it. Whether the id was ever the objection is not certain — `0a` is
-        // an unexplained code — but a number the watch issued itself is a better guess
-        // than one reCMF made up.
-        val newId = listed.ids[replacedIndex]
+        // A number above everything the watch holds is the same shape and was tried first,
+        // and refused — but that attempt sent a file with four stray bytes on the end and
+        // two stale lengths in its header, so it proved nothing about the id. Reusing the
+        // displaced face's own id was tried next, on a correct file, and refused too.
+        //
+        // That leaves this combination — an unused id and a file the watch has already
+        // accepted once — as the one the two failures never tested together.
+        val newId = (listed.ids.maxOrNull() ?: 0) + 1
 
         sendingWatchface = sending
         watchfaceName = name
