@@ -65,11 +65,22 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     /**
      * What the official app actually sends as the second init, in place of `9063`.
      *
-     * Captured from Nothing X installing a face: `8052` → `0052` → **`9075`** → `a075` →
-     * the chunks → `a065`. Gadgetbridge sends `9063` at that step and its upload does not
-     * work, which is the whole of issue #4581. Its body is 32 bytes of ciphertext where
-     * `9063` would carry nine plaintext bytes, so this step wants more than the length
-     * and id Gadgetbridge puts in it.
+     * Captured from Nothing X installing a face and then decrypted, so the layout is read
+     * rather than guessed — thirteen little-endian bytes:
+     *
+     * ```
+     * mode:u8 | replacedId:u32 | newId:u32 | size:u32
+     * ```
+     *
+     * One capture reads `03 6e010000 43010000 48290100`: mode 3, replacing the face with
+     * id 366, installing id 323, 76104 bytes. All three check out — 366 was the id sitting
+     * in that slot, 323 is the id the list reported afterwards, and the watch's own chunk
+     * requests run to offset 76104 exactly.
+     *
+     * Gadgetbridge sends `9063` here with `a5`, a big-endian length and a **random** id
+     * under a comment reading `FIXME watchface ID?`, which is why its upload does not
+     * work. Wrong opcode, wrong byte order, and a field that is not a random number at
+     * all: it names the face being replaced.
      */
     DATA_TRANSFER_WATCHFACE_INIT_2_ALT_REQUEST(0xffff, 0x9075),
     DATA_TRANSFER_WATCHFACE_INIT_2_ALT_REPLY(0xffff, 0xa075),
@@ -126,11 +137,11 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     /**
      * The watchface list, written or asked for, depending on what it carries.
      *
-     * A capture of the official app switching faces settled this. With a bare `a5` it is
-     * a request and `a055` answers with the list. With the **whole list** as its payload
-     * it is a selection: the app sends back the twenty-eight bytes it was given, with the
-     * active byte pointing somewhere else, and the watch echoes exactly those bytes under
-     * `a055` and changes the face.
+     * A capture of the official app switching faces settled this, and decrypting it later
+     * confirmed the bytes. With a single `00` it is a request and `a055` answers with the
+     * list. With the **whole list** as its payload it is a selection: the app sends back
+     * the twenty-eight bytes it was given with the active byte pointing somewhere else,
+     * the watch answers `00` and then re-sends the list with the new face active.
      *
      * Which is why single ids and single indices were acknowledged and ignored. The watch
      * does not take an argument here; it takes the list.

@@ -256,10 +256,29 @@ RX ffff/a064   x19    each request encrypted
 RX ffff/a065   16 B   finished
 ```
 
-That is very likely the whole of Gadgetbridge's issue #4581: it sends `9063`, and this
-firmware wants `9075`. Its body is 32 bytes of ciphertext — two AES blocks — where
-Gadgetbridge's `9063` carries nine plaintext bytes, so the step wants more than a length
-and an id.
+**And `9075` has been decrypted.** Thirteen little-endian bytes:
+
+```
+mode:u8 | replacedId:u32 | newId:u32 | size:u32
+```
+
+One capture reads `03 6e010000 43010000 48290100` — mode 3, replacing id 366, installing
+id 323, 76104 bytes. Every field checks out independently: 366 was what the list held in
+that slot, 323 is what the list held afterwards, and the watch's own chunk requests run to
+offset 76104 exactly.
+
+So Gadgetbridge's issue #4581 has three causes at once, and the id was never the hard part.
+It sends the wrong opcode (`9063`), in the wrong byte order (big-endian), with a field it
+fills using `new Random().nextInt()` under a comment reading `FIXME watchface ID?` — when
+that field is not a random identifier at all. **It names the face being replaced.** The
+watch holds a fixed six, so an install is always a replacement, and the frame has to say
+which one goes.
+
+**The watch's app secret does not change between pairings.** It belongs to the watch, not
+to the app that asks for it, so a secret read once out of a `GETSECRET` reply decrypts any
+later pairing — by any app — on that watch. That is what turned a capture with the nonces
+but no `GETSECRET` in it, which is what a ring buffer usually leaves you, into a readable
+one. `tools/btsnoop.py --secret` takes it.
 
 **A capture that contains a pairing can be read in full**, which is what `tools/btsnoop.py`
 does. Nothing is broken to do it: the watch hands its app secret over the shell
@@ -268,11 +287,9 @@ SHA-256 of material already on the wire — `K1 = SHA-256(nonce1 || random2 || s
 then `SHA-256(nonce || K1)[:16]` re-derived on each reconnect. Confirmed by reading reCMF's
 own `a055` frames out of a capture and getting the list byte for byte.
 
-**But each app that pairs negotiates its own `K1`**, so a capture of the *official* app is
-unreadable unless it was taken across a fresh pairing of that app. Which is why the body of
-`9075` is still unknown: the capture holds the transfer and reCMF's pairing, not Nothing
-X's. Un-pairing Nothing X and pairing it again with the snoop log running would settle the
-last of this.
+**Each app that pairs negotiates its own `K1`**, so a capture of the official app needs
+that app's own pairing in it — but with the watch's secret in hand, that pairing is enough
+on its own.
 
 **The file itself came out of that capture**, because the chunks are not encrypted. 58217
 bytes, and its first sixteen read:
@@ -371,9 +388,10 @@ switching between installed faces settled it, and the frame is the same one that
 list — what it carries decides which it is:
 
 ```
-TX ffff/9055  16 B  identical every time      → a request; a055 answers with the list
-TX ffff/9055  48 B  ciphertext of the list    → a selection
-RX ffff/a055  48 B  the same ciphertext back  → accepted, and the face changes
+TX ffff/9055  00                              → a request; a055 answers with the list
+TX ffff/9055  01 03 06 07 <the six ids>       → a selection: active byte moved to 3
+RX ffff/a055  00                              → accepted
+RX ffff/a055  01 03 06 07 <the six ids>       → and the list comes back with it active
 ```
 
 The app names no face. It returns the twenty-eight plaintext bytes it was given with the

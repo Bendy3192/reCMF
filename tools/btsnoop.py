@@ -13,14 +13,16 @@ after that is a SHA-256 of things already on the wire:
 So this is not breaking anything. It is reading your own devices talking, which is what
 the whole project is built on.
 
-**A capture without the pairing cannot be read**, and that is not a bug. Each app that
-pairs with the watch negotiates its own K1, so a log of the official app is unreadable
-unless it was captured across a fresh pairing. Learning that cost an afternoon; it is
-written here so the next person spends none.
+A capture needs the pairing in it, because each app that pairs negotiates its own K1.
+But the app secret belongs to the **watch**, not the app, and does not change between
+pairings — so a secret read once can decrypt any later pairing of any app on that watch.
+Pass it with --secret when the capture has the nonces but no GETSECRET, which is what a
+ring buffer usually leaves you.
 
 Usage:
     python3 tools/btsnoop.py btsnoop_hci.log
     python3 tools/btsnoop.py btsnoop_hci.log --only 9055,a055
+    python3 tools/btsnoop.py btsnoop_hci.log --secret d61272b0...
     python3 tools/btsnoop.py btsnoop_hci.log --extract 9064 face.bin
 
 Needs openssl on PATH, and nothing else.
@@ -128,9 +130,9 @@ def app_secret(blob: bytes) -> bytes | None:
     return bytes.fromhex(found.group(1).decode()) if found else None
 
 
-def long_term_key(blob: bytes) -> bytes | None:
+def long_term_key(blob: bytes, secret: bytes | None = None) -> bytes | None:
     """K1, if this capture contains a pairing."""
-    secret = app_secret(blob)
+    secret = secret or app_secret(blob)
     if secret is None:
         return None
 
@@ -161,6 +163,8 @@ def main() -> None:
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("capture")
     parser.add_argument("--only", help="comma-separated cmd2 values in hex, e.g. 9055,a055")
+    parser.add_argument("--secret", help="the watch's app secret in hex, when the capture "
+                                         "has a pairing but no GETSECRET in it")
     parser.add_argument("--extract", nargs=2, metavar=("CMD2", "FILE"),
                         help="append every body of this command to a file, in order")
     args = parser.parse_args()
@@ -170,12 +174,17 @@ def main() -> None:
     extract = int(args.extract[0], 16) if args.extract else None
     extracted = bytearray()
 
-    k1 = long_term_key(blob)
+    secret = bytes.fromhex(args.secret) if args.secret else None
+    k1 = long_term_key(blob, secret)
     if k1 is None:
-        print("No pairing in this capture, so the traffic cannot be decrypted.", file=sys.stderr)
-        print("Headers are still readable. To read bodies, capture across a fresh pairing:",
+        print("Could not recover a key from this capture.", file=sys.stderr)
+        print("It needs a pairing (ffff/8047 and ffff/0048) and the watch's app secret.",
               file=sys.stderr)
-        print("each app that pairs negotiates its own key.\n", file=sys.stderr)
+        print("If the pairing is here but GETSECRET is not, pass --secret: the secret is",
+              file=sys.stderr)
+        print("the watch's own and does not change between pairings.\n", file=sys.stderr)
+    elif secret is not None:
+        print("# key recovered using the supplied secret\n", file=sys.stderr)
     else:
         print(f"# pairing found; long-term key recovered\n", file=sys.stderr)
 
