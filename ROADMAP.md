@@ -224,6 +224,37 @@ Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and fir
 chunked upload protocol, and firmware flashing is the one operation here that can brick a
 watch — so it comes last and stays behind a warning.
 
+**The upload sequence is already known**, read out of Gadgetbridge's `CmfDataUploader`
+(GitHub mirror, December 2024 — its live development is on Codeberg and is further along
+than this):
+
+1. `DATA_TRANSFER_WATCHFACE_INIT_1_REQUEST` (`ffff/8052`) carrying one byte, `a5`.
+2. The watch replies `ffff/0052` with `01`.
+3. `DATA_TRANSFER_WATCHFACE_INIT_2_REQUEST` (`ffff/9063`), nine **big-endian** bytes:
+   `a5`, the file length as u32, and a u32 watchface id.
+4. The watch replies `ffff/a063` with `01`.
+5. The watch then asks for the file in pieces: `ffff/a064` carries offset u32, length u32
+   and a progress byte, and each piece goes back as `ffff/9064` — unencrypted, like the
+   A-GPS chunks.
+6. `ffff/a065` closes it and is answered with `ffff/9065`.
+
+The file itself starts `01 00 00 02`, carries a null-terminated name at offset 8, and
+repeats that name 28 bytes from the end — Gadgetbridge checks both and refuses the file if
+they disagree. Reports elsewhere say faces built for the **Pro 2** start `01 00 00 00`
+instead, which that December snapshot does not know about.
+
+**Step 3 is where it stalls.** Gadgetbridge writes `new Random().nextInt()` there, under a
+comment reading `FIXME watchface ID?` — nobody knew what the field wanted. Which is
+interesting, because `ffff/a055` — the frame this watch sends unprompted and which appears
+nowhere in Gadgetbridge's source — is six 32-bit numbers: 273, 274, 275, 276, 277, 280.
+Six ids, in the field width that step 3 wants. That is a hypothesis and not a finding, but
+it is the first one either project has had.
+
+Getting a face file to try needs the official app's copy of one: they land in
+`/data/data/com.nothing.smartcenter/app_flutter/dial/market/dial_file/` as
+`watchface_<hash>.bin`, which is a private directory and needs root to reach. This is the
+one place in the whole project where root buys something ADB cannot.
+
 **Switching between the faces already on the watch is a separate and much smaller
 question**, and it is not in this phase. It needs one opcode, `WATCHFACE` (`009f/0001`),
 and no file transfer at all. reCMF now sends `009f/0002` on every connection and logs
