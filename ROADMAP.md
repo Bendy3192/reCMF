@@ -366,16 +366,33 @@ which is what a dial ring or a round icon is. And the compression ratio, which r
 absurd 200 pixels per byte before, now sits between 1.6 and 28.6 across every distinct size
 in both files, which is the range an RLE over small images actually lives in.
 
-**The compressed data itself is what remains.** It is not PNG, JPEG, WebP, GIF, BMP, gzip or
-zlib — no magic for any of them appears anywhere. Three images in one file are the same
-picture at three heights (10 by 28, 10 by 44, 10 by 140) and differ *only* in the length of a
-run of `ff` bytes — two, four and fifteen of them — which says runs are in there and that
-`ff` is how they are spelled. Every image's data opens with `1f 00 01 00`.
+**The compressed data is half open.** It is not PNG, JPEG, WebP, GIF, BMP, gzip or zlib —
+no magic for any of them appears anywhere — and what it turned out to be is a small
+run-length format over **RGB888**, three bytes to the pixel.
 
-The best cribs are the digit sets. A ten-image element is the digits nought to nine in order,
-and it reads like it: in one set the smallest image by far is index 1 and the second smallest
-is index 7, which is exactly the order of how much ink a digit takes. Ten pictures whose
-content is known in advance is as good a starting point as a codec ever offers.
+Two things gave it away. Three images in one file are the same picture at three heights —
+10 by 28, 10 by 44 and 10 by 140 — and differ *only* in a run of `ff` bytes followed by one
+other byte. Read as `255 × (number of ff) + that byte`, the three values are 671, 1151 and
+4031, and against the three pixel counts they sit on a straight line of **exactly three units
+per pixel**, twice over. So lengths are counted in output bytes and a pixel is three of them.
+
+The other is a token that turns up again and again in the digits: `0f 8d 00`. The digit box is
+47 pixels wide, and `0x008d` is 141, which is 47 × 3 — one row. So **`0f` followed by a
+little-endian u16 is a run of that many bytes**, and the lengths land on whole rows. In the
+simplest digit, twelve of them are exactly one row, one is two rows and one is three; in the
+weekday strip, fourteen are one row; in a background, twenty-four. That is what the blank
+space above and below a glyph looks like from inside a codec.
+
+The same reading holds at every width tried: the 10-wide images carry `0f 1e 00`, and
+`0x001e` is 30, which is 10 × 3.
+
+What is still unknown: the other opcodes, whether the `0f` run means transparent or repeat,
+and what the tag byte in the image header (`04` or `05`) selects. Every image's data opens
+with `1f 00 01 00`, which is not yet explained either.
+
+The best cribs remain the digit sets: a ten-image element is the digits nought to nine in
+order, and it reads like it — in one set the smallest image by far is index 1 and the second
+smallest is index 7, exactly the order of how much ink a digit takes.
 
 The feedback loop for cracking it is slow but real: build a file, send it, look at the watch.
 A minute an attempt, and the answer is on the screen.
