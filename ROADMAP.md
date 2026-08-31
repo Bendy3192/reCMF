@@ -500,6 +500,16 @@ That splits the remaining work in two. Elements that are pictures are nearly rea
 watch renders — arcs, hands, and whatever else survives a recolour — are a second kind of
 descriptor that has not been looked at yet.
 
+**And their colour is not in the face at all.** The arcs on one face are `#ff4820`, taken from
+that face's own preview where they are 6633 pixels of one shade. That colour does not appear in
+the file: not as RGB565, not as RGB888 either way round, not as a word — the two bytes `ff 48`
+occur four times in 57 kilobytes and never in the element table.
+
+So the watch is not being told what colour to draw its arcs. It already knows. A face can at
+most be selecting a style, with the colours living in the firmware — which means repainting
+every picture in a face, as the tool now does, will always leave those arcs in the colour the
+watch chose. That is a limit worth knowing before designing around it.
+
 ### Where the stock faces are
 
 Two faces is a thin corpus for reading the placement bytes, and the watch will not hand its
