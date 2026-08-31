@@ -52,6 +52,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -668,22 +669,54 @@ class WatchService : LifecycleService() {
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
     /**
-     * Asks the watch for a face, then asks it what face it has.
+     * Asks the watch for a face, in each shape the command might want, until one lands.
      *
-     * The write half of this pair has never been confirmed — the payload is a guess, and
-     * this watch has already been seen to acknowledge a write and keep what it had, which
-     * is exactly what goals do. So the request is followed by a read, and the log says
-     * plainly whether the watch moved. A frame that is accepted and ignored looks
-     * identical to one that worked, right up until someone reads the list back.
+     * A four-byte little-endian id was tried first and failed: the watch acknowledged five
+     * different ids and kept the face it had. Acknowledged-and-ignored is this watch's
+     * house style — goal writes do the same — so nothing here is believed without reading
+     * the face back, and the read half is understood well enough to make that cheap.
+     *
+     * Walking the shapes in one press rather than one build at a time is the point. Each
+     * is written, read back and compared, and the log names the one that worked. If none
+     * do, that is a finding too, and the last line says so rather than leaving the user to
+     * infer it from a picker that quietly does nothing.
      */
     private suspend fun selectWatchface(id: Int) {
-        ProtocolLog.note("Watchface: asking for id $id")
-        connection.send(CmfCommand.WATCHFACE, CmfSettings.watchface(id))
+        val listed = WatchStatus.watchfaces.value
+        val index = listed?.ids?.indexOf(id) ?: -1
 
-        // The watch answers its own settings promptly, but not instantly, and a read sent
-        // in the same breath as the write comes back describing the state before it.
-        delay(WATCHFACE_SETTLE_MILLIS)
-        connection.send(CmfCommand.WATCHFACE_GET)
+        if (listed == null || index < 0) {
+            ProtocolLog.note("Watchface: $id is not in the list the watch gave")
+            return
+        }
+
+        // Otherwise the first read would find the id already active and report a success
+        // that nothing caused.
+        if (listed.activeId == id) {
+            ProtocolLog.note("Watchface: $id is already on the screen")
+            return
+        }
+
+        for (attempt in CmfSettings.watchfaceAttempts(id, index)) {
+            ProtocolLog.note("Watchface: asking for id $id as ${attempt.name}")
+            connection.send(CmfCommand.WATCHFACE, attempt.payload)
+
+            // The watch answers its own settings promptly but not instantly, and a read
+            // sent in the same breath comes back describing the state before the write.
+            delay(WATCHFACE_SETTLE_MILLIS)
+            connection.send(CmfCommand.WATCHFACE_GET)
+
+            val moved = withTimeoutOrNull(WATCHFACE_REPLY_TIMEOUT_MILLIS) {
+                WatchStatus.watchfaces.first { it?.activeId == id }
+            }
+
+            if (moved != null) {
+                ProtocolLog.note("Watchface: ${attempt.name} is the shape that works")
+                return
+            }
+        }
+
+        ProtocolLog.note("Watchface: every shape was acknowledged and none changed the face")
     }
 
     private suspend fun readBackSettings() {
@@ -1228,7 +1261,10 @@ class WatchService : LifecycleService() {
         const val EXTRA_WATCHFACE_ID = "dev.recmf.extra.WATCHFACE_ID"
 
         /** Long enough for the watch to have acted before it is asked what it did. */
-        private const val WATCHFACE_SETTLE_MILLIS = 700L
+        private const val WATCHFACE_SETTLE_MILLIS = 600L
+
+        /** How long a read is given to arrive before the shape is counted as a failure. */
+        private const val WATCHFACE_REPLY_TIMEOUT_MILLIS = 1_500L
         const val ACTION_STOP_RINGING = "dev.recmf.action.STOP_RINGING"
 
         fun start(context: Context) {

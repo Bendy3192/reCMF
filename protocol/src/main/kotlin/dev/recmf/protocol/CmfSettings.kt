@@ -280,19 +280,42 @@ object CmfSettings {
     private const val WATCHFACE_ACTIVE_BYTE = 1
 
     /**
-     * `WATCHFACE`: asks for a face by the id the list reports.
+     * The shapes `WATCHFACE` might want, in the order they are worth trying.
      *
-     * **The payload is a guess.** The read half of this pair is understood; the write half
-     * has never been sent to a watch. Four little-endian bytes are chosen because that is
-     * how the list identifies a face, and because the upload sequence asks for an id in
-     * the same width — but a single index byte would fit the evidence just as well, and
-     * the watch may well ignore both. Whether it worked is not assumed: the caller reads
-     * the list back afterwards and compares, which is the same way goal writes were found
-     * to be silently ignored.
+     * A four-byte little-endian id was the first guess and it failed: the watch
+     * acknowledged every one of five different ids and kept the face it had — the same
+     * behaviour goal writes have. So rather than guess again one build at a time, the
+     * caller walks this list and reads the face back after each, which is cheap because
+     * the read half of this pair is understood and answers in well under a second.
+     *
+     * The order is by argument, not by whim:
+     *
+     * 1. **A single index byte.** The watch reports the active face as an index byte, so
+     *    an index byte is what it already speaks about faces.
+     * 2. **A big-endian id.** Every setting payload this protocol writes is big-endian —
+     *    reminders, goals, heart alerts — while the *lists* it reads back are little-endian.
+     *    The first guess used the reading order for a write.
+     * 3. **A big-endian index**, for the same reason one step down.
+     * 4. **A count and then an index**, which is the shape the sport list is written in.
+     * 5. **A two-byte id**, since every id so far fits in two bytes.
+     *
+     * If none of them moves the watch, that is a finding rather than a failure: it would
+     * put watchfaces where goals are — readable, and not writable on this firmware.
      */
-    fun watchface(id: Int): ByteArray =
-        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(id).array()
+    fun watchfaceAttempts(id: Int, index: Int): List<WatchfaceAttempt> = listOf(
+        WatchfaceAttempt("index byte", byteArrayOf(index.toByte())),
+        WatchfaceAttempt("id, big-endian", bigEndian(4) { putInt(id) }),
+        WatchfaceAttempt("index, big-endian", bigEndian(4) { putInt(index) }),
+        WatchfaceAttempt("count and index", byteArrayOf(1, index.toByte())),
+        WatchfaceAttempt("id, two bytes", bigEndian(2) { putShort(id.toShort()) }),
+    )
+
+    private inline fun bigEndian(size: Int, fill: ByteBuffer.() -> Unit): ByteArray =
+        ByteBuffer.allocate(size).order(ByteOrder.BIG_ENDIAN).apply(fill).array()
 }
+
+/** One shape of the select-a-face command, named so the log can say which one landed. */
+class WatchfaceAttempt(val name: String, val payload: ByteArray)
 
 /**
  * What the watch says its goals are.

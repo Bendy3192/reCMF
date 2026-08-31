@@ -316,10 +316,21 @@ beside the reading of it, so the moment the two stop agreeing is visible.
 
 `07` is unexplained and is not an index into six entries. `01` is unexplained.
 
-What remains untried is **whether `WATCHFACE` (`009f/0001`) selects a face**. It is the
-obvious candidate — it is the write half of the pair whose read half is now understood —
-but writing an id into the watch blind is not the way to find out, and the id list only
-became trustworthy an hour ago.
+**Selecting a face does not work yet.** `WATCHFACE` (`009f/0001`) was sent with a
+four-byte little-endian id — the shape the list reports ids in, and the width the upload
+sequence asks for. The watch acknowledged all five ids it was offered and kept the face it
+had. That is the same behaviour as goal writes, which are also accepted and ignored.
+
+The payload is the first thing to suspect rather than the opcode, because the reading
+order was used for a write. Every setting payload this protocol *writes* is big-endian —
+reminders, goals, heart alerts — while the lists it *reads* are little-endian. So reCMF
+now walks five shapes in one press, reading the face back after each and naming in the log
+whichever lands: an index byte (the watch already describes the active face as an index
+byte), a big-endian id, a big-endian index, a count-then-index like the sport list, and a
+two-byte id.
+
+If none of them moves it, watchfaces join goals: readable, not writable on this firmware.
+That is worth knowing plainly rather than shipping a picker that quietly does nothing.
 
 ## Known and fixed, worth not repeating
 
