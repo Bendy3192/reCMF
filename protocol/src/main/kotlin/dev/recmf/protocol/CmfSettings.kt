@@ -241,13 +241,16 @@ object CmfSettings {
     /**
      * `WATCHFACE_LIST`: four header bytes, then one 32-bit id per watchface.
      *
-     * Confirmed as `01 05 06 07` followed by 273, 274, 275, 276, 277 and 280 — six ids,
+     * Confirmed as `01 05 06 07` followed by 274, 273, 275, 276, 277 and 280 — six ids,
      * and the header's third byte is 6. That agreement is the only check available, so a
      * frame whose header disagrees with what follows is refused rather than guessed at.
      *
-     * The other three header bytes are not identified. `05` is a plausible index into six
-     * entries and `07` is not, but nothing has tested either: the way to find out is to
-     * change the face on the watch by hand and read this again.
+     * The second byte reads as the active face: it was 5 on a watch showing the sixth of
+     * the six. That is one observation, and one observation cannot tell an index from any
+     * other number that happens to equal five — so it is offered as [WatchfaceList.active]
+     * and only when it lands inside the list, and a second capture with a different face
+     * selected is what would settle it. The first and fourth bytes are unexplained; `07`
+     * is not an index into six entries, whatever else it is.
      */
     fun parseWatchfaceList(payload: ByteArray): WatchfaceList? {
         if (payload.size < WATCHFACE_HEADER_BYTES) return null
@@ -259,7 +262,11 @@ object CmfSettings {
 
         if (header[WATCHFACE_COUNT_BYTE] != ids.size) return null
 
-        return WatchfaceList(header = header, ids = ids)
+        return WatchfaceList(
+            header = header,
+            ids = ids,
+            active = header[WATCHFACE_ACTIVE_BYTE].takeIf { it in ids.indices },
+        )
     }
 
     /** The four bytes ahead of the ids. */
@@ -267,6 +274,9 @@ object CmfSettings {
 
     /** The one header byte with a known meaning: how many ids follow. */
     private const val WATCHFACE_COUNT_BYTE = 2
+
+    /** Reads as the position of the active face, on the strength of one capture. */
+    private const val WATCHFACE_ACTIVE_BYTE = 1
 }
 
 /**
@@ -293,8 +303,15 @@ data class WatchGoals(
  *   later capture can be compared byte for byte against this one.
  * @param ids one 32-bit number per watchface. Very likely the same id that the upload
  *   sequence asks for and that Gadgetbridge currently fills with a random number.
+ * @param active where in [ids] the face currently on the screen sits, or null when the
+ *   header byte does not point inside the list — which would mean it is not an index and
+ *   this reading is wrong.
  */
 data class WatchfaceList(
     val header: List<Int>,
     val ids: List<Int>,
-)
+    val active: Int?,
+) {
+    /** The id of the face on the screen, as far as [active] can be trusted. */
+    val activeId: Int? get() = active?.let { ids[it] }
+}

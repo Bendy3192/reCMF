@@ -909,7 +909,15 @@ class WatchService : LifecycleService() {
             CmfCommand.WATCHFACE_LIST -> readBack(
                 value = CmfSettings.parseWatchfaceList(message.payload),
                 describe = {
-                    "Watchfaces on the watch: " + it.ids.joinToString(", ") + " (header " +
+                    // The raw header stays in the line beside the reading of it. The
+                    // active byte rests on a single capture, and a log that printed only
+                    // the conclusion would hide the moment the two stop agreeing.
+                    val active = it.active
+                        ?.let { at -> "active #${at + 1} of ${it.ids.size}, id ${it.ids[at]}" }
+                        ?: "active unknown"
+
+                    "Watchfaces on the watch: " + it.ids.joinToString(", ") + " — " +
+                        active + " (header " +
                         it.header.joinToString(" ") { byte -> "%02x".format(byte) } + ")"
                 },
                 adopt = { false },

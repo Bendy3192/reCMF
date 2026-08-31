@@ -276,11 +276,23 @@ Its content is a four-byte header, `01 05 06 07`, then six little-endian 32-bit 
 that agreement is the only structural check the frame offers — reCMF refuses a frame where
 the two disagree rather than reading invented numbers out of it.
 
-Two things remain. **Which face is active** — `05` is a plausible index into six entries
-and `07` is not, but neither has been tested, and changing the face on the watch by hand
-and re-reading this settles it. And **whether `WATCHFACE` (`009f/0001`) selects one**,
-which is untried: it is the obvious candidate, and writing an id blind is not the way to
-find out.
+**The second header byte reads as the active face.** The watch was showing the sixth of
+its six, and that byte is 5 — the position of the sixth when counting from zero. reCMF
+offers that reading, and only when the byte lands inside the list: a value that cannot be
+a position is evidence it was never a position, so the reading is withdrawn rather than
+clamped to something plausible.
+
+One capture cannot tell an index from any other number that happens to equal five, so this
+is a prediction rather than a fact, and it is a falsifiable one: **select the first face on
+the watch and the byte should read `00`.** Until that is done the log prints the raw header
+beside the reading of it, so the moment the two stop agreeing is visible.
+
+`07` is unexplained and is not an index into six entries. `01` is unexplained.
+
+What remains untried is **whether `WATCHFACE` (`009f/0001`) selects a face**. It is the
+obvious candidate — it is the write half of the pair whose read half is now understood —
+but writing an id into the watch blind is not the way to find out, and the id list only
+became trustworthy an hour ago.
 
 ## Known and fixed, worth not repeating
 

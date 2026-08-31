@@ -111,6 +111,25 @@ class CmfSettingsReadBackTest {
 
         assertEquals(listOf(0x01, 0x05, 0x06, 0x07), list?.header)
         assertEquals(listOf(274, 273, 275, 276, 277, 280), list?.ids)
+
+        // The watch was showing the sixth of the six, and the second header byte is 5.
+        // One observation: enough to offer the reading, not enough to rely on it.
+        assertEquals(5, list?.active)
+        assertEquals(280, list?.activeId)
+    }
+
+    @Test
+    fun `an active byte pointing outside the list is not an index`() {
+        // Six ids and a second byte of 9. Rather than clamp it to something plausible,
+        // the reading is withdrawn: a number that cannot be a position into this list is
+        // evidence that it was never a position at all.
+        val list = CmfSettings.parseWatchfaceList(
+            bytes("01090607120100001101000013010000140100001501000018010000"),
+        )
+
+        assertEquals(listOf(274, 273, 275, 276, 277, 280), list?.ids)
+        assertNull(list?.active)
+        assertNull(list?.activeId)
     }
 
     @Test
