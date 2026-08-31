@@ -147,7 +147,6 @@ class MainActivity : ComponentActivity() {
                     onForget = model::forget,
                     onSyncNow = model::syncNow,
                     onFindWatch = model::findWatch,
-                    onSelectWatchface = model::selectWatchface,
                     updateState = updateState,
                     onCheckForUpdate = model::checkForUpdate,
                     onInstallUpdate = model::installUpdate,

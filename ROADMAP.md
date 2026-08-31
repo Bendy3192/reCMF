@@ -353,21 +353,24 @@ write half. **The capture does not contain a face being selected** — only one 
 installed — so the select command is still unfound, and the new face becoming active is
 explained by the install rather than by any command.
 
-**Selecting a face does not work yet.** `WATCHFACE` (`009f/0001`) was sent with a
-four-byte little-endian id — the shape the list reports ids in, and the width the upload
-sequence asks for. The watch acknowledged all five ids it was offered and kept the face it
-had. That is the same behaviour as goal writes, which are also accepted and ignored.
+**Selecting a face is not solved, and `009f/0001` was probably never the place.** Five
+payload shapes were sent to it — an index byte, a big-endian id, a big-endian index, a
+count-then-index like the sport list, and a two-byte id. The watch acknowledged every one
+and kept the face it had, which is what goal writes do too. Suspecting the payload was
+reasonable while the opcode looked settled; the capture of the official app then showed
+watchfaces living entirely on the vendor channel (`8052`, `9075`, `9064`, `9055`), so the
+generic opcode is now the thing to doubt.
 
-The payload is the first thing to suspect rather than the opcode, because the reading
-order was used for a write. Every setting payload this protocol *writes* is big-endian —
-reminders, goals, heart alerts — while the lists it *reads* are little-endian. So reCMF
-now walks five shapes in one press, reading the face back after each and naming in the log
-whichever lands: an index byte (the watch already describes the active face as an index
-byte), a big-endian id, a big-endian index, a count-then-index like the sport list, and a
-two-byte id.
+The picker is gone and the card is a reading. Buttons that do nothing cost a wrong belief,
+and these also cost twenty log lines a tap.
 
-If none of them moves it, watchfaces join goals: readable, not writable on this firmware.
-That is worth knowing plainly rather than shipping a picker that quietly does nothing.
+**Installing a face replaces a slot rather than adding one.** Before: 274, **273**, 275,
+276, 277, 280. After installing "Combo": 274, **366**, 275, 276, 277, 280 — still six, with
+the new id in the second slot, and the active byte pointing at it. So the watch holds a
+fixed six and the new face becoming active is a consequence of the install.
+
+What is still missing is a capture of a face being **selected** in the official app rather
+than installed. That is one unfamiliar frame, and it ends this.
 
 ## Known and fixed, worth not repeating
 

@@ -504,11 +504,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      */
     val watchfaces: StateFlow<WatchfaceList?> = WatchStatus.watchfaces
 
-    /** Asks the watch to show a face. Whether it obliges is a question the log answers. */
-    fun selectWatchface(id: Int) {
-        WatchService.setWatchface(getApplication(), id)
-    }
-
     /** The last night the watch reported, or null until it reports one. */
     val lastSleep: StateFlow<SleepSummary?> = settingsStore.lastSleep
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)

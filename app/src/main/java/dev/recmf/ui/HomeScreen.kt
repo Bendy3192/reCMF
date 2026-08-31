@@ -151,7 +151,6 @@ fun HomeScreen(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
-    onSelectWatchface: (Int) -> Unit,
     updateState: UpdateState,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
@@ -198,7 +197,6 @@ fun HomeScreen(
                         onForget = onForget,
                         onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
-                        onSelectWatchface = onSelectWatchface,
                         updateState = updateState,
                         onCheckForUpdate = onCheckForUpdate,
                         onInstallUpdate = onInstallUpdate,
@@ -249,7 +247,6 @@ private fun TabContent(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
-    onSelectWatchface: (Int) -> Unit,
     updateState: UpdateState,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
@@ -312,7 +309,7 @@ private fun TabContent(
                 }
                 item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
-                item { WatchfaceCard(watchfaces, state.connection.isUsable, onSelectWatchface) }
+                item { WatchfaceCard(watchfaces) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
@@ -2053,50 +2050,40 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
 }
 
 /**
- * The faces the watch has, and which one it is wearing.
+ * The faces the watch has, and which one it is wearing. A reading, not a control.
  *
- * The list is the watch's own — it is asked for on every connection and never stored,
- * because a face changed on the wrist would make a remembered copy wrong until the next
- * sync. There are no names or pictures here and there will not be until the watch offers
- * them: it reports six numbers and nothing else, and inventing labels for them would be
- * pretending to know which is which.
+ * The list is the watch's own — asked for on every connection, volunteered again whenever
+ * the face is changed on the wrist, and never stored, because a remembered copy would be
+ * wrong from the moment someone reached for the watch. No names and no pictures: it
+ * reports six numbers and nothing else, and inventing labels would be pretending to know
+ * which is which.
  *
- * Selecting is offered as an experiment rather than a feature, and the card says so. The
- * write half of this pair has never been confirmed; the app sends its best guess at the
- * payload and then reads the list back, so the log answers whether the watch moved. This
- * watch has form here — it acknowledges goal writes and keeps the goals it had.
+ * There were chips here that tried to select a face. Five payload shapes were sent to
+ * `009f/0001`; the watch acknowledged all five and changed nothing, the way it does with
+ * daily goals. Then a capture of the official app showed watchfaces living entirely on the
+ * vendor channel, so `009f/0001` was probably never the selector. Buttons that do nothing
+ * are worse than no buttons — they cost a wrong belief and, here, twenty log lines a tap.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WatchfaceCard(
-    watchfaces: WatchfaceList?,
-    connected: Boolean,
-    onSelect: (Int) -> Unit,
-) {
+private fun WatchfaceCard(watchfaces: WatchfaceList?) {
     if (watchfaces == null) return
 
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.watchfaces), style = MaterialTheme.typography.titleMedium)
+
+            watchfaces.active?.let {
+                Text(
+                    stringResource(R.string.watchface_active, it + 1, watchfaces.ids.size),
+                    style = MaterialTheme.typography.titleLarge,
+                )
+            }
+
             Text(
                 stringResource(R.string.watchfaces_explainer),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                watchfaces.ids.forEachIndexed { index, id ->
-                    FilterChip(
-                        selected = index == watchfaces.active,
-                        onClick = { onSelect(id) },
-                        enabled = connected,
-                        label = { Text(stringResource(R.string.watchface_number, index + 1)) },
-                    )
-                }
-            }
         }
     }
 }
