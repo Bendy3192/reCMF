@@ -25,8 +25,18 @@ compressor saying "this row is the last one again" and is what makes a watchface
 flat areas come to a few kilobytes.
 
 Usage:
-    python3 tools/watchface.py face.bin              # what is in it
-    python3 tools/watchface.py face.bin --png out/   # and every picture as a PNG
+    python3 tools/watchface.py face.bin                      # what is in it
+    python3 tools/watchface.py face.bin --png out/           # every picture as a PNG
+    python3 tools/watchface.py face.bin --from out/ \
+                               --rebuild mine.bin            # and back again
+
+Those three lines are the whole loop for making a face of your own: take one apart, redraw
+its pictures in whatever you draw in, put it back together. The layout and the data each
+element shows come from the face you started with; everything you can see is yours.
+
+A picture has to come back the size it went out — the element table says how big each slot
+is and the watch believes it — and anything not in the directory is carried through
+unchanged, so a single background can be swapped without touching the rest.
 """
 
 from __future__ import annotations
@@ -267,6 +277,20 @@ def all_records(face: bytes, table: int) -> list[tuple[int, int, int, list[int]]
     return out
 
 
+def runs(face: bytes) -> list[tuple[int, int, list[int]]]:
+    """The distinct runs of pictures a face holds, in file order.
+
+    Several elements can name the same run — the hours and the minutes share a set of
+    digits — so this is what both reading and writing count through, and a picture's number
+    means the same thing to `--png` and to `--from`.
+    """
+    content, resources = struct.unpack_from("<II", face, CONTENT_SIZE_OFFSET)
+    out: dict[int, tuple[int, list[int]]] = {}
+    for _at, count, start, sizes in all_records(face, content - resources):
+        out.setdefault(start, (count, sizes))
+    return [(start, count, sizes) for start, (count, sizes) in sorted(out.items())]
+
+
 def rebuild(face: bytes, replaced: dict[tuple[int, int], bytes]) -> bytes:
     """Writes the face back out, with any pictures in [replaced] swapped in.
 
@@ -281,7 +305,7 @@ def rebuild(face: bytes, replaced: dict[tuple[int, int], bytes]) -> bytes:
     blob = bytearray()
     moved: dict[int, tuple[int, list[int]]] = {}
 
-    for index, (start, _count, sizes) in enumerate(elements(face)):
+    for index, (start, _count, sizes) in enumerate(runs(face)):
         where = table + len(blob)
         built_sizes = []
         at = start
@@ -316,6 +340,84 @@ def rebuild(face: bytes, replaced: dict[tuple[int, int], bytes]) -> bytes:
     return bytes(out) + bytes(out[:HEADER_BYTES])
 
 
+
+def read_png(path: str) -> tuple[int, int, bytes]:
+    """A PNG back to RGBA, for pictures that have been out to an image editor and returned.
+
+    Only what this tool writes and what an editor gives back: eight bits a channel, colour
+    with or without alpha, no interlacing. Anything else is refused by name rather than
+    misread — a picture that decodes to the wrong thing would be found on the watch, which
+    is a long way to go for a wrong answer.
+    """
+    blob = open(path, "rb").read()
+    if blob[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError(f"{path}: not a PNG")
+
+    at = 8
+    width = height = 0
+    channels = 0
+    data = bytearray()
+
+    while at + 8 <= len(blob):
+        length = struct.unpack_from(">I", blob, at)[0]
+        kind = blob[at + 4:at + 8]
+        body = blob[at + 8:at + 8 + length]
+        at += 12 + length
+
+        if kind == b"IHDR":
+            width, height, depth, colour, compression, filters, interlace = \
+                struct.unpack(">IIBBBBB", body)
+            if depth != 8 or colour not in (2, 6) or interlace or compression or filters:
+                raise ValueError(f"{path}: needs to be an 8-bit RGB or RGBA PNG, not interlaced")
+            channels = 3 if colour == 2 else 4
+        elif kind == b"IDAT":
+            data += body
+        elif kind == b"IEND":
+            break
+
+    if not width or not channels:
+        raise ValueError(f"{path}: no image header")
+
+    raw = zlib.decompress(bytes(data))
+    stride = width * channels
+    out = bytearray(height * width * 4)
+    previous = bytearray(stride)
+
+    for row in range(height):
+        start = row * (stride + 1)
+        rule = raw[start]
+        line = bytearray(raw[start + 1:start + 1 + stride])
+
+        # The five PNG filters, each undone against the pixel to the left and the row above.
+        for i in range(stride):
+            left = line[i - channels] if i >= channels else 0
+            up = previous[i]
+            corner = previous[i - channels] if i >= channels else 0
+            if rule == 1:
+                line[i] = (line[i] + left) & 0xFF
+            elif rule == 2:
+                line[i] = (line[i] + up) & 0xFF
+            elif rule == 3:
+                line[i] = (line[i] + (left + up) // 2) & 0xFF
+            elif rule == 4:
+                guess = left + up - corner
+                dl, du, dc = abs(guess - left), abs(guess - up), abs(guess - corner)
+                nearest = left if dl <= du and dl <= dc else up if du <= dc else corner
+                line[i] = (line[i] + nearest) & 0xFF
+            elif rule != 0:
+                raise ValueError(f"{path}: unknown row filter {rule}")
+
+        for x in range(width):
+            source = x * channels
+            target = (row * width + x) * 4
+            out[target:target + 3] = line[source:source + 3]
+            out[target + 3] = line[source + 3] if channels == 4 else 255
+
+        previous = line
+
+    return width, height, bytes(out)
+
+
 def write_png(path: str, width: int, height: int, pixels: bytes) -> None:
     """RGBA, so a picture's transparency survives being looked at."""
     rows = b"".join(
@@ -336,7 +438,7 @@ def write_png(path: str, width: int, height: int, pixels: bytes) -> None:
 def pictures_of(face: bytes) -> list[bytes]:
     """Every picture in a face as plain RGB, for comparing one face against another."""
     out = []
-    for start, _count, sizes in elements(face):
+    for start, _count, sizes in runs(face):
         at = start
         for size in sizes:
             cf = header(struct.unpack_from("<I", face, at)[0])[0]
@@ -349,6 +451,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("face")
     parser.add_argument("--png", metavar="DIR", help="write every picture here as a PNG")
+    parser.add_argument("--from", dest="source", metavar="DIR",
+                        help="rebuild using the PNGs in this directory, named as --png "
+                             "wrote them. Every picture is optional: whatever is missing "
+                             "is carried over from the face unchanged.")
     parser.add_argument("--rebuild", metavar="FILE",
                         help="write the face back out, recompressed, and check that every "
                              "picture in it still decodes to the same pixels")
@@ -371,24 +477,37 @@ def main() -> None:
         os.makedirs(args.png, exist_ok=True)
 
     if args.rebuild:
-        rebuilt = rebuild(face, {})
-        before = [pictures_of(face)]
-        after = [pictures_of(rebuilt)]
-        if before != after:
-            print("the rebuilt face does not decode to the same pixels", file=sys.stderr)
-            raise SystemExit(1)
+        swapped: dict[tuple[int, int], bytes] = {}
+        if args.source:
+            for index, (start, _count, sizes) in enumerate(runs(face)):
+                at = start
+                for which, size in enumerate(sizes):
+                    _cf, width, height = header(struct.unpack_from("<I", face, at)[0])
+                    at += size
+                    path = os.path.join(args.source, f"{index:02d}-{which}.png")
+                    if not os.path.exists(path):
+                        continue
+                    got_w, got_h, pixels = read_png(path)
+                    if (got_w, got_h) != (width, height):
+                        print(f"{path}: this slot is {width} by {height}, not "
+                              f"{got_w} by {got_h}", file=sys.stderr)
+                        raise SystemExit(1)
+                    swapped[(index, which)] = pixels
+            print(f"  taking {len(swapped)} picture(s) from {args.source}")
+
+        rebuilt = rebuild(face, swapped)
+        if not swapped:
+            before, after = pictures_of(face), pictures_of(rebuilt)
+            if before != after:
+                print("the rebuilt face does not decode to the same pixels", file=sys.stderr)
+                raise SystemExit(1)
+            print(f"  rebuilt: {len(rebuilt)} bytes, every picture identical")
+        else:
+            print(f"  rebuilt: {len(rebuilt)} bytes")
         open(args.rebuild, "wb").write(rebuilt)
-        print(f"  rebuilt: {len(rebuilt)} bytes, every picture identical")
         return
 
-    content, resources = struct.unpack_from("<II", face, CONTENT_SIZE_OFFSET)
-    listed = []
-    for _at, count, start, sizes in all_records(face, content - resources):
-        if start not in {seen for seen, _, _ in listed}:
-            listed.append((start, count, sizes))
-    listed.sort()
-
-    for index, (start, count, sizes) in enumerate(listed):
+    for index, (start, count, sizes) in enumerate(runs(face)):
         kinds = {1: "static", 2: "two-state", 7: "days of the week", 10: "digits 0-9"}
         print(f"  element {index}: {count} picture(s), {kinds.get(count, 'unknown')}")
         at = start

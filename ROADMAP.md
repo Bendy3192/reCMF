@@ -438,8 +438,21 @@ progress arcs at least, and probably the icons beside them, taking their colour 
 somewhere other than the pictures. The obvious candidate is the placement block after each
 element, which is the part still unread.
 
-The first useful thing to build on this is not an editor: it is swapping one picture in a
-face somebody already has for one of their own.
+**Making a face is now a three-line loop.** `tools/watchface.py` takes one apart into PNGs,
+takes PNGs back, and writes the face out again:
+
+```
+watchface.py face.bin --png out/
+watchface.py face.bin --from out/ --rebuild mine.bin
+```
+
+Everything visible is then yours — background, glyphs, icons, palette — while the layout and
+what each element shows come from the face it started from. Forty-five pictures out of a face
+and back through PNG come home pixel for pixel, which is the check that the reader and the
+writer agree.
+
+That is authorship inside a borrowed skeleton. Authorship from nothing needs the descriptors,
+which is the work below.
 
 ### Reading the placement block
 
