@@ -222,7 +222,9 @@ payload discovered from scratch.
 
 **Watchface install works.** The whole sequence — `8052`, `9075` with its four decrypted
 fields, the chunks the watch asks for by offset, `a065` to close — runs against a real Watch
-Pro 2, and a face read out of a capture installed into a slot that now shows it.
+Pro 2. Confirmed on two files of different origin: one read byte for byte out of a capture of
+the official app, and one downloaded from a watchface site and repaired here. Both are on the
+watch and both draw.
 
 **Two faults were in the way at once, and each hid the other.**
 
@@ -287,7 +289,8 @@ table chains from the first resource to the last without a gap — the same chec
 file passes.
 
 That is the same mistake reCMF made rebuilding a file of its own, which is the only reason it
-was recognisable at a glance.
+was recognisable at a glance. The repaired file installs and draws, which is what turns the
+reading from an argument into a fact.
 
 The message lengths are not fixed, so the repair does not model them: it extends a CRC32 a
 byte at a time and watches for the four bytes that follow to be it, taking the longest length
