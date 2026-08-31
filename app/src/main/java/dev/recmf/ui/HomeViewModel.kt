@@ -29,6 +29,7 @@ import dev.recmf.health.HealthConnectSync
 import dev.recmf.protocol.BatteryStatus
 import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.SleepSession
+import dev.recmf.protocol.WatchfaceList
 import dev.recmf.protocol.hexToBytes
 import dev.recmf.BuildConfig
 import dev.recmf.service.WatchService
@@ -493,6 +494,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
 
         return hours.toList()
+    }
+
+    /**
+     * The faces the watch listed this connection, or null before it has listed any.
+     *
+     * Straight from [WatchStatus] and nowhere else: this is the watch's current state, not
+     * a record of anything, and it goes empty on a restart on purpose.
+     */
+    val watchfaces: StateFlow<WatchfaceList?> = WatchStatus.watchfaces
+
+    /** Asks the watch to show a face. Whether it obliges is a question the log answers. */
+    fun selectWatchface(id: Int) {
+        WatchService.setWatchface(getApplication(), id)
     }
 
     /** The last night the watch reported, or null until it reports one. */

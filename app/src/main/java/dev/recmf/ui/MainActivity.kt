@@ -109,6 +109,7 @@ class MainActivity : ComponentActivity() {
                 val charts by model.charts.collectAsStateWithLifecycle()
                 val weekly by model.weekly.collectAsStateWithLifecycle()
                 val sleepSession by model.lastSleepSession.collectAsStateWithLifecycle()
+                val watchfaces by model.watchfaces.collectAsStateWithLifecycle()
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -128,6 +129,7 @@ class MainActivity : ComponentActivity() {
                     sleepSession = sleepSession,
                     charts = charts,
                     weekly = weekly,
+                    watchfaces = watchfaces,
                     onNotificationAppBlocked = model::setNotificationBlocked,
                     onNotificationAppsBlocked = model::setNotificationBlocked,
                     isBatteryExempt = isBatteryExempt,
@@ -145,6 +147,7 @@ class MainActivity : ComponentActivity() {
                     onForget = model::forget,
                     onSyncNow = model::syncNow,
                     onFindWatch = model::findWatch,
+                    onSelectWatchface = model::selectWatchface,
                     updateState = updateState,
                     onCheckForUpdate = model::checkForUpdate,
                     onInstallUpdate = model::installUpdate,

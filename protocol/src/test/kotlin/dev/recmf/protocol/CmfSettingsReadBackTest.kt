@@ -113,9 +113,24 @@ class CmfSettingsReadBackTest {
         assertEquals(listOf(274, 273, 275, 276, 277, 280), list?.ids)
 
         // The watch was showing the sixth of the six, and the second header byte is 5.
-        // One observation: enough to offer the reading, not enough to rely on it.
         assertEquals(5, list?.active)
         assertEquals(280, list?.activeId)
+    }
+
+    @Test
+    fun `selecting the first face moves the active byte to zero`() {
+        // The second capture, and the reason the reading above is trusted. It was
+        // predicted before it was taken: the watch was switched to the first face and the
+        // byte was expected to read 0. Everything else in the frame — the six ids and the
+        // other three header bytes — is identical to the capture above.
+        val list = CmfSettings.parseWatchfaceList(
+            bytes("01000607120100001101000013010000140100001501000018010000"),
+        )
+
+        assertEquals(listOf(0x01, 0x00, 0x06, 0x07), list?.header)
+        assertEquals(listOf(274, 273, 275, 276, 277, 280), list?.ids)
+        assertEquals(0, list?.active)
+        assertEquals(274, list?.activeId)
     }
 
     @Test

@@ -5,6 +5,7 @@ package dev.recmf.service
 
 import dev.recmf.ble.ConnectionState
 import dev.recmf.protocol.BatteryStatus
+import dev.recmf.protocol.WatchfaceList
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
@@ -55,6 +56,15 @@ object WatchStatus {
      * look exactly the same.
      */
     val lastExchangeAtMillis = MutableStateFlow<Long?>(null)
+
+    /**
+     * The watchfaces the watch reported, and which of them it is showing.
+     *
+     * Here rather than in the database because it is not history: it is what the watch
+     * said this connection, and a face changed on the wrist would make a stored copy a
+     * lie until the next sync.
+     */
+    val watchfaces = MutableStateFlow<WatchfaceList?>(null)
 }
 
 /**

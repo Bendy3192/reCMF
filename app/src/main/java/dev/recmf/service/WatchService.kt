@@ -196,6 +196,11 @@ class WatchService : LifecycleService() {
                 if (_status.value == ConnectionState.READY) connection.send(CmfCommand.FIND_WATCH)
             }
 
+            ACTION_SET_WATCHFACE -> lifecycleScope.launch {
+                val id = intent.getIntExtra(EXTRA_WATCHFACE_ID, 0)
+                if (_status.value == ConnectionState.READY && id != 0) selectWatchface(id)
+            }
+
             // From the notification the ringing itself posts. It has to come through the
             // service rather than a receiver of its own because the ringer is the
             // service's, and a second instance would silence nothing.
@@ -662,6 +667,25 @@ class WatchService : LifecycleService() {
      * asks "what does the watch actually say", and until this ran there, checking whether
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
+    /**
+     * Asks the watch for a face, then asks it what face it has.
+     *
+     * The write half of this pair has never been confirmed — the payload is a guess, and
+     * this watch has already been seen to acknowledge a write and keep what it had, which
+     * is exactly what goals do. So the request is followed by a read, and the log says
+     * plainly whether the watch moved. A frame that is accepted and ignored looks
+     * identical to one that worked, right up until someone reads the list back.
+     */
+    private suspend fun selectWatchface(id: Int) {
+        ProtocolLog.note("Watchface: asking for id $id")
+        connection.send(CmfCommand.WATCHFACE, CmfSettings.watchface(id))
+
+        // The watch answers its own settings promptly, but not instantly, and a read sent
+        // in the same breath as the write comes back describing the state before it.
+        delay(WATCHFACE_SETTLE_MILLIS)
+        connection.send(CmfCommand.WATCHFACE_GET)
+    }
+
     private suspend fun readBackSettings() {
         // First, and it stays first: this is what tied `ffff/a055` to it. That frame had
         // been arriving unattributed for months, and it kept arriving right behind this
@@ -909,9 +933,9 @@ class WatchService : LifecycleService() {
             CmfCommand.WATCHFACE_LIST -> readBack(
                 value = CmfSettings.parseWatchfaceList(message.payload),
                 describe = {
-                    // The raw header stays in the line beside the reading of it. The
-                    // active byte rests on a single capture, and a log that printed only
-                    // the conclusion would hide the moment the two stop agreeing.
+                    // The raw header stays in the line beside the reading of it. Two
+                    // captures agree, but a log that printed only the conclusion would
+                    // hide the moment a third one stops agreeing.
                     val active = it.active
                         ?.let { at -> "active #${at + 1} of ${it.ids.size}, id ${it.ids[at]}" }
                         ?: "active unknown"
@@ -920,7 +944,14 @@ class WatchService : LifecycleService() {
                         active + " (header " +
                         it.header.joinToString(" ") { byte -> "%02x".format(byte) } + ")"
                 },
-                adopt = { false },
+                adopt = {
+                    WatchStatus.watchfaces.value = it
+
+                    // Nothing is stored: the list is the watch's, it costs one frame per
+                    // connection to ask for, and a remembered copy would go stale the
+                    // first time someone changed the face on the wrist.
+                    false
+                },
             )
 
             // Nothing here writes Do Not Disturb, so this is read and reported and that
@@ -1193,6 +1224,11 @@ class WatchService : LifecycleService() {
         const val ACTION_STOP = "dev.recmf.action.STOP"
         const val ACTION_SYNC_NOW = "dev.recmf.action.SYNC_NOW"
         const val ACTION_FIND_WATCH = "dev.recmf.action.FIND_WATCH"
+        const val ACTION_SET_WATCHFACE = "dev.recmf.action.SET_WATCHFACE"
+        const val EXTRA_WATCHFACE_ID = "dev.recmf.extra.WATCHFACE_ID"
+
+        /** Long enough for the watch to have acted before it is asked what it did. */
+        private const val WATCHFACE_SETTLE_MILLIS = 700L
         const val ACTION_STOP_RINGING = "dev.recmf.action.STOP_RINGING"
 
         fun start(context: Context) {
@@ -1213,6 +1249,15 @@ class WatchService : LifecycleService() {
         fun findWatch(context: Context) {
             context.startForegroundService(
                 Intent(context, WatchService::class.java).setAction(ACTION_FIND_WATCH),
+            )
+        }
+
+        /** Asks the watch to show a face, by the id its own list gave. */
+        fun setWatchface(context: Context, id: Int) {
+            context.startForegroundService(
+                Intent(context, WatchService::class.java)
+                    .setAction(ACTION_SET_WATCHFACE)
+                    .putExtra(EXTRA_WATCHFACE_ID, id),
             )
         }
 

@@ -112,6 +112,7 @@ import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.WeatherProblem
 import dev.recmf.data.SleepSummary
 import dev.recmf.protocol.SleepSession
+import dev.recmf.protocol.WatchfaceList
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import java.time.Instant
@@ -134,6 +135,7 @@ fun HomeScreen(
     sleepSession: SleepSession?,
     charts: HealthCharts,
     weekly: WeeklySeries,
+    watchfaces: WatchfaceList?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -149,6 +151,7 @@ fun HomeScreen(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
+    onSelectWatchface: (Int) -> Unit,
     updateState: UpdateState,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
@@ -181,6 +184,7 @@ fun HomeScreen(
                         sleepSession = sleepSession,
                         charts = charts,
                         weekly = weekly,
+                        watchfaces = watchfaces,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -194,6 +198,7 @@ fun HomeScreen(
                         onForget = onForget,
                         onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
+                        onSelectWatchface = onSelectWatchface,
                         updateState = updateState,
                         onCheckForUpdate = onCheckForUpdate,
                         onInstallUpdate = onInstallUpdate,
@@ -230,6 +235,7 @@ private fun TabContent(
     sleepSession: SleepSession?,
     charts: HealthCharts,
     weekly: WeeklySeries,
+    watchfaces: WatchfaceList?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -243,6 +249,7 @@ private fun TabContent(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
+    onSelectWatchface: (Int) -> Unit,
     updateState: UpdateState,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
@@ -305,6 +312,7 @@ private fun TabContent(
                 }
                 item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
+                item { WatchfaceCard(watchfaces, state.connection.isUsable, onSelectWatchface) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
@@ -2039,6 +2047,55 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
             )
             FilledTonalButton(onClick = onFindWatch, enabled = connected) {
                 Text(stringResource(R.string.action_find_watch))
+            }
+        }
+    }
+}
+
+/**
+ * The faces the watch has, and which one it is wearing.
+ *
+ * The list is the watch's own — it is asked for on every connection and never stored,
+ * because a face changed on the wrist would make a remembered copy wrong until the next
+ * sync. There are no names or pictures here and there will not be until the watch offers
+ * them: it reports six numbers and nothing else, and inventing labels for them would be
+ * pretending to know which is which.
+ *
+ * Selecting is offered as an experiment rather than a feature, and the card says so. The
+ * write half of this pair has never been confirmed; the app sends its best guess at the
+ * payload and then reads the list back, so the log answers whether the watch moved. This
+ * watch has form here — it acknowledges goal writes and keeps the goals it had.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WatchfaceCard(
+    watchfaces: WatchfaceList?,
+    connected: Boolean,
+    onSelect: (Int) -> Unit,
+) {
+    if (watchfaces == null) return
+
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(stringResource(R.string.watchfaces), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.watchfaces_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                watchfaces.ids.forEachIndexed { index, id ->
+                    FilterChip(
+                        selected = index == watchfaces.active,
+                        onClick = { onSelect(id) },
+                        enabled = connected,
+                        label = { Text(stringResource(R.string.watchface_number, index + 1)) },
+                    )
+                }
             }
         }
     }

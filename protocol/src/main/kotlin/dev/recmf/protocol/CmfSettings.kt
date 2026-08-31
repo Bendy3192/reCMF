@@ -245,12 +245,13 @@ object CmfSettings {
      * and the header's third byte is 6. That agreement is the only check available, so a
      * frame whose header disagrees with what follows is refused rather than guessed at.
      *
-     * The second byte reads as the active face: it was 5 on a watch showing the sixth of
-     * the six. That is one observation, and one observation cannot tell an index from any
-     * other number that happens to equal five — so it is offered as [WatchfaceList.active]
-     * and only when it lands inside the list, and a second capture with a different face
-     * selected is what would settle it. The first and fourth bytes are unexplained; `07`
-     * is not an index into six entries, whatever else it is.
+     * The second byte is the active face, confirmed by prediction rather than by fitting:
+     * it read 5 on a watch showing the sixth of six, the prediction was that selecting the
+     * first would make it 0, and it did — with the six ids and the other three header
+     * bytes unchanged across both captures. Nothing else in the frame moved.
+     *
+     * `01` and `07` did not move either and are unexplained. `07` cannot be an index into
+     * six entries, whatever else it is.
      */
     fun parseWatchfaceList(payload: ByteArray): WatchfaceList? {
         if (payload.size < WATCHFACE_HEADER_BYTES) return null
@@ -275,8 +276,22 @@ object CmfSettings {
     /** The one header byte with a known meaning: how many ids follow. */
     private const val WATCHFACE_COUNT_BYTE = 2
 
-    /** Reads as the position of the active face, on the strength of one capture. */
+    /** The position of the active face, confirmed across two captures. */
     private const val WATCHFACE_ACTIVE_BYTE = 1
+
+    /**
+     * `WATCHFACE`: asks for a face by the id the list reports.
+     *
+     * **The payload is a guess.** The read half of this pair is understood; the write half
+     * has never been sent to a watch. Four little-endian bytes are chosen because that is
+     * how the list identifies a face, and because the upload sequence asks for an id in
+     * the same width — but a single index byte would fit the evidence just as well, and
+     * the watch may well ignore both. Whether it worked is not assumed: the caller reads
+     * the list back afterwards and compares, which is the same way goal writes were found
+     * to be silently ignored.
+     */
+    fun watchface(id: Int): ByteArray =
+        ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(id).array()
 }
 
 /**
@@ -304,8 +319,8 @@ data class WatchGoals(
  * @param ids one 32-bit number per watchface. Very likely the same id that the upload
  *   sequence asks for and that Gadgetbridge currently fills with a random number.
  * @param active where in [ids] the face currently on the screen sits, or null when the
- *   header byte does not point inside the list — which would mean it is not an index and
- *   this reading is wrong.
+ *   header byte does not point inside the list — which would mean it is not an index after
+ *   all, and this reading is wrong.
  */
 data class WatchfaceList(
     val header: List<Int>,
