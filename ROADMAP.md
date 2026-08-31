@@ -220,63 +220,51 @@ payload discovered from scratch.
 
 ## Phase 6 — Transfers
 
-**Watchface install is written and untested against a watch.** The whole sequence is
-known — `8052`, `9075` with its four decrypted fields, the chunks the watch asks for by
-offset, `a065`/`9065` to close — and reCMF now walks it, reading a `.bin` through the
-system file picker and answering each ask from it.
+**Watchface install works.** The whole sequence — `8052`, `9075` with its four decrypted
+fields, the chunks the watch asks for by offset, `a065` to close — runs against a real Watch
+Pro 2, and a face read out of a capture installed into a slot that now shows it.
 
-**First run against a watch: the transfer completes and the watch then refuses it.** Both
-faces crossed to their last byte — the final chunk request lands exactly on the announced
-size, twice — and `a065` came back `0a` where the official app is answered `01`. So the
-bytes arrive; something about the frame that announced them does not satisfy the watch.
+**Two faults were in the way at once, and each hid the other.**
 
-`0a` is unexplained. What is known is that it is not `01` — and the first version of this
-code treated any reply to the finish frame as success, which is how the log said "Combo
-sent" over a rejection. Fixed: the verdict is read, the code reported, the install failed.
+The first is the id. `9075` names the face being replaced *and* the id the new one gets, and
+**the second must be a number the watch is not already holding**. Reusing the displaced
+face's own id is refused with `0a` even when the file is one the watch has accepted before;
+an unused id with the same file is accepted. So the watch is not overwriting a slot so much
+as adding a face and dropping the one named as replaced, and the two cannot be the same
+number. reCMF sends one above everything on the watch.
 
-The **new id** was the leading suspect and is no longer. It is not in the file — searched
-the whole of both — so the official app takes it from its catalogue. reCMF's first guess was
-a number above everything the watch holds; the second reused the id of the face being
-displaced. Both were refused with the same `0a`.
+The second is the file. A face downloaded from a watchface site is a device file with four
+bytes stuck on the end and two stale lengths in its header — see the layout below. Sent as
+it came it is refused with the same `0a`, which is why the first attempt at an unused id
+proved nothing: it carried a broken file.
 
-**A control run was set up and then wasted by a bad file.** The idea was sound: send back
-the bytes the watch had already accepted, rebuilt from the capture of the official app
-installing them, and the answer separates a wrong file from a wrong protocol. The face came
-back refused, which read as proof that the protocol was at fault.
+Both had to be right at once, and the order in which they were tried meant every single
+attempt failed until the last. What made the last one possible was a control run that was
+finally trustworthy, and that took its own detour:
+
+**A control run was set up and then wasted by a bad file.** The idea was sound: send back the
+bytes the watch had already accepted, rebuilt from the capture of the official app installing
+them. The face came back refused, which read as proof that the protocol was at fault.
 
 It was not. The reassembly had copied one message without stripping its CRC32, so the file
-was the right length, opened as a watchface, named itself correctly — and was wrong from
-byte 224 onwards. `tools/btsnoop.py --extract` now checks every message's CRC32 before
-stripping it and says loudly when one does not verify. The correctly rebuilt file differs
-from the one that was sent in 65403 of its 76104 bytes.
+was the right length, opened as a watchface, named itself correctly — and was wrong from byte
+224 onwards. `tools/btsnoop.py --extract` now checks every message's CRC32 before stripping it
+and says loudly when one does not verify. The correctly rebuilt file differs from the one that
+was sent in 65403 of its 76104 bytes.
 
-**With a correct file the control run finally ran, and it says the protocol is at fault.**
-The bytes the watch accepted from the official app were sent back to it by reCMF and refused
-with the same `0a`. So the file is not the objection.
-
-**And the official install has now been decrypted end to end**, using a long-term key carried
-over from another capture of the same app — `tools/btsnoop.py --k1` takes one, for a capture
-that holds no pairing of its own. Laid against reCMF's own log the two are the same frames in
-the same order with the same payloads:
+**The official install is decrypted end to end**, using a long-term key carried over from
+another capture of the same app — `tools/btsnoop.py --k1` takes one, for a capture that holds
+no pairing of its own. Laid against reCMF's own log the two are the same frames in the same
+order with the same payloads, down to the watch asking for the file in identical steps:
 
 ```
 TX 8052  a5                                RX 0052  01
 TX 9075  03 6e010000 43010000 48290100     RX a075  01
 RX a064  0000000000000c0000  ... twenty-five asks, identical offsets, lengths and percents
-RX a065  01                                          <- reCMF is answered 0a here
+RX a065  01
 ```
 
-The watch even asks for the file in exactly the same steps. **The only field that differs in
-the whole exchange is `9075`'s pair of ids**: the official app replaced 366 with 323, an id
-the watch was not holding. reCMF has tried an unused id against a broken file, and the
-displaced face's own id against a good one. The remaining combination — an unused id and a
-file the watch has already accepted — is what the two failures never tested together, and is
-what it now sends.
-
-If that is refused too, the ids are exonerated and what is left is the bytes themselves: the
-watch reassembles the file from `9064` messages, and nothing in the exchange proves reCMF's
-messages carry the same bytes as the official app's. That takes a capture of reCMF's own
-transfer, to be diffed against the one already in hand.
+That comparison is what narrowed the whole question down to `9075`'s pair of ids.
 
 **What the correct rebuild showed is the layout of the whole file:**
 
@@ -291,18 +279,19 @@ accepted file all of it agrees exactly: 76068 and 74796 in a file of 76104, clos
 76068, first element at 1272.
 
 The downloaded face agrees with none of it. Its closing copy sits at 58177 with four more
-bytes after it, while its header still claims the file stops at 57137. So it is a device file
-with a checksum stuck on the end and two lengths nobody updated. reCMF now cuts a file to
+bytes after it, while its header still claims the file stops at 57137. reCMF cuts a file to
 just after its closing copy and rewrites both lengths from where that copy was found, keeping
 their difference so the element table still lines up. A file that carries no closing copy is
 sent as it came, because there is then nothing to measure from.
 
-An earlier version of this cut the file at the length its header declared instead, which
-would have thrown away a thousand real bytes. That reading came from the corrupt rebuild.
+**The mode byte** is always `03`. `02` is reported elsewhere as "add rather than replace",
+but this watch holds six slots and no seventh, and an untried mode is not worth sending to a
+device that has to be re-paired when it sulks.
 
-The **mode byte** is always `03`. `02` is reported elsewhere as "add rather than replace",
-but this watch holds six slots and no seventh, and an untried mode is not worth sending to
-a device that has to be re-paired when it sulks.
+**Worth telling Gadgetbridge.** Its issue #4581 is this exact wall, and three things it has
+wrong are now known: the opcode is `9075` and not `9063`, the fields are little-endian, and
+the one it fills with `new Random().nextInt()` under `FIXME watchface ID?` is the id of the
+face being *replaced* — with the new face's id in the field beside it, which must be unused.
 
 ### What is inside a watchface
 

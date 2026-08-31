@@ -765,18 +765,15 @@ class WatchService : LifecycleService() {
             )
         }
 
-        // The id the new face gets. Nothing in the file says what it should be — the
-        // official app takes that from its catalogue — so it has to be invented, and the
-        // shape of the frame the watch accepted says what kind of number to invent: it
-        // replaced 366 with 323, an id the watch was not already holding.
+        // The id the new face gets, and it has to be one the watch is not already holding.
+        // Nothing in the file says what it should be — the official app takes that from its
+        // catalogue — so it is invented here, above everything on the watch.
         //
-        // A number above everything the watch holds is the same shape and was tried first,
-        // and refused — but that attempt sent a file with four stray bytes on the end and
-        // two stale lengths in its header, so it proved nothing about the id. Reusing the
-        // displaced face's own id was tried next, on a correct file, and refused too.
-        //
-        // That leaves this combination — an unused id and a file the watch has already
-        // accepted once — as the one the two failures never tested together.
+        // This is settled rather than guessed. Reusing the displaced face's own id is
+        // refused with `0a` even when the file is one the watch has accepted before; an
+        // unused id with the same file is accepted. The watch is not overwriting a slot so
+        // much as adding a face and dropping the one named as replaced, and the two cannot
+        // be the same number.
         val newId = (listed.ids.maxOrNull() ?: 0) + 1
 
         sendingWatchface = sending

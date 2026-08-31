@@ -115,12 +115,15 @@ exists because of it.
 | Find phone | The watch's own button rings the phone, on the alarm stream so a silent phone still answers |
 | Updates | Checks this repository's releases once a day, says what changed, and installs them |
 | Background | Foreground service + WorkManager watchdog + reconnect with backoff |
-| Watch face | Lists the six the watch holds, says which is on, and switches between them |
+| Watch face | Lists the six the watch holds, says which is on, switches between them, and installs a `.bin` over one |
 | UI | Compose, Material 3, dynamic colour, three tabs |
 
 **Not done:** workouts and their GPS tracks, contacts, a call screen with answer and
-reject, *installing* watchfaces, firmware. Daily goals are read from the watch but cannot
-be written to it — see the roadmap.
+reject, firmware. Daily goals are read from the watch but cannot be written to it — see the
+roadmap.
+
+reCMF installs a watchface file; it does not supply one. Where a `.bin` comes from is the
+wearer's business, and none ship here — see the note at the top.
 
 ### About Material 3 Expressive
 
