@@ -194,4 +194,10 @@
     <string name="watchface_choose_file">Choose a file…</string>
     <string name="watchface_sending">Sending %1$s — %2$d%%</string>
     <string name="watchface_sent">Sent %1$s</string>
+    <string name="metric_detail_today">Today</string>
+    <string name="metric_detail_week">Last seven days</string>
+    <string name="metric_detail_thin">One day is not a week yet. Wear the watch a few more days and this fills in.</string>
+    <string name="metric_stat_max">Highest</string>
+    <string name="metric_stat_avg">Average</string>
+    <string name="metric_stat_min">Lowest</string>
 </resources>

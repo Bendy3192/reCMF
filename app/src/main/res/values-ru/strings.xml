@@ -195,4 +195,10 @@
     <string name="watchface_choose_file">Выбрать файл…</string>
     <string name="watchface_sending">Отправляю %1$s — %2$d%%</string>
     <string name="watchface_sent">Отправлен %1$s</string>
+    <string name="metric_detail_today">Сегодня</string>
+    <string name="metric_detail_week">За семь дней</string>
+    <string name="metric_detail_thin">Один день — ещё не неделя. Поносите часы ещё несколько дней, и здесь появится сравнение.</string>
+    <string name="metric_stat_max">Максимум</string>
+    <string name="metric_stat_avg">Среднее</string>
+    <string name="metric_stat_min">Минимум</string>
 </resources>

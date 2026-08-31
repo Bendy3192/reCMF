@@ -121,6 +121,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -264,6 +265,10 @@ private fun TabContent(
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
 ) {
+    // Which measurement is open, if any. Held here rather than in the tile so that the
+    // sheet outlives the row scrolling off the screen.
+    var opened by remember { mutableStateOf<TileSpec?>(null) }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -282,7 +287,7 @@ private fun TabContent(
 
                 // Tiles come before the charts: a figure is what gets looked for, and the
                 // shape of the day is what gets looked at once the figure has been read.
-                metricTiles(state, weekly)
+                metricTiles(state, weekly) { opened = it }
 
                 if (charts.heartRate.size >= 2 || charts.stepsByHour.any { it > 0f } ||
                     charts.spo2.isNotEmpty()
@@ -333,6 +338,18 @@ private fun TabContent(
                 item { ProtocolLogCard() }
             }
         }
+    }
+
+    opened?.let { tile ->
+        val context = LocalContext.current
+        MetricDetailSheet(
+            icon = tile.icon,
+            label = stringResource(tile.label),
+            value = tile.value(context),
+            week = tile.week,
+            format = { number -> tile.format(context, number) },
+            onDismiss = { opened = null },
+        )
     }
 }
 
@@ -597,26 +614,41 @@ private fun TodayCard(
  * week, the tile stays and honestly says none today. Vanishing on the flat days would make
  * the grid rearrange itself under the reader.
  */
-private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) {
+private fun LazyListScope.metricTiles(
+    state: HomeUiState,
+    weekly: WeeklySeries,
+    onOpen: (TileSpec) -> Unit,
+) {
     val tiles = buildList {
         state.latestHeartRate?.let { latest ->
             add(
-                TileSpec(R.drawable.ic_metric_heart, R.string.metric_heart_rate, weekly.heartRate) {
-                    it.getString(R.string.value_bpm, latest.bpm)
-                },
+                TileSpec(
+                    R.drawable.ic_metric_heart, R.string.metric_heart_rate, weekly.heartRate,
+                    format = { context, bpm ->
+                        context.getString(R.string.value_bpm, bpm.roundToInt())
+                    },
+                ) { it.getString(R.string.value_bpm, latest.bpm) },
             )
         }
         state.restingHeartRate?.let { bpm ->
             add(
-                TileSpec(R.drawable.ic_metric_heart, R.string.metric_resting_heart_rate,
-                    weekly.restingHeartRate) { it.getString(R.string.value_bpm, bpm) },
+                TileSpec(
+                    R.drawable.ic_metric_heart, R.string.metric_resting_heart_rate,
+                    weekly.restingHeartRate,
+                    format = { context, beats ->
+                        context.getString(R.string.value_bpm, beats.roundToInt())
+                    },
+                ) { it.getString(R.string.value_bpm, bpm) },
             )
         }
         state.spo2?.let { percent ->
             add(
-                TileSpec(R.drawable.ic_metric_oxygen, R.string.metric_spo2, weekly.spo2) {
-                    it.getString(R.string.value_percent, percent)
-                },
+                TileSpec(
+                    R.drawable.ic_metric_oxygen, R.string.metric_spo2, weekly.spo2,
+                    format = { context, share ->
+                        context.getString(R.string.value_percent, share.roundToInt())
+                    },
+                ) { it.getString(R.string.value_percent, percent) },
             )
         }
         state.stress?.let { level ->
@@ -628,14 +660,21 @@ private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) 
         }
         if (state.today.distanceMeters > 0 || weekly.distanceMeters.hasReadings()) {
             add(
-                TileSpec(R.drawable.ic_metric_distance, R.string.metric_distance,
-                    weekly.distanceMeters) { it.readableDistance(state.today.distanceMeters) },
+                TileSpec(
+                    R.drawable.ic_metric_distance, R.string.metric_distance,
+                    weekly.distanceMeters,
+                    format = { context, metres -> context.readableDistance(metres.roundToInt()) },
+                ) { it.readableDistance(state.today.distanceMeters) },
             )
         }
         if (state.today.calories > 0 || weekly.calories.hasReadings()) {
             add(
-                TileSpec(R.drawable.ic_metric_calories, R.string.metric_calories,
-                    weekly.calories) { it.getString(R.string.value_kcal, state.today.calories) },
+                TileSpec(
+                    R.drawable.ic_metric_calories, R.string.metric_calories, weekly.calories,
+                    format = { context, kcal ->
+                        context.getString(R.string.value_kcal, kcal.roundToInt())
+                    },
+                ) { it.getString(R.string.value_kcal, state.today.calories) },
             )
         }
         if (state.today.climbs > 0 || weekly.climbs.hasReadings()) {
@@ -669,6 +708,7 @@ private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) 
                         value = tile.value(context),
                         accent = ACCENTS[(row * 2 + column) % ACCENTS.size],
                         week = tile.week,
+                        onClick = { onOpen(tile) },
                         modifier = Modifier
                             .weight(1f)
                             .fillMaxHeight(),
@@ -687,12 +727,16 @@ private fun LazyListScope.metricTiles(state: HomeUiState, weekly: WeeklySeries) 
  * One tile before it knows what colour it is.
  *
  * [value] takes a context rather than being a string because these are built outside a
- * composition, where `stringResource` cannot be called.
+ * composition, where `stringResource` cannot be called. [format] is the same unit applied
+ * to any number, which is what the detail screen needs for the week's high, low and average.
  */
 private class TileSpec(
     @param:DrawableRes val icon: Int,
     @param:StringRes val label: Int,
     val week: List<DayValue> = emptyList(),
+    // Ahead of [value] so the trailing lambda at every call site still binds to that one.
+    // A metric whose unit is worth saying overrides it; a plain count does not need to.
+    val format: (Context, Float) -> String = { _, number -> number.roundToInt().toString() },
     val value: (Context) -> String,
 )
 

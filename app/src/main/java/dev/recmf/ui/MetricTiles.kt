@@ -5,6 +5,7 @@ package dev.recmf.ui
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -90,6 +92,8 @@ private fun TileAccent.content(): Color = when (this) {
  *   kilometres to one decimal or a whole count.
  * @param week seven days oldest first, or empty to draw no strip at all. A single day is
  *   not a trend and gets no strip either.
+ * @param onClick opens the measurement's own screen. Every tile has one, so the whole card
+ *   is the target rather than some corner of it.
  */
 @Composable
 fun MetricTile(
@@ -98,12 +102,17 @@ fun MetricTile(
     value: String,
     accent: TileAccent,
     week: List<DayValue>,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val content = accent.content()
 
     Card(
-        modifier = modifier,
+        // Clipped before it is made clickable, so the ripple stops at the card's corners
+        // instead of filling the rectangle behind them.
+        modifier = modifier
+            .clip(CardDefaults.shape)
+            .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = accent.container()),
     ) {
         Column(
