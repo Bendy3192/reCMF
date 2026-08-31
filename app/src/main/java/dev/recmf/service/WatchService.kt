@@ -746,9 +746,17 @@ class WatchService : LifecycleService() {
                 )
         }
 
-        // Nothing in the file says what id it should get — the official app takes that
-        // from its catalogue — so reCMF picks one the watch is not already using.
-        val newId = (listed.ids.maxOrNull() ?: 0) + 1
+        // The id the new face gets. Nothing in the file says what it should be — the
+        // official app takes that from its catalogue — and a number invented above
+        // everything the watch holds was tried first: the transfer ran to its last byte
+        // and the watch then answered `0a` instead of `01`.
+        //
+        // So reuse the id of the face being displaced. The watch already knows that
+        // number, the slot it belongs to is the slot being written, and nothing else can
+        // collide with it. Whether the id was ever the objection is not certain — `0a` is
+        // an unexplained code — but a number the watch issued itself is a better guess
+        // than one reCMF made up.
+        val newId = listed.ids[replacedIndex]
 
         sendingWatchface = bytes
         watchfaceName = name
@@ -756,8 +764,8 @@ class WatchService : LifecycleService() {
         watchfaceNewId = newId
 
         ProtocolLog.note(
-            "Watchface: sending \"$name\", ${bytes.size} bytes, " +
-                "replacing id $watchfaceReplaces with $newId",
+            "Watchface: sending \"$name\", ${bytes.size} bytes, into the slot holding " +
+                "id $watchfaceReplaces",
         )
         WatchStatus.watchfaceInstall.value = WatchfaceInstall.Sending(name, 0)
 
@@ -1095,17 +1103,20 @@ class WatchService : LifecycleService() {
 
             CmfCommand.DATA_CHUNK_REQUEST_WATCHFACE -> handleWatchfaceRequest(message.payload)
 
+            // The last word on whether the file was accepted, and the first version of
+            // this treated any reply as success. It is not: the official app is answered
+            // `01`, and a transfer that ran to the last byte and was then rejected came
+            // back `0a`. Saying "sent" over a refusal is the one thing this must not do.
             CmfCommand.DATA_TRANSFER_WATCHFACE_FINISH_ACK_1 -> {
                 if (sendingWatchface == null) return
 
-                // The watch's own last word is echoed back to it, which is what closes
-                // the transfer on its side.
-                connection.sendOnDataChannel(
-                    CmfCommand.DATA_TRANSFER_WATCHFACE_FINISH_ACK_2,
-                    message.payload,
-                )
+                val verdict = message.payload.firstOrNull()?.toInt()?.and(0xff)
+                if (verdict != 1) {
+                    failWatchfaceInstall("the watch refused the face (code $verdict)")
+                    return
+                }
 
-                ProtocolLog.note("Watchface: \"$watchfaceName\" sent")
+                ProtocolLog.note("Watchface: \"$watchfaceName\" accepted")
                 WatchStatus.watchfaceInstall.value = WatchfaceInstall.Done(watchfaceName)
                 sendingWatchface = null
 
