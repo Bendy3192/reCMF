@@ -98,4 +98,29 @@ class CmfSettingsReadBackTest {
         assertNull(CmfSettings.parseGoals(bytes("10270000a00f000090010000d00200001e000000")))
         assertNull(CmfSettings.parseGoals(bytes("10270000a00f0000")))
     }
+
+    @Test
+    fun `the watchface list is a header and one id per face`() {
+        // Captured from a real watch, as the reply to WATCHFACE_GET. The read-back rule
+        // does not hold for watchfaces: nothing comes back under 009f/0001, and this
+        // arrives under ffff/a055 instead. Moving the request to the front of the batch
+        // moved this frame with it, which is how the two were tied together.
+        val list = CmfSettings.parseWatchfaceList(
+            bytes("01050607120100001101000013010000140100001501000018010000"),
+        )
+
+        assertEquals(listOf(0x01, 0x05, 0x06, 0x07), list?.header)
+        assertEquals(listOf(274, 273, 275, 276, 277, 280), list?.ids)
+    }
+
+    @Test
+    fun `a watchface list whose header disagrees with its length is refused`() {
+        // The header counts the ids, and that agreement is the only check this frame
+        // offers. A header saying seven over six ids means the layout is not understood,
+        // and reading it anyway would put invented numbers into a list reCMF may one day
+        // upload against.
+        assertNull(CmfSettings.parseWatchfaceList(bytes("01050707120100001101000013010000")))
+        assertNull(CmfSettings.parseWatchfaceList(bytes("010506071201")))
+        assertNull(CmfSettings.parseWatchfaceList(bytes("010506")))
+    }
 }

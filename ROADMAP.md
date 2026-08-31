@@ -245,10 +245,13 @@ instead, which that December snapshot does not know about.
 
 **Step 3 is where it stalls.** Gadgetbridge writes `new Random().nextInt()` there, under a
 comment reading `FIXME watchface ID?` — nobody knew what the field wanted. Which is
-interesting, because `ffff/a055` — the frame this watch sends unprompted and which appears
-nowhere in Gadgetbridge's source — is six 32-bit numbers: 273, 274, 275, 276, 277, 280.
-Six ids, in the field width that step 3 wants. That is a hypothesis and not a finding, but
-it is the first one either project has had.
+interesting, because `ffff/a055` — the frame this watch answers `WATCHFACE_GET` with, and
+which appears nowhere in Gadgetbridge's source — is six 32-bit numbers: 273, 274, 275,
+276, 277, 280.
+Six ids, in the field width that step 3 wants. It is now confirmed as the watch's reply to
+`WATCHFACE_GET`, which makes it a list of watchfaces rather than a list of anything else —
+so the id that step 3 wants being one of these six is a good deal more than a guess,
+though still short of a test.
 
 Getting a face file to try needs the official app's copy of one: they land in
 `/data/data/com.nothing.smartcenter/app_flutter/dial/market/dial_file/` as
@@ -256,14 +259,28 @@ Getting a face file to try needs the official app's copy of one: they land in
 one place in the whole project where root buys something ADB cannot.
 
 **Switching between the faces already on the watch is a separate and much smaller
-question**, and it is not in this phase. It needs one opcode, `WATCHFACE` (`009f/0001`),
-and no file transfer at all. reCMF now sends `009f/0002` on every connection and logs
-whatever comes back, because the read-back rule — a `<cmd1>/0x0002` GET answered under
-`<cmd1>/0x0001` — has held for the serial number, both reminders, raise-to-wake, the clock
-format, sports, Do Not Disturb, the goals and the alarms. If it holds here, the reply says
-which face is active and probably how many exist, and a picker follows from that. If
-nothing comes back, this firmware does not serve the opcode and there is nothing to build
-a picker on. Either way the log answers it, and the frame costs one write per connection.
+question**, and it is not in this phase. It needs no file transfer at all.
+
+`WATCHFACE_GET` (`009f/0002`) is answered — but not under `009f/0001`, which is what the
+read-back rule would predict and which this watch has never sent. It is answered by
+`ffff/a055`, and that identification is the one thing here that is settled rather than
+guessed. The frame had been arriving unattributed for months. The request was added at the
+end of the read-back batch, where an unattributed frame lands anyway, and a055 followed it
+— suggestive, worthless as proof. So the request was moved to the *front* of the batch,
+and a055 moved with it, arriving ahead of the heart-rate, reminder, goal, clock, sports,
+Do Not Disturb and alarm replies that all used to precede it. It follows the request
+because it answers the request.
+
+Its content is a four-byte header, `01 05 06 07`, then six little-endian 32-bit ids: 274,
+273, 275, 276, 277, 280. The header's third byte is 6, which is how many ids follow, and
+that agreement is the only structural check the frame offers — reCMF refuses a frame where
+the two disagree rather than reading invented numbers out of it.
+
+Two things remain. **Which face is active** — `05` is a plausible index into six entries
+and `07` is not, but neither has been tested, and changing the face on the watch by hand
+and re-reading this settles it. And **whether `WATCHFACE` (`009f/0001`) selects one**,
+which is untried: it is the obvious candidate, and writing an id blind is not the way to
+find out.
 
 ## Known and fixed, worth not repeating
 
@@ -302,24 +319,6 @@ can be compared against them rather than starting over.
   The guess was that it was the watch refusing the pointless `BATTERY` request reCMF used
   to send; that request is gone and the frame still arrives, so the guess was wrong. It is
   unsolicited, always the same value, and 56 matches nothing on the watch's screen.
-- **`ffff/a055`, 28 bytes.** Re-read correctly: a four-byte header `01 05 06 07`, then
-  **six** little-endian 32-bit numbers — 274, 273, 275, 276, 277, 280 (`0x112`, `0x111`,
-  `0x113`, `0x114`, `0x115`, `0x118`). The earlier note said five-byte groups, which does
-  not divide 24 and was simply wrong. The header's third byte is 6, which is how many
-  numbers follow.
-
-  **Probably the watchfaces.** `WATCHFACE_GET` (`009f/0002`) was sent for the first time
-  and drew no reply under `009f/0001` — the read-back rule that has held for every other
-  setting does not hold here — but a055 arrived immediately after it, twice, and before
-  the two GETs that came next. That is not proof: a055 was already arriving before the
-  probe existed, and the probe was added at the end of the batch, which is where an
-  unattributed frame lands anyway. So the probe now goes out **first**. An a055 that still
-  follows it is following it; an a055 that turns up at the end belongs to something else.
-
-  If it is the list, the remaining question is which of the six is active, and the header
-  is where to look: `05` would be an index into the six, `07` is unexplained. Changing the
-  face on the watch by hand and re-reading answers both — whichever header byte moves is
-  the active one, and a picker follows from it.
 - **The reply to `HEART_MONITORING_ENABLED_GET`, 8 bytes.** High-entropy and *different on
   every connection*, which rules out the obvious reading — it is not the monitoring state.
 - **The last 12 bytes of every activity record.** The tail used to be sixteen. Its first

@@ -110,6 +110,17 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     WAKE_ON_WRIST_RAISE_GET(0x0062, 0x0002),
     WATCHFACE(0x009f, 0x0001),
     WATCHFACE_GET(0x009f, 0x0002),
+
+    /**
+     * What `WATCHFACE_GET` is actually answered with.
+     *
+     * Not `009f/0001`, which is what every other setting's read-back rule would predict
+     * and which this watch never sends. The reply is a vendor frame instead, and it was
+     * arriving long before reCMF asked for anything — it sat in the roadmap for months as
+     * an unattributed 28-byte list. Moving the request to the front of the read-back
+     * batch moved this with it, which is what settled it.
+     */
+    WATCHFACE_LIST(0xffff, 0xa055),
     WATER_REMINDER_GET(0x0061, 0x0002),
     WATER_REMINDER_SET(0x0061, 0x0001),
     WEATHER_SET_1(0xffff, 0x906b),

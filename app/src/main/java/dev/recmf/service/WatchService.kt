@@ -663,12 +663,11 @@ class WatchService : LifecycleService() {
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
     private suspend fun readBackSettings() {
-        // First on purpose, and only until one question is settled. The watch answered
-        // the last read-back with `ffff/a055` — twenty-eight bytes that arrived right
-        // after this frame, twice — but that command used to sit at the end of the batch,
-        // where anything unattributed lands by default. Sent first, an a055 that still
-        // follows it is following it; an a055 that turns up at the end belongs to
-        // something else. One connection decides it.
+        // First, and it stays first: this is what tied `ffff/a055` to it. That frame had
+        // been arriving unattributed for months, and it kept arriving right behind this
+        // request when the request sat at the end of the batch — where anything
+        // unattributed lands anyway. Moved to the front, the reply moved with it, ahead
+        // of every other read-back. That is the whole proof, and it costs nothing to keep.
         connection.send(CmfCommand.WATCHFACE_GET)
 
         connection.send(CmfCommand.HEART_MONITORING_ENABLED_GET)
@@ -898,11 +897,23 @@ class WatchService : LifecycleService() {
                 adopt = { settings.adoptSportTypesFromWatch(it) },
             )
 
-            // Never seen. The read-back rule did not hold for watchfaces: nothing came
-            // back under 009f/0001 at all. Kept because a reply here would still be the
-            // cleanest possible answer, and because its silence is itself the finding.
+            // Never seen, and that is the finding: the read-back rule that holds for
+            // every other setting does not hold here. Kept so a firmware that does answer
+            // under this opcode is noticed rather than logged as unknown.
             CmfCommand.WATCHFACE ->
-                ProtocolLog.note("Watchface reply: ${message.payload.toHex()}")
+                ProtocolLog.note("Watchface reply under 009f/0001: ${message.payload.toHex()}")
+
+            // The actual answer to WATCHFACE_GET. The header is logged raw beside the ids
+            // because three of its four bytes are still unexplained, and the one way to
+            // explain them is to compare two captures with a different face selected.
+            CmfCommand.WATCHFACE_LIST -> readBack(
+                value = CmfSettings.parseWatchfaceList(message.payload),
+                describe = {
+                    "Watchfaces on the watch: " + it.ids.joinToString(", ") + " (header " +
+                        it.header.joinToString(" ") { byte -> "%02x".format(byte) } + ")"
+                },
+                adopt = { false },
+            )
 
             // Nothing here writes Do Not Disturb, so this is read and reported and that
             // is all — there is no preference for it to disagree with.

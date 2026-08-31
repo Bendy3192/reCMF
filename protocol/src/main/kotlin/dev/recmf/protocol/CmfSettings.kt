@@ -238,6 +238,35 @@ object CmfSettings {
     private const val GOAL_BYTES = 5 * 4 + 1
     // endregion
 
+    /**
+     * `WATCHFACE_LIST`: four header bytes, then one 32-bit id per watchface.
+     *
+     * Confirmed as `01 05 06 07` followed by 273, 274, 275, 276, 277 and 280 — six ids,
+     * and the header's third byte is 6. That agreement is the only check available, so a
+     * frame whose header disagrees with what follows is refused rather than guessed at.
+     *
+     * The other three header bytes are not identified. `05` is a plausible index into six
+     * entries and `07` is not, but nothing has tested either: the way to find out is to
+     * change the face on the watch by hand and read this again.
+     */
+    fun parseWatchfaceList(payload: ByteArray): WatchfaceList? {
+        if (payload.size < WATCHFACE_HEADER_BYTES) return null
+        if ((payload.size - WATCHFACE_HEADER_BYTES) % 4 != 0) return null
+
+        val buffer = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
+        val header = List(WATCHFACE_HEADER_BYTES) { buffer.get().toInt() and 0xff }
+        val ids = List(buffer.remaining() / 4) { buffer.int }
+
+        if (header[WATCHFACE_COUNT_BYTE] != ids.size) return null
+
+        return WatchfaceList(header = header, ids = ids)
+    }
+
+    /** The four bytes ahead of the ids. */
+    private const val WATCHFACE_HEADER_BYTES = 4
+
+    /** The one header byte with a known meaning: how many ids follow. */
+    private const val WATCHFACE_COUNT_BYTE = 2
 }
 
 /**
@@ -253,4 +282,19 @@ data class WatchGoals(
     val unidentified: Int,
     val activeMinutes: Int,
     val climbs: Int,
+)
+
+
+/**
+ * The watchfaces the watch says it has.
+ *
+ * @param header the four bytes ahead of the list, kept whole. Only the third is
+ *   understood — it counts the ids — and the rest are carried rather than dropped so a
+ *   later capture can be compared byte for byte against this one.
+ * @param ids one 32-bit number per watchface. Very likely the same id that the upload
+ *   sequence asks for and that Gadgetbridge currently fills with a random number.
+ */
+data class WatchfaceList(
+    val header: List<Int>,
+    val ids: List<Int>,
 )
