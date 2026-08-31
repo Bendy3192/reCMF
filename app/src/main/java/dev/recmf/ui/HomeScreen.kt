@@ -2085,7 +2085,6 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
 @Composable
 private fun WatchfaceCard(
     watchfaces: WatchfaceList?,
-    watchfaceInstall: WatchfaceInstall?,
     install: WatchfaceInstall?,
     connected: Boolean,
     onSelect: (Int) -> Unit,
