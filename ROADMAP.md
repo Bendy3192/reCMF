@@ -268,6 +268,47 @@ The **mode byte** is always `03`. `02` is reported elsewhere as "add rather than
 but this watch holds six slots and no seventh, and an untried mode is not worth sending to
 a device that has to be re-paired when it sulks.
 
+### What is inside a watchface
+
+Sending somebody else's file is a stopgap. The point of knowing the format is to build one,
+which is also the only version of this with no copyright question in it at all. Two files
+were enough to take the container apart; what follows was read out of both and holds in both.
+
+```
+header      36 bytes   4 unexplained | version u32 | name in 12 | 0a | content u32 | resources u32 | 3 words
+name block  84 bytes   the name again at offset 45, then zeroes
+elements    variable   the table below, running until the resource area
+resources   the rest   images, concatenated, no separators
+```
+
+`content` at offset 24 is everything after the header. `resources` at offset 28 is the image
+blob alone, so the element table is the difference between them — 1272 bytes in one file, 923
+in the other, and in both the first element points at exactly that offset.
+
+An element is:
+
+```
+61 | count:u8 | 00 | start:u32 | count × size:u16 | placement
+```
+
+`count` is how many pictures the element cycles through, and it reads as plainly as anything
+in this protocol: **1** is a static image, **10** a digit place, **7** the days of the week,
+**2** a two-state icon. `start` is where its first picture begins and the sizes are the
+pictures' byte lengths in order — they sum to exactly the gap to the next element's `start`,
+in every element of both files, which is what confirms the whole reading.
+
+`placement` is 24 bytes for a static element and longer for the rest. Recurring shapes like
+`30 1e 00 01 1b 00` sit where coordinates would.
+
+**The image codec is the one part still closed.** It is not PNG, JPEG, WebP, GIF, BMP, gzip
+or zlib — no magic for any of them appears anywhere in either file — and entropy around 5.5
+says compressed but not tightly. The best cribs are already in hand: one file carries images
+of 36, 41 and 49 bytes, which at this screen size can only be near-solid colour, and both
+files repeat `04 38 c4 21` sixteen bytes into their first picture.
+
+The feedback loop for cracking it is slow but real: build a file, send it, look at the watch.
+A minute an attempt, and the answer is on the screen.
+
 
 Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and firmware. These use the second GATT service and a
 chunked upload protocol, and firmware flashing is the one operation here that can brick a
