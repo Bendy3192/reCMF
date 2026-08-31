@@ -220,6 +220,19 @@ payload discovered from scratch.
 
 ## Phase 6 — Transfers
 
+**Watchface install is written and untested against a watch.** The whole sequence is
+known — `8052`, `9075` with its four decrypted fields, the chunks the watch asks for by
+offset, `a065`/`9065` to close — and reCMF now walks it, reading a `.bin` through the
+system file picker and answering each ask from it.
+
+Two things about it are guesses rather than readings, and both are marked as such in the
+code. The **new id** is not in the file: the official app takes it from its catalogue, so
+reCMF picks one above everything the watch already holds. And the **mode byte** is always
+`03`; `02` is reported elsewhere as "add rather than replace", but this watch holds six
+slots and no seventh, and an untried mode is not worth sending to a device that has to be
+re-paired when it sulks.
+
+
 Watchfaces (`DATA_TRANSFER_WATCHFACE_*`), A-GPS (`DATA_TRANSFER_AGPS_*`) and firmware. These use the second GATT service and a
 chunked upload protocol, and firmware flashing is the one operation here that can brick a
 watch — so it comes last and stays behind a warning.

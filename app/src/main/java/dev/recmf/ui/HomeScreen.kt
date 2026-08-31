@@ -74,6 +74,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -113,6 +114,7 @@ import dev.recmf.service.WeatherProblem
 import dev.recmf.data.SleepSummary
 import dev.recmf.protocol.SleepSession
 import dev.recmf.protocol.WatchfaceList
+import dev.recmf.service.WatchfaceInstall
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import java.time.Instant
@@ -136,6 +138,7 @@ fun HomeScreen(
     charts: HealthCharts,
     weekly: WeeklySeries,
     watchfaces: WatchfaceList?,
+    watchfaceInstall: WatchfaceInstall?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -152,6 +155,7 @@ fun HomeScreen(
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
     onSelectWatchface: (Int) -> Unit,
+    onInstallWatchface: (Int) -> Unit,
     updateState: UpdateState,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
@@ -185,6 +189,7 @@ fun HomeScreen(
                         charts = charts,
                         weekly = weekly,
                         watchfaces = watchfaces,
+                        watchfaceInstall = watchfaceInstall,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -199,6 +204,7 @@ fun HomeScreen(
                         onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
                         onSelectWatchface = onSelectWatchface,
+                        onInstallWatchface = onInstallWatchface,
                         updateState = updateState,
                         onCheckForUpdate = onCheckForUpdate,
                         onInstallUpdate = onInstallUpdate,
@@ -236,6 +242,7 @@ private fun TabContent(
     charts: HealthCharts,
     weekly: WeeklySeries,
     watchfaces: WatchfaceList?,
+    watchfaceInstall: WatchfaceInstall?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -250,6 +257,7 @@ private fun TabContent(
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
     onSelectWatchface: (Int) -> Unit,
+    onInstallWatchface: (Int) -> Unit,
     updateState: UpdateState,
     onCheckForUpdate: () -> Unit,
     onInstallUpdate: (AvailableUpdate) -> Unit,
@@ -312,7 +320,15 @@ private fun TabContent(
                 }
                 item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
-                item { WatchfaceCard(watchfaces, state.connection.isUsable, onSelectWatchface) }
+                item {
+                    WatchfaceCard(
+                        watchfaces = watchfaces,
+                        install = watchfaceInstall,
+                        connected = state.connection.isUsable,
+                        onSelect = onSelectWatchface,
+                        onInstall = onInstallWatchface,
+                    )
+                }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
@@ -2069,10 +2085,17 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
 @Composable
 private fun WatchfaceCard(
     watchfaces: WatchfaceList?,
+    watchfaceInstall: WatchfaceInstall?,
+    install: WatchfaceInstall?,
     connected: Boolean,
     onSelect: (Int) -> Unit,
+    onInstall: (Int) -> Unit,
 ) {
     if (watchfaces == null) return
+
+    // Which face the next install displaces. The watch holds a fixed six, so there is no
+    // "add" — something goes, and the person doing it should be the one to say what.
+    var replacing by rememberSaveable { mutableIntStateOf(-1) }
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -2095,6 +2118,64 @@ private fun WatchfaceCard(
                         label = { Text(stringResource(R.string.watchface_number, index + 1)) },
                     )
                 }
+            }
+
+            HorizontalDivider()
+
+            Text(stringResource(R.string.watchface_install), style = MaterialTheme.typography.labelLarge)
+            Text(
+                stringResource(R.string.watchface_install_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                watchfaces.ids.indices.forEach { index ->
+                    FilterChip(
+                        selected = index == replacing,
+                        onClick = { replacing = if (replacing == index) -1 else index },
+                        enabled = connected,
+                        label = { Text(stringResource(R.string.watchface_number, index + 1)) },
+                    )
+                }
+            }
+
+            // Deliberately inert until a slot is chosen: a file picker that opens before
+            // the question is answered invites answering it afterwards, in a hurry.
+            FilledTonalButton(
+                onClick = { onInstall(replacing) },
+                enabled = connected && replacing >= 0 && install !is WatchfaceInstall.Sending,
+            ) {
+                Text(stringResource(R.string.watchface_choose_file))
+            }
+
+            when (install) {
+                is WatchfaceInstall.Sending -> {
+                    Text(
+                        stringResource(R.string.watchface_sending, install.name, install.percent),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    LinearProgressIndicator(
+                        progress = { install.percent / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                is WatchfaceInstall.Done -> Text(
+                    stringResource(R.string.watchface_sent, install.name),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+
+                is WatchfaceInstall.Failed -> Text(
+                    install.reason,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+
+                null -> Unit
             }
         }
     }

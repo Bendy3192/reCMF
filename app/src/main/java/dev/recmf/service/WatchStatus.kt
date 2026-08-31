@@ -58,6 +58,15 @@ object WatchStatus {
     val lastExchangeAtMillis = MutableStateFlow<Long?>(null)
 
     /**
+     * How an install is going, or null when none is.
+     *
+     * Not persisted and not resumable: the watch asks for the file in pieces and holds no
+     * position across a disconnection, so an interrupted install is one that has to start
+     * again. Saying so honestly is better than a progress bar that resumes into nothing.
+     */
+    val watchfaceInstall = MutableStateFlow<WatchfaceInstall?>(null)
+
+    /**
      * The watchfaces the watch reported, and which of them it is showing.
      *
      * Here rather than in the database because it is not history: it is what the watch
@@ -77,4 +86,11 @@ enum class WeatherProblem {
 
     /** The provider could not be reached, or answered something unreadable. */
     UNREACHABLE,
+}
+
+/** Where an install has got to, in the words the screen uses. */
+sealed interface WatchfaceInstall {
+    data class Sending(val name: String, val percent: Int) : WatchfaceInstall
+    data class Done(val name: String) : WatchfaceInstall
+    data class Failed(val reason: String) : WatchfaceInstall
 }

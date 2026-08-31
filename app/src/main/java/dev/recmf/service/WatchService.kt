@@ -9,6 +9,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import androidx.core.net.toUri
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
@@ -42,6 +44,7 @@ import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
 import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
+import dev.recmf.protocol.CmfWatchfaceFile
 import dev.recmf.protocol.CmfWeather
 import dev.recmf.protocol.toHex
 import dev.recmf.protocol.MonitoringChannel
@@ -61,6 +64,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.io.IOException
 import java.util.TimeZone
 import java.util.concurrent.Executors
 
@@ -126,6 +130,21 @@ class WatchService : LifecycleService() {
 
     /** So an empty sleep reply is reported once a connection rather than every refresh. */
     private var emptySleepReported = false
+
+    /**
+     * The watchface being sent, held only for as long as it is being sent.
+     *
+     * The watch drives the transfer — it asks for each stretch by offset — so this is the
+     * file those asks are answered from, and nothing else. It is dropped the moment the
+     * install finishes or fails, because a half-sent face left in memory is a face that
+     * would answer a stray request from the next connection.
+     */
+    private var sendingWatchface: ByteArray? = null
+
+    /** What the file calls itself, and what it displaces. Meaningful only mid-transfer. */
+    private var watchfaceName: String = ""
+    private var watchfaceReplaces: Int = 0
+    private var watchfaceNewId: Int = 0
 
     /** What the watch was last told is playing, so an unchanged track is not resent. */
     private var lastSentNowPlaying: NowPlaying? = null
@@ -194,6 +213,14 @@ class WatchService : LifecycleService() {
 
             ACTION_FIND_WATCH -> lifecycleScope.launch {
                 if (_status.value == ConnectionState.READY) connection.send(CmfCommand.FIND_WATCH)
+            }
+
+            ACTION_INSTALL_WATCHFACE -> lifecycleScope.launch {
+                val uri = intent.getStringExtra(EXTRA_WATCHFACE_URI)?.toUri()
+                val replaced = intent.getIntExtra(EXTRA_WATCHFACE_REPLACES, -1)
+                if (_status.value == ConnectionState.READY && uri != null && replaced >= 0) {
+                    installWatchface(uri, replaced)
+                }
             }
 
             ACTION_SET_WATCHFACE -> lifecycleScope.launch {
@@ -668,6 +695,105 @@ class WatchService : LifecycleService() {
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
     /**
+     * Sends a watchface file, replacing the one in [replacedIndex].
+     *
+     * The watch drives this: it is told what is coming and how big, and then asks for the
+     * file a stretch at a time by offset. So this method only opens the transfer — the
+     * chunks are answered from [handleWatchfaceRequest] as the asks arrive.
+     *
+     * The watch holds a fixed six faces, so there is no such thing as adding one. Every
+     * install displaces something, and the frame that opens the transfer has to name what.
+     */
+    private suspend fun installWatchface(uri: Uri, replacedIndex: Int) {
+        val listed = WatchStatus.watchfaces.value
+        if (listed == null || replacedIndex !in listed.ids.indices) {
+            failWatchfaceInstall("the watch has not said which faces it holds")
+            return
+        }
+
+        if (sendingWatchface != null) {
+            failWatchfaceInstall("another face is already being sent")
+            return
+        }
+
+        val bytes = try {
+            contentResolver.openInputStream(uri)?.use { it.readBytes() }
+        } catch (e: IOException) {
+            Log.w(TAG, "Could not read the watchface", e)
+            null
+        }
+
+        if (bytes == null) {
+            failWatchfaceInstall("the file could not be read")
+            return
+        }
+
+        val name = when (val reading = CmfWatchfaceFile.read(bytes)) {
+            is CmfWatchfaceFile.Reading.Ok -> reading.name
+            // Each of these is worth saying differently. Somebody holding a face for the
+            // first CMF Watch can go and find the right one; somebody holding a truncated
+            // download cannot tell that from the same words.
+            CmfWatchfaceFile.Reading.ForTheOtherWatch ->
+                return failWatchfaceInstall("that face is built for the first CMF Watch")
+            CmfWatchfaceFile.Reading.TooSmall ->
+                return failWatchfaceInstall("that file is too small to be a watchface")
+            CmfWatchfaceFile.Reading.NoName ->
+                return failWatchfaceInstall("that file has no watchface name in it")
+            is CmfWatchfaceFile.Reading.UnknownVersion ->
+                return failWatchfaceInstall(
+                    "unknown watchface version " +
+                        reading.version.joinToString(" ") { "%02x".format(it) },
+                )
+        }
+
+        // Nothing in the file says what id it should get — the official app takes that
+        // from its catalogue — so reCMF picks one the watch is not already using.
+        val newId = (listed.ids.maxOrNull() ?: 0) + 1
+
+        sendingWatchface = bytes
+        watchfaceName = name
+        watchfaceReplaces = listed.ids[replacedIndex]
+        watchfaceNewId = newId
+
+        ProtocolLog.note(
+            "Watchface: sending \"$name\", ${bytes.size} bytes, " +
+                "replacing id $watchfaceReplaces with $newId",
+        )
+        WatchStatus.watchfaceInstall.value = WatchfaceInstall.Sending(name, 0)
+
+        connection.sendOnDataChannel(
+            CmfCommand.DATA_TRANSFER_WATCHFACE_INIT_1_REQUEST,
+            CmfFrame.A5,
+        )
+    }
+
+    /** Answers one of the watch's asks for a stretch of the file it is being sent. */
+    private suspend fun handleWatchfaceRequest(payload: ByteArray) {
+        val file = sendingWatchface ?: return
+        val request = CmfWatchfaceFile.parseChunkRequest(payload)
+
+        if (request == null || request.offset >= file.size) {
+            failWatchfaceInstall("the watch asked for a piece that is not in the file")
+            return
+        }
+
+        val end = minOf(request.offset + request.length, file.size)
+        connection.sendOnDataChannel(
+            CmfCommand.DATA_CHUNK_WRITE_WATCHFACE,
+            file.copyOfRange(request.offset, end),
+        )
+
+        WatchStatus.watchfaceInstall.value =
+            WatchfaceInstall.Sending(watchfaceName, request.percent)
+    }
+
+    private fun failWatchfaceInstall(reason: String) {
+        sendingWatchface = null
+        ProtocolLog.note("Watchface: $reason")
+        WatchStatus.watchfaceInstall.value = WatchfaceInstall.Failed(reason)
+    }
+
+    /**
      * Switches the face by handing the watch its own list back, with a different one active.
      *
      * The watch takes no argument here. A capture of the official app shows it sending the
@@ -939,6 +1065,53 @@ class WatchService : LifecycleService() {
             // which does answer here is noticed rather than logged as unknown.
             CmfCommand.WATCHFACE ->
                 ProtocolLog.note("Watchface reply under 009f/0001: ${message.payload.toHex()}")
+
+            // The watch drives an install from here on: it acknowledges each step and
+            // then asks for the file a stretch at a time. Every branch below is one of
+            // those asks, answered in the order a real capture showed them.
+            CmfCommand.DATA_TRANSFER_WATCHFACE_INIT_1_REPLY -> {
+                if (sendingWatchface == null) return
+                if (message.payload.firstOrNull() != 1.toByte()) {
+                    failWatchfaceInstall("the watch refused to start the transfer")
+                    return
+                }
+
+                connection.sendOnDataChannel(
+                    CmfCommand.DATA_TRANSFER_WATCHFACE_INIT_2_ALT_REQUEST,
+                    CmfWatchfaceFile.transferRequest(
+                        replacedId = watchfaceReplaces,
+                        newId = watchfaceNewId,
+                        size = sendingWatchface?.size ?: 0,
+                    ),
+                )
+            }
+
+            CmfCommand.DATA_TRANSFER_WATCHFACE_INIT_2_ALT_REPLY -> {
+                if (sendingWatchface == null) return
+                if (message.payload.firstOrNull() != 1.toByte()) {
+                    failWatchfaceInstall("the watch would not take the face")
+                }
+            }
+
+            CmfCommand.DATA_CHUNK_REQUEST_WATCHFACE -> handleWatchfaceRequest(message.payload)
+
+            CmfCommand.DATA_TRANSFER_WATCHFACE_FINISH_ACK_1 -> {
+                if (sendingWatchface == null) return
+
+                // The watch's own last word is echoed back to it, which is what closes
+                // the transfer on its side.
+                connection.sendOnDataChannel(
+                    CmfCommand.DATA_TRANSFER_WATCHFACE_FINISH_ACK_2,
+                    message.payload,
+                )
+
+                ProtocolLog.note("Watchface: \"$watchfaceName\" sent")
+                WatchStatus.watchfaceInstall.value = WatchfaceInstall.Done(watchfaceName)
+                sendingWatchface = null
+
+                // The list is what says whether it took, so ask rather than assume.
+                connection.send(CmfCommand.WATCHFACE_GET)
+            }
 
             // The actual answer to WATCHFACE_GET. The header is logged raw beside the ids
             // because three of its four bytes are still unexplained, and the one way to
@@ -1239,6 +1412,9 @@ class WatchService : LifecycleService() {
         const val ACTION_FIND_WATCH = "dev.recmf.action.FIND_WATCH"
         const val ACTION_SET_WATCHFACE = "dev.recmf.action.SET_WATCHFACE"
         const val EXTRA_WATCHFACE_INDEX = "dev.recmf.extra.WATCHFACE_INDEX"
+        const val ACTION_INSTALL_WATCHFACE = "dev.recmf.action.INSTALL_WATCHFACE"
+        const val EXTRA_WATCHFACE_URI = "dev.recmf.extra.WATCHFACE_URI"
+        const val EXTRA_WATCHFACE_REPLACES = "dev.recmf.extra.WATCHFACE_REPLACES"
 
         /** Long enough for the watch to have acted before it is asked what it did. */
         private const val WATCHFACE_SETTLE_MILLIS = 600L
@@ -1262,6 +1438,16 @@ class WatchService : LifecycleService() {
         fun findWatch(context: Context) {
             context.startForegroundService(
                 Intent(context, WatchService::class.java).setAction(ACTION_FIND_WATCH),
+            )
+        }
+
+        /** Sends a watchface file, displacing the face at [replacedIndex]. */
+        fun installWatchface(context: Context, uri: String, replacedIndex: Int) {
+            context.startForegroundService(
+                Intent(context, WatchService::class.java)
+                    .setAction(ACTION_INSTALL_WATCHFACE)
+                    .putExtra(EXTRA_WATCHFACE_URI, uri)
+                    .putExtra(EXTRA_WATCHFACE_REPLACES, replacedIndex),
             )
         }
 

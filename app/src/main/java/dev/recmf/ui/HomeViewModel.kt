@@ -38,6 +38,7 @@ import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
 import dev.recmf.service.WeatherProblem
 import dev.recmf.service.WatchStatus
+import dev.recmf.service.WatchfaceInstall
 import dev.recmf.service.WatchdogWorker
 import dev.recmf.weather.WeatherClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -503,6 +504,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * a record of anything, and it goes empty on a restart on purpose.
      */
     val watchfaces: StateFlow<WatchfaceList?> = WatchStatus.watchfaces
+
+    /** How the current install is going, straight from the service. */
+    val watchfaceInstall: StateFlow<WatchfaceInstall?> = WatchStatus.watchfaceInstall
+
+    /** Sends a face file, displacing the one at [replacedIndex] in the watch's list. */
+    fun installWatchface(uri: String, replacedIndex: Int) {
+        WatchService.installWatchface(getApplication(), uri, replacedIndex)
+    }
 
     /** Hands the watch its own list back with a different face marked active. */
     fun selectWatchface(index: Int) {

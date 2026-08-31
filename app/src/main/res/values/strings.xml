@@ -189,4 +189,9 @@
     <string name="watchfaces">Watch face</string>
     <string name="watchfaces_explainer">The watch names none of its faces, so these are counted in the order it reports them, and it tells reCMF whenever the face changes on the wrist.</string>
     <string name="watchface_number">Face %1$d</string>
+    <string name="watchface_install">Install a face</string>
+    <string name="watchface_install_explainer">The watch holds six and no more, so installing one replaces another. Pick which one goes, then choose the file — a .bin built for the Watch Pro 2.</string>
+    <string name="watchface_choose_file">Choose a file…</string>
+    <string name="watchface_sending">Sending %1$s — %2$d%%</string>
+    <string name="watchface_sent">Sent %1$s</string>
 </resources>

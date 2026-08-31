@@ -16,6 +16,10 @@ import androidx.compose.runtime.getValue
 import android.annotation.SuppressLint
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.Context
 import dev.recmf.health.HealthConnectSync
@@ -110,6 +114,22 @@ class MainActivity : ComponentActivity() {
                 val weekly by model.weekly.collectAsStateWithLifecycle()
                 val sleepSession by model.lastSleepSession.collectAsStateWithLifecycle()
                 val watchfaces by model.watchfaces.collectAsStateWithLifecycle()
+                val watchfaceInstall by model.watchfaceInstall.collectAsStateWithLifecycle()
+
+                // Which face the chosen file will displace, remembered across the trip out
+                // to the system picker — the activity can be recreated while it is open.
+                var replacing by rememberSaveable { mutableIntStateOf(-1) }
+
+                // OpenDocument rather than GetContent: this reads one file once and wants
+                // no storage permission for it, and the picker is the system's, so reCMF
+                // never sees anything the person did not hand it.
+                val chooseFace = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument(),
+                ) { uri ->
+                    if (uri != null && replacing >= 0) {
+                        model.installWatchface(uri.toString(), replacing)
+                    }
+                }
 
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
@@ -130,6 +150,7 @@ class MainActivity : ComponentActivity() {
                     charts = charts,
                     weekly = weekly,
                     watchfaces = watchfaces,
+                    watchfaceInstall = watchfaceInstall,
                     onNotificationAppBlocked = model::setNotificationBlocked,
                     onNotificationAppsBlocked = model::setNotificationBlocked,
                     isBatteryExempt = isBatteryExempt,
@@ -148,6 +169,12 @@ class MainActivity : ComponentActivity() {
                     onSyncNow = model::syncNow,
                     onFindWatch = model::findWatch,
                     onSelectWatchface = model::selectWatchface,
+                    onInstallWatchface = { slot ->
+                        replacing = slot
+                        // Watchfaces have no registered type, so anything is offered and
+                        // the file itself is checked before a byte goes to the watch.
+                        chooseFace.launch(arrayOf("*/*"))
+                    },
                     updateState = updateState,
                     onCheckForUpdate = model::checkForUpdate,
                     onInstallUpdate = model::installUpdate,
