@@ -21,3 +21,7 @@ local.properties
 
 # OS
 .DS_Store
+
+# Python leaves these next to any script that gets imported.
+__pycache__/
+*.pyc
