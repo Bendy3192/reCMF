@@ -200,4 +200,6 @@
     <string name="metric_stat_max">Highest</string>
     <string name="metric_stat_avg">Average</string>
     <string name="metric_stat_min">Lowest</string>
+    <string name="tab_faces">Faces</string>
+    <string name="watchfaces_waiting">Connect the watch to see the faces it holds and switch between them.</string>
 </resources>

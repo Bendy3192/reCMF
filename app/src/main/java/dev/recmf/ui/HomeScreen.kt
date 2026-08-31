@@ -306,6 +306,18 @@ private fun TabContent(
                 item { SleepCard(sleepSession) }
             }
 
+            HomeTab.FACES -> {
+                item {
+                    WatchfaceCard(
+                        watchfaces = watchfaces,
+                        install = watchfaceInstall,
+                        connected = state.connection.isUsable,
+                        onSelect = onSelectWatchface,
+                        onInstall = onInstallWatchface,
+                    )
+                }
+            }
+
             HomeTab.DEVICE -> {
                 item {
                     WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences)
@@ -325,15 +337,6 @@ private fun TabContent(
                 }
                 item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
-                item {
-                    WatchfaceCard(
-                        watchfaces = watchfaces,
-                        install = watchfaceInstall,
-                        connected = state.connection.isUsable,
-                        onSelect = onSelectWatchface,
-                        onInstall = onInstallWatchface,
-                    )
-                }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
@@ -443,7 +446,9 @@ private fun FloatingTabDock(
                         .clip(RoundedCornerShape(percent = 50))
                         .background(background)
                         .clickable { onSelect(index) }
-                        .padding(horizontal = 18.dp, vertical = 12.dp),
+                        // Four tabs now, one of them a long word in some languages, so the
+                        // pills are a touch tighter than they were with three.
+                        .padding(horizontal = 13.dp, vertical = 12.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -2134,7 +2139,22 @@ private fun WatchfaceCard(
     onSelect: (Int) -> Unit,
     onInstall: (Int) -> Unit,
 ) {
-    if (watchfaces == null) return
+    if (watchfaces == null) {
+        // On its own tab this is the whole screen, so an empty one would read as broken.
+        // The list arrives moments after a connection, so the honest thing to say is that
+        // it has not arrived yet.
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(stringResource(R.string.watchfaces), style = MaterialTheme.typography.titleMedium)
+                Text(
+                    stringResource(R.string.watchfaces_waiting),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        return
+    }
 
     // Which face the next install displaces. The watch holds a fixed six, so there is no
     // "add" — something goes, and the person doing it should be the one to say what.
@@ -2235,8 +2255,12 @@ private enum class HomeTab(@param:StringRes val labelRes: Int) {
     HEALTH(R.string.tab_health),
 
     // Between the two rather than after them: sleep is a measurement, and the watch tab
-    // is where the settings live. The dock reads health, sleep, watch.
+    // is where the settings live. The dock reads health, sleep, faces, watch.
     SLEEP(R.string.tab_sleep),
+
+    // Its own tab rather than a card buried in the watch settings: switching and
+    // installing a face is a thing people come to do, not a setting they adjust once.
+    FACES(R.string.tab_faces),
     DEVICE(R.string.tab_device),
 }
 

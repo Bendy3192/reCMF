@@ -201,4 +201,6 @@
     <string name="metric_stat_max">Максимум</string>
     <string name="metric_stat_avg">Среднее</string>
     <string name="metric_stat_min">Минимум</string>
+    <string name="tab_faces">Циферблаты</string>
+    <string name="watchfaces_waiting">Подключите часы, чтобы увидеть их циферблаты и переключаться между ними.</string>
 </resources>
