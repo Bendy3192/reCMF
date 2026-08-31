@@ -261,6 +261,19 @@ firmware wants `9075`. Its body is 32 bytes of ciphertext — two AES blocks —
 Gadgetbridge's `9063` carries nine plaintext bytes, so the step wants more than a length
 and an id.
 
+**A capture that contains a pairing can be read in full**, which is what `tools/btsnoop.py`
+does. Nothing is broken to do it: the watch hands its app secret over the shell
+characteristic in plain text, both nonces travel unencrypted, and every key after that is a
+SHA-256 of material already on the wire — `K1 = SHA-256(nonce1 || random2 || secret)[:16]`,
+then `SHA-256(nonce || K1)[:16]` re-derived on each reconnect. Confirmed by reading reCMF's
+own `a055` frames out of a capture and getting the list byte for byte.
+
+**But each app that pairs negotiates its own `K1`**, so a capture of the *official* app is
+unreadable unless it was taken across a fresh pairing of that app. Which is why the body of
+`9075` is still unknown: the capture holds the transfer and reCMF's pairing, not Nothing
+X's. Un-pairing Nothing X and pairing it again with the snoop log running would settle the
+last of this.
+
 **The file itself came out of that capture**, because the chunks are not encrypted. 58217
 bytes, and its first sixteen read:
 

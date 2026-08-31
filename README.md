@@ -10,11 +10,13 @@ stock app does badly: stay connected without being killed, and put the watch's d
 
 > **How the protocol was learned.** By watching the Bluetooth traffic between a phone and
 > its own watch, with Android's own HCI snoop log, and by reading Gadgetbridge — which is
-> what the interoperability exceptions to copyright exist for. No encryption was broken:
-> the session key is handed over openly during pairing, and captures of the official app
-> stay unreadable here, which the protocol notes say plainly. Nothing's watchface files
-> are somebody else's work and are not in this repository, nor are the captures; both are
-> fine to examine on your own hardware and are not ours to hand out.
+> what the interoperability exceptions to copyright exist for. `tools/btsnoop.py` reads
+> such a capture. No encryption is broken to do it: the watch hands its app secret over in
+> plain text and every key is a SHA-256 of material already on the wire — and a capture
+> without a pairing stays unreadable, including captures of the official app, because each
+> app negotiates its own key. Nothing's watchface files are somebody else's work and are
+> not in this repository, nor are any captures or keys; both are fine to examine on your
+> own hardware and are not ours to hand out.
 
 > **Status: in daily use against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
 > steps, heart rate, resting heart rate, blood oxygen, stress, weather, notifications,
