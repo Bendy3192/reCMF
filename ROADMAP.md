@@ -343,11 +343,39 @@ in every element of both files, which is what confirms the whole reading.
 `placement` is 24 bytes for a static element and longer for the rest. Recurring shapes like
 `30 1e 00 01 1b 00` sit where coordinates would.
 
-**The image codec is the one part still closed.** It is not PNG, JPEG, WebP, GIF, BMP, gzip
-or zlib — no magic for any of them appears anywhere in either file — and entropy around 5.5
-says compressed but not tightly. The best cribs are already in hand: one file carries images
-of 36, 41 and 49 bytes, which at this screen size can only be near-solid colour, and both
-files repeat `04 38 c4 21` sixteen bytes into their first picture.
+**An image has an eight-byte header, and it is now read.**
+
+```
+tag:u8 | dimensions:u24 | length:u32 | compressed data
+```
+
+`length` is the bytes after the header — it agrees with the element table's own size for
+that image, minus eight, on every image in both files. `tag` is `04` or `05`; what it selects
+is not yet known.
+
+The dimensions took a detour worth recording. Read as twelve bits and twelve bits they give
+numbers like 1864 by 932, which is nonsense on a 466-pixel screen — until you notice that
+1864 is four times 466 and 932 is twice it. **The low field is the width times four and the
+high field is the height times two.** Across 113 images in the two files, every low field
+divides by four and every high field by two, without a single exception; chance would put
+that at one in 8^113.
+
+What comes out is a face's worth of sensible pictures. The largest image in *both* files is
+exactly 466 by 466 — the screen. Others land on 270 by 270, 136 by 136, 50 by 50: square,
+which is what a dial ring or a round icon is. And the compression ratio, which read as an
+absurd 200 pixels per byte before, now sits between 1.6 and 28.6 across every distinct size
+in both files, which is the range an RLE over small images actually lives in.
+
+**The compressed data itself is what remains.** It is not PNG, JPEG, WebP, GIF, BMP, gzip or
+zlib — no magic for any of them appears anywhere. Three images in one file are the same
+picture at three heights (10 by 28, 10 by 44, 10 by 140) and differ *only* in the length of a
+run of `ff` bytes — two, four and fifteen of them — which says runs are in there and that
+`ff` is how they are spelled. Every image's data opens with `1f 00 01 00`.
+
+The best cribs are the digit sets. A ten-image element is the digits nought to nine in order,
+and it reads like it: in one set the smallest image by far is index 1 and the second smallest
+is index 7, which is exactly the order of how much ink a digit takes. Ten pictures whose
+content is known in advance is as good a starting point as a codec ever offers.
 
 The feedback loop for cracking it is slow but real: build a file, send it, look at the watch.
 A minute an attempt, and the answer is on the screen.
