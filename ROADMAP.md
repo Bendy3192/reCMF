@@ -453,14 +453,23 @@ So **the position is a pair of little-endian u16, and it follows a marker** rath
 at a fixed offset; the blocks are not all the same shape, which is why no fixed offset fits more
 than about two thirds of them.
 
-Taking the pair after the first `01 ?? 00` in a block and compositing every element onto a 466
-by 466 canvas places 73 of that face's 87 elements, and what comes out is recognisably the face:
-the sun's arc across the top, the coloured progress rings, the battery and sleep icons, the
-words SUNRISE and SUNSET. Wrong in the details — several rings land in the wrong quarter, and
-the same rule places only 3 of 14 elements on a downloaded face — so the marker is close but not
-yet the right one.
+Taking the pair after a `01 ?? 00` marker in a block and compositing every element onto a 466 by
+466 canvas draws something recognisably the face: the sun's arc across the top, the coloured
+progress rings, the battery and sleep icons, the words SUNRISE and SUNSET.
 
-That is where this stands: the coordinates are found, the way they are addressed is not.
+There is more than one such marker in most blocks, and **the last one is the better rule**: on
+the richest face it places 83 of 87 elements against 73 for the first, and the composite is
+closer to that face's own preview. It also puts the seven-day strip in a row across the top and
+the three rings in a row along the bottom, which the first-marker rule scattered.
+
+It is still wrong in the details — a stack of rings lands in the top-left corner where the face
+has none, and a downloaded face places only 9 of its 14 elements. So the coordinates are found
+and the way they are addressed is nearly found.
+
+The next thing to look at is what makes the blocks different shapes. They are not one layout:
+some open `30 2c 00 01 1b 00`, others `81 32 00 01 1b 00` or `02 0b 00 02 …`, and the pattern
+follows what the element is — a static picture, a digit place, a ring, a hand. Reading that is
+reading the rest of the face.
 
 ### Where the stock faces are
 
