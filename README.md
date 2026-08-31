@@ -8,6 +8,14 @@ stock app does badly: stay connected without being killed, and put the watch's d
 > Nothing. "CMF" and "Nothing" are their trademarks and are used here only to say which
 > watch this talks to. Nothing's own app is not required, modified or redistributed.
 
+> **How the protocol was learned.** By watching the Bluetooth traffic between a phone and
+> its own watch, with Android's own HCI snoop log, and by reading Gadgetbridge — which is
+> what the interoperability exceptions to copyright exist for. No encryption was broken:
+> the session key is handed over openly during pairing, and captures of the official app
+> stay unreadable here, which the protocol notes say plainly. Nothing's watchface files
+> are somebody else's work and are not in this repository, nor are the captures; both are
+> fine to examine on your own hardware and are not ours to hand out.
+
 > **Status: in daily use against a real Watch Pro 2 on firmware 1.0.0.73.** Pairing,
 > steps, heart rate, resting heart rate, blood oxygen, stress, weather, notifications,
 > incoming calls, alarms, find-watch and sleep with its stages are confirmed on hardware.
