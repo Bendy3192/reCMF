@@ -663,6 +663,14 @@ class WatchService : LifecycleService() {
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
     private suspend fun readBackSettings() {
+        // First on purpose, and only until one question is settled. The watch answered
+        // the last read-back with `ffff/a055` — twenty-eight bytes that arrived right
+        // after this frame, twice — but that command used to sit at the end of the batch,
+        // where anything unattributed lands by default. Sent first, an a055 that still
+        // follows it is following it; an a055 that turns up at the end belongs to
+        // something else. One connection decides it.
+        connection.send(CmfCommand.WATCHFACE_GET)
+
         connection.send(CmfCommand.HEART_MONITORING_ENABLED_GET)
         connection.send(CmfCommand.STANDING_REMINDER_GET)
         connection.send(CmfCommand.WATER_REMINDER_GET)
@@ -671,13 +679,6 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.WAKE_ON_WRIST_RAISE_GET)
         connection.send(CmfCommand.SPORTS_GET)
         connection.send(CmfCommand.DO_NOT_DISTURB_GET)
-
-        // Asked purely to find out whether it answers. The watchface opcode is ported
-        // from Gadgetbridge and has never been sent to this firmware; if the read-back
-        // rule holds here as it has for every other setting, the reply says which face
-        // is on the watch and how many it knows about. That is the whole question
-        // between a picker reCMF can build and one it cannot.
-        connection.send(CmfCommand.WATCHFACE_GET)
 
         // The one that unblocks alarms. The watch keeps exactly the list it is sent, so
         // reCMF must not offer an alarm UI until it can read what is already there —
@@ -897,11 +898,9 @@ class WatchService : LifecycleService() {
                 adopt = { settings.adoptSportTypesFromWatch(it) },
             )
 
-            // Raw, because nothing is known about the shape yet: the log is the
-            // experiment. A single byte would most likely be the active face's index,
-            // which is all a picker needs; anything longer probably lists what is
-            // installed. Silence answers the question too — it would mean this firmware
-            // does not serve the opcode and a picker has nothing to be built on.
+            // Never seen. The read-back rule did not hold for watchfaces: nothing came
+            // back under 009f/0001 at all. Kept because a reply here would still be the
+            // cleanest possible answer, and because its silence is itself the finding.
             CmfCommand.WATCHFACE ->
                 ProtocolLog.note("Watchface reply: ${message.payload.toHex()}")
 

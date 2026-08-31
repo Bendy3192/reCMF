@@ -271,9 +271,24 @@ can be compared against them rather than starting over.
   The guess was that it was the watch refusing the pointless `BATTERY` request reCMF used
   to send; that request is gone and the frame still arrives, so the guess was wrong. It is
   unsolicited, always the same value, and 56 matches nothing on the watch's screen.
-- **`ffff/a055`, 28 bytes.** `01 05 06 07` and then five-byte groups: 274, 273, 275, 276,
-  277, 280. A stable list of something the watch supports; the numbers do not move between
-  connections.
+- **`ffff/a055`, 28 bytes.** Re-read correctly: a four-byte header `01 05 06 07`, then
+  **six** little-endian 32-bit numbers — 274, 273, 275, 276, 277, 280 (`0x112`, `0x111`,
+  `0x113`, `0x114`, `0x115`, `0x118`). The earlier note said five-byte groups, which does
+  not divide 24 and was simply wrong. The header's third byte is 6, which is how many
+  numbers follow.
+
+  **Probably the watchfaces.** `WATCHFACE_GET` (`009f/0002`) was sent for the first time
+  and drew no reply under `009f/0001` — the read-back rule that has held for every other
+  setting does not hold here — but a055 arrived immediately after it, twice, and before
+  the two GETs that came next. That is not proof: a055 was already arriving before the
+  probe existed, and the probe was added at the end of the batch, which is where an
+  unattributed frame lands anyway. So the probe now goes out **first**. An a055 that still
+  follows it is following it; an a055 that turns up at the end belongs to something else.
+
+  If it is the list, the remaining question is which of the six is active, and the header
+  is where to look: `05` would be an index into the six, `07` is unexplained. Changing the
+  face on the watch by hand and re-reading answers both — whichever header byte moves is
+  the active one, and a picker follows from it.
 - **The reply to `HEART_MONITORING_ENABLED_GET`, 8 bytes.** High-entropy and *different on
   every connection*, which rules out the obvious reading — it is not the monitoring state.
 - **The last 12 bytes of every activity record.** The tail used to be sixteen. Its first
