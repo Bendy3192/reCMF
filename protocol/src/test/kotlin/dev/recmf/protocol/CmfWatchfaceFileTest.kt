@@ -3,9 +3,13 @@
  */
 package dev.recmf.protocol
 
+import org.junit.jupiter.api.Assertions.assertArrayEquals
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertInstanceOf
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Test
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class CmfWatchfaceFileTest {
 
@@ -14,13 +18,25 @@ class CmfWatchfaceFileTest {
         name: String,
         version: ByteArray = CmfWatchfaceFile.VERSION_WATCH_PRO_2,
         size: Int = 256,
+        declared: Int = size - HEADER_BYTES,
     ): ByteArray {
         val bytes = ByteArray(size)
         // Four bytes that differ between files and are not a CRC of anything else in them.
         "d3879fb9".hexToBytes().copyInto(bytes, 0)
         version.copyInto(bytes, 4)
         name.toByteArray().copyInto(bytes, 8)
+        ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).putInt(24, declared)
+        // Filler that is not zero, so trimming is visible as something other than padding.
+        for (i in HEADER_BYTES until size) bytes[i] = (i and 0x7f).toByte()
         return bytes
+    }
+
+    /** What a watchface site hands out: a device file with its own header stuck on the end. */
+    private fun wrapped(inside: ByteArray, extra: Int = 0): ByteArray =
+        inside + ByteArray(extra) { 0x5a } + inside.copyOf(HEADER_BYTES) + "ced23cc5".hexToBytes()
+
+    private companion object {
+        const val HEADER_BYTES = 36
     }
 
     @Test
@@ -87,5 +103,68 @@ class CmfWatchfaceFileTest {
         assertNull(CmfWatchfaceFile.parseChunkRequest("ffffffff00000c0000".hexToBytes()))
         assertNull(CmfWatchfaceFile.parseChunkRequest("000000000000000000".hexToBytes()))
         assertNull(CmfWatchfaceFile.parseChunkRequest("0000".hexToBytes()))
+    }
+
+    @Test
+    fun `a file whose header accounts for every byte after it is sent as it is`() {
+        // The one face known to have been accepted was 76104 bytes and said 76068, which
+        // is the whole file bar its 36 byte header.
+        val bytes = file("Dash", size = 76104, declared = 76068)
+
+        val packaging = CmfWatchfaceFile.prepare(bytes)
+
+        assertInstanceOf(CmfWatchfaceFile.Packaging.Device::class.java, packaging)
+        assertArrayEquals(bytes, packaging.bytes)
+    }
+
+    @Test
+    fun `a downloaded face is cut back to the device file inside its wrapper`() {
+        // The refused one: 58217 bytes declaring 57137, with the first 36 bytes repeated
+        // at the end. 57137 + 36 = 57173 is the file the watch is meant to receive.
+        val inside = file("Combo", size = 57173, declared = 57137)
+        val bytes = wrapped(inside, extra = 1004)
+
+        val packaging = CmfWatchfaceFile.prepare(bytes)
+
+        assertInstanceOf(CmfWatchfaceFile.Packaging.Trimmed::class.java, packaging)
+        assertEquals(58217, bytes.size)
+        assertArrayEquals(inside, packaging.bytes)
+    }
+
+    @Test
+    fun `a length that fits neither shape is sent whole rather than trimmed on a guess`() {
+        // Trimming rests on one accepted file and one refused one. A file that matches
+        // neither is not evidence for the rule, and cutting it would destroy a face that
+        // might have installed.
+        val bytes = file("Odd", size = 4096, declared = 1234)
+
+        val packaging = CmfWatchfaceFile.prepare(bytes)
+
+        assertInstanceOf(CmfWatchfaceFile.Packaging.Unexplained::class.java, packaging)
+        assertArrayEquals(bytes, packaging.bytes)
+        assertEquals(1234, (packaging as CmfWatchfaceFile.Packaging.Unexplained).declared)
+    }
+
+    @Test
+    fun `a wrapper is only recognised by the header it repeats`() {
+        // Same lengths, different bytes at the end. Without the repeat there is nothing
+        // saying where the file inside stops, so nothing is cut.
+        val inside = file("Combo", size = 57173, declared = 57137)
+        val bytes = inside + ByteArray(1044) { 0x11 }
+
+        assertInstanceOf(
+            CmfWatchfaceFile.Packaging.Unexplained::class.java,
+            CmfWatchfaceFile.prepare(bytes),
+        )
+    }
+
+    @Test
+    fun `a header claiming more than the file holds is never trusted with a length`() {
+        val bytes = file("Combo", size = 256, declared = 1 shl 30)
+
+        val packaging = CmfWatchfaceFile.prepare(bytes)
+
+        assertInstanceOf(CmfWatchfaceFile.Packaging.Unexplained::class.java, packaging)
+        assertArrayEquals(bytes, packaging.bytes)
     }
 }

@@ -234,11 +234,35 @@ bytes arrive; something about the frame that announced them does not satisfy the
 code treated any reply to the finish frame as success, which is how the log said "Combo
 sent" over a rejection. Fixed: the verdict is read, the code reported, the install failed.
 
-The **new id** is the leading suspect. It is not in the file — searched the whole of both —
-so the official app takes it from its catalogue, and reCMF's first guess was a number above
-everything the watch holds. The second reuses the id of the face being displaced: the watch
-issued that number itself, the slot it belongs to is the slot being written, and nothing
-can collide with it.
+The **new id** was the leading suspect and is no longer. It is not in the file — searched
+the whole of both — so the official app takes it from its catalogue. reCMF's first guess was
+a number above everything the watch holds; the second reused the id of the face being
+displaced, a number the watch issued itself into the slot being written. Both were refused
+with the same `0a`, which is as close to ruling the id out as two attempts can get.
+
+**The file being sent was the wrong shape.** Two files were to hand: the one the official
+app installed, read byte for byte off the wire, and the one downloaded from a watchface site
+that reCMF has been refused with. Laid side by side they are packaged differently.
+
+At offset 24 the header carries a length. On the accepted file it reads 76068 against a file
+of 76104 — the whole file bar its 36-byte header, exactly. On the downloaded file it reads
+57137 against 58217, which is 1044 bytes too many. And the downloaded file **ends with its
+own first 36 bytes repeated**, followed by four more; the accepted file has no such thing
+and simply stops.
+
+So the download is a wrapper around the file the watch is sent, and reCMF was sending the
+wrapper. The four bytes after the repeat are not a CRC32 of the file with them, without
+them, of the content, or of anything else tried — they are the wrapper's business.
+
+This also explains a check in Gadgetbridge that never made sense: it requires the name
+repeated 28 bytes from the end. That is this wrapper. Gadgetbridge is validating the
+distributed file and then sending it whole, which is the same mistake.
+
+reCMF now cuts a file back to the length its own header declares, but only when the repeated
+header is there to say where the file inside stops. One accepted file and one refused one is
+thin evidence for a rule, so a file matching neither shape is sent as it came and said to be
+unrecognised, rather than trimmed on a guess that would destroy a face that might have
+installed.
 
 The **mode byte** is always `03`. `02` is reported elsewhere as "add rather than replace",
 but this watch holds six slots and no seventh, and an untried mode is not worth sending to

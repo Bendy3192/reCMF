@@ -22,6 +22,12 @@ import java.nio.charset.StandardCharsets
  * Watch, and refuses a Pro 2 file before it transmits anything. The first four bytes differ
  * between files and are not a CRC32 of the rest; they are carried and not interpreted.
  *
+ * At offset 24 there is a length. On the one file known to have been accepted — read byte
+ * for byte off the wire while the official app installed it — it is 76068 against a file of
+ * 76104, exactly [HEADER_BYTES] short of the whole. A file downloaded from a watchface site
+ * says 57137 against 58217 and ends with its own first 36 bytes repeated, which the accepted
+ * file does not. See [prepare].
+ *
  * Nothing here parses the *contents*. reCMF sends a file the watch will accept or refuses
  * one it will not; drawing a watchface is the watch's business.
  */
@@ -130,4 +136,83 @@ object CmfWatchfaceFile {
 
         return ChunkRequest(offset, length, percent)
     }
+
+    /**
+     * The fixed part at the front, before anything that varies with the face.
+     *
+     * Thirty-six bytes: the four unexplained ones, the version, the name in twelve, four
+     * zeroes, a `0a`, and then two lengths and three words that differ per file. The name
+     * appears a second time at offset 45, which is why a face can be recognised without
+     * knowing any of this.
+     */
+    private const val HEADER_BYTES = 36
+
+    /** Where the header says how much file follows it. */
+    private const val CONTENT_SIZE_OFFSET = 24
+
+    /** The length at [CONTENT_SIZE_OFFSET], or null from something too short to hold one. */
+    fun declaredContentSize(bytes: ByteArray): Int? =
+        if (bytes.size < HEADER_BYTES) {
+            null
+        } else {
+            ByteBuffer.wrap(bytes, CONTENT_SIZE_OFFSET, 4).order(ByteOrder.LITTLE_ENDIAN).int
+        }
+
+    /**
+     * What a file's length says about how it is packaged, and the bytes to send because of it.
+     *
+     * A face installed by the official app was [HEADER_BYTES] longer than the length in its
+     * own header — header plus content, and nothing after. A face downloaded from a site was
+     * 1044 bytes longer than that, and those bytes end with the file's own first 36 repeated
+     * and four more; the accepted file carries no such thing. So the download is a wrapper
+     * around a device file, and the wrapper is what the watch was never sent.
+     *
+     * This is one known-good file against one known-refused one, which is why the third case
+     * exists: a file that matches neither shape is sent whole and said to be unrecognised,
+     * rather than trimmed on a rule that has been seen to hold exactly once.
+     */
+    sealed interface Packaging {
+        /** The bytes to put on the wire. */
+        val bytes: ByteArray
+
+        /** Header plus the content it declares, which is the shape the watch was sent. */
+        class Device(override val bytes: ByteArray) : Packaging
+
+        /** A wrapper recognised by its repeated header and cut back to the file inside. */
+        class Trimmed(override val bytes: ByteArray, val from: Int) : Packaging
+
+        /** Neither shape. Sent as it came, because guessing at it would be worse. */
+        class Unexplained(override val bytes: ByteArray, val declared: Int) : Packaging
+    }
+
+    fun prepare(bytes: ByteArray): Packaging {
+        val declared = declaredContentSize(bytes) ?: return Packaging.Unexplained(bytes, 0)
+        if (declared < 0 || declared > bytes.size) return Packaging.Unexplained(bytes, declared)
+
+        val whole = declared + HEADER_BYTES
+        if (whole == bytes.size) return Packaging.Device(bytes)
+
+        return if (whole in MINIMUM_SIZE until bytes.size && carriesWrapper(bytes)) {
+            Packaging.Trimmed(bytes.copyOf(whole), bytes.size)
+        } else {
+            Packaging.Unexplained(bytes, declared)
+        }
+    }
+
+    /**
+     * Whether the file ends with its own header again.
+     *
+     * Four bytes follow that repeat, and they are not a CRC32 of the file with or without
+     * them, of the content, or of anything else tried. They are the wrapper's business and
+     * are dropped with it. Gadgetbridge looks for the same repeat — it expects the name 28
+     * bytes from the end — which says the wrapper is what watchface sites hand out.
+     */
+    private fun carriesWrapper(bytes: ByteArray): Boolean {
+        val end = bytes.size - WRAPPER_BYTES
+        if (end < HEADER_BYTES) return false
+        return bytes.copyOfRange(end, end + HEADER_BYTES).contentEquals(bytes.copyOf(HEADER_BYTES))
+    }
+
+    /** The repeated header and the four bytes after it. */
+    private const val WRAPPER_BYTES = HEADER_BYTES + 4
 }
