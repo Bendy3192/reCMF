@@ -441,6 +441,35 @@ element, which is the part still unread.
 The first useful thing to build on this is not an editor: it is swapping one picture in a
 face somebody already has for one of their own.
 
+### Where the stock faces are
+
+Two faces is a thin corpus for reading the placement bytes, and the watch will not hand its
+own back — the protocol uploads and does not download. They turned out not to be needed.
+
+Somebody has already pulled a **firmware dump** of this watch off its OTA URL and put the
+decompressed image up (`whatotter/cmf-watch-firmware`). Their notes say the watch runs Zephyr
+and LVGL, which is what identified the image header, and that pulling the assets out was still
+on their list — they had carved only JPEGs.
+
+Scanning that 80 MB image for this format finds **315 pictures** and, more to the point,
+**seven whole watchfaces**: Activity Moon, Multifunction, Prismatic Time, Dichotomy, SlopeTime,
+Sun Circle. The detector is the format's own arithmetic, so it cannot really be wrong — a
+container is only accepted when its closing copy lands exactly where offset 24 says, and a
+picture only when its LZ4 block consumes its own length and decodes to exactly
+`width × height × bytes-per-pixel`. All eight faces now in hand read with no mismatches.
+
+Multifunction is the one worth having. It is the face with the weather, the sunrise and sunset
+times, the sun's arc, the seven-day strip and the three rings — every widget kind on one face,
+with its placement bytes beside it and its own 270 by 270 preview inside it to say what those
+bytes produced.
+
+None of these files are in this repository and none will be. They are Nothing's artwork; the
+format is the part worth sharing.
+
+Reading them also loosened the element detector. A downloaded face stops at eleven pictures in
+an element; a stock one runs to sixty, and the reader was refusing anything above sixteen.
+
+
 The feedback loop for cracking it is slow but real: build a file, send it, look at the watch.
 A minute an attempt, and the answer is on the screen.
 

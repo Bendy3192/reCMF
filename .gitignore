@@ -25,3 +25,6 @@ local.properties
 # Python leaves these next to any script that gets imported.
 __pycache__/
 *.pyc
+
+# Firmware dumps and extracted faces are somebody else own work and stay out of here.
+*.bin

@@ -254,7 +254,10 @@ def all_records(face: bytes, table: int) -> list[tuple[int, int, int, list[int]]
         if face[at] != 0x61 or face[at + 2] != 0:
             continue
         count = face[at + 1]
-        if not 1 <= count <= 16 or at + 7 + 2 * count > table:
+        # Stock faces run to sixty frames in one element where a downloaded one stops at
+        # eleven, so this is loose on purpose: the checks that matter are that the sizes
+        # are non-zero and that the run they describe lands inside the file.
+        if not 1 <= count <= 255 or at + 7 + 2 * count > table:
             continue
         start = struct.unpack_from("<I", face, at + 3)[0]
         sizes = list(struct.unpack_from(f"<{count}H", face, at + 7))
@@ -378,7 +381,14 @@ def main() -> None:
         print(f"  rebuilt: {len(rebuilt)} bytes, every picture identical")
         return
 
-    for index, (start, count, sizes) in enumerate(elements(face)):
+    content, resources = struct.unpack_from("<II", face, CONTENT_SIZE_OFFSET)
+    listed = []
+    for _at, count, start, sizes in all_records(face, content - resources):
+        if start not in {seen for seen, _, _ in listed}:
+            listed.append((start, count, sizes))
+    listed.sort()
+
+    for index, (start, count, sizes) in enumerate(listed):
         kinds = {1: "static", 2: "two-state", 7: "days of the week", 10: "digits 0-9"}
         print(f"  element {index}: {count} picture(s), {kinds.get(count, 'unknown')}")
         at = start
