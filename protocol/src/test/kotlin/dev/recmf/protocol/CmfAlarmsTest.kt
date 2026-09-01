@@ -7,13 +7,67 @@ import org.junit.jupiter.api.Test
 
 class CmfAlarmsTest {
 
+    /**
+     * Two records a real watch answered `ALARMS_GET` with, byte for byte.
+     *
+     * They were put there by the official app, so they are the watch's own idea of the
+     * format rather than a copy of ours: 03:10 on Wednesdays and 06:10 on weekdays.
+     */
+    private val fromTheWatch = (
+        "882c0000" + "00" + "01" + "04" + "01" + "00".repeat(32) +
+            "b8560000" + "01" + "01" + "1f" + "01" + "00".repeat(32)
+        ).hexToBytes()
+
+    @Test
+    fun `the watch's own alarms read back as the times it shows`() {
+        // The test that matters. Everything below it round-trips our own bytes, which
+        // stayed green for months while the time field was written the wrong way round —
+        // parse read it back reversed too, so the two agreed with each other and with
+        // nothing else. Only these bytes, which we did not write, catch that.
+        val alarms = CmfAlarms.parse(fromTheWatch)
+
+        assertEquals(
+            listOf(
+                CmfAlarm(3, 10, enabled = true, days = setOf(CmfWeekday.WEDNESDAY)),
+                CmfAlarm(
+                    6, 10, enabled = true,
+                    days = setOf(
+                        CmfWeekday.MONDAY, CmfWeekday.TUESDAY, CmfWeekday.WEDNESDAY,
+                        CmfWeekday.THURSDAY, CmfWeekday.FRIDAY,
+                    ),
+                ),
+            ),
+            alarms,
+        )
+    }
+
+    @Test
+    fun `what we send the watch is what the watch sends us`() {
+        // The other half: the same two alarms, encoded here, must come out as the bytes
+        // above. Parsing them correctly would be no use if we still wrote them reversed.
+        val payload = CmfAlarms.payload(
+            listOf(
+                CmfAlarm(3, 10, enabled = true, days = setOf(CmfWeekday.WEDNESDAY)),
+                CmfAlarm(
+                    6, 10, enabled = true,
+                    days = setOf(
+                        CmfWeekday.MONDAY, CmfWeekday.TUESDAY, CmfWeekday.WEDNESDAY,
+                        CmfWeekday.THURSDAY, CmfWeekday.FRIDAY,
+                    ),
+                ),
+            ),
+        )
+
+        assertEquals(fromTheWatch.toHex(), payload.toHex())
+    }
+
     @Test
     fun `an alarm is forty bytes with the time in seconds from midnight`() {
         val payload = CmfAlarms.payload(listOf(CmfAlarm(hour = 7, minute = 30)))
 
         assertEquals(CmfAlarms.RECORD_SIZE, payload.size)
-        // 7 * 3600 + 30 * 60 = 27000 = 0x6978, big-endian.
-        assertEquals("00006978", payload.copyOf(4).toHex())
+        // 7 * 3600 + 30 * 60 = 27000 = 0x6978, little-endian as the watch stores it.
+        assertEquals("78690000", payload.copyOf(4).toHex())
     }
 
     @Test

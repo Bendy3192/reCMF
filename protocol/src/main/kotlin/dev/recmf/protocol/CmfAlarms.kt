@@ -35,7 +35,17 @@ data class CmfAlarm(
 object CmfAlarms {
 
     /**
-     * `ALARMS_SET`: forty bytes per alarm, big-endian.
+     * `ALARMS_SET`: forty bytes per alarm.
+     *
+     * ```
+     * seconds from midnight : u32 little-endian
+     * index                 : u8   position in this list
+     * enabled               : u8
+     * repeat days           : u8   the [CmfWeekday] bitmask
+     * 0x01                  : u8   unidentified, and 1 in everything the watch reports
+     * 24 bytes of zero
+     * 8 bytes of label, sent empty
+     * ```
      *
      * The whole list is sent at once and **the watch keeps exactly what it receives** —
      * there is no way to add one alarm. That makes this the same hazard as the sport
@@ -43,21 +53,27 @@ object CmfAlarms {
      * nothing may call this until it holds a list the user actually chose or the watch
      * actually reported.
      *
-     * The time is seconds since midnight rather than an hour and a minute. The last eight
-     * bytes are a label, sent empty: Gadgetbridge records that the watch does not display
-     * labels at all, and a field that cannot be seen, cannot be read back, and would make
-     * the round trip asymmetric is worse than no field.
+     * The time is seconds since midnight rather than an hour and a minute, and it is
+     * **little-endian**. This was big-endian here for a long time and nothing caught it:
+     * [parse] read it back the same way round, so every round-trip test passed while the
+     * watch was being sent 03:10 as 2,284,126,208 seconds and collapsing the whole list
+     * into a single 00:00. Only the watch's own reply to `ALARMS_GET` settles it, which
+     * is why [CmfAlarmsTest] now pins these bytes rather than only the round trip.
+     *
+     * The last eight bytes are a label, sent empty: Gadgetbridge records that the watch
+     * does not display labels at all, and a field that cannot be seen, cannot be read
+     * back, and would make the round trip asymmetric is worse than no field.
      */
     fun payload(alarms: List<CmfAlarm>): ByteArray {
         val capped = alarms.take(MAX_ALARMS)
-        val buf = ByteBuffer.allocate(capped.size * RECORD_SIZE).order(ByteOrder.BIG_ENDIAN)
+        val buf = ByteBuffer.allocate(capped.size * RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
 
         capped.forEachIndexed { index, alarm ->
             buf.putInt(alarm.hour * 3600 + alarm.minute * 60)
             buf.put(index.toByte())
             buf.put(if (alarm.enabled) 1 else 0)
             buf.put(alarm.days.fold(0) { mask, day -> mask or day.bit }.toByte())
-            buf.put(0xff.toByte()) // unidentified, and constant in every capture
+            buf.put(1) // unidentified, and 1 in every record the watch has reported
             buf.put(ByteArray(UNKNOWN_TAIL))
 
             buf.put(ByteArray(LABEL_BYTES))
@@ -78,7 +94,7 @@ object CmfAlarms {
     fun parse(payload: ByteArray): List<CmfAlarm>? {
         if (payload.size % RECORD_SIZE != 0) return null
 
-        val buf = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN)
         val out = ArrayList<CmfAlarm>(payload.size / RECORD_SIZE)
 
         while (buf.remaining() >= RECORD_SIZE) {

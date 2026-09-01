@@ -177,6 +177,26 @@ none set. The list is adopted on read but not marked as configured, so a connect
 writes back what it just read. Labels are not modelled: the watch does not display them
 and they cannot be read back.
 
+Forty bytes each: seconds from midnight as a **little-endian** u32, then the index in the
+list, enabled, the repeat mask, a byte that is always `01`, twenty-four zeroes and eight
+label bytes. That u32 was written big-endian here for a long time and every test passed,
+because the reader had the same mistake — the two agreed with each other and with nothing
+else. The watch was being sent 03:10 as 2,284,126,208 seconds, and it collapsed the whole
+list into one 00:00. What settled it was the watch's own reply, holding alarms the official
+app had written: `88 2c 00 00 | 00 01 04 01` is 11400 seconds, Wednesdays, and 11400 is
+03:10. Those bytes are now a test, which is the only kind that could have caught this.
+
+The byte order is genuinely mixed across this protocol, so neither answer generalises: the
+goals and the alarms are little-endian, the two reminders are big-endian — `00 003c …` read
+back as sixty minutes, which only works one way round.
+
+The phone's own alarms can be mirrored onto the watch, which needs root: Android has no
+public way to list another app's alarms, and `AlarmManager` gives the next one only. The
+clock's provider answers `content query` under `su`. Ordering is by **when each alarm will
+next ring**, not by time of day, because the watch holds eight and a morning can hold more:
+one that is switched off never rings and falls off the end, and one that has already gone
+off is now tomorrow's and yields its slot to what is still to come.
+
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather
 than of the watch, and it shows: the tone plays on the alarm stream, because the phone
