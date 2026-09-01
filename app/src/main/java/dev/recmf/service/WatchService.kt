@@ -1352,12 +1352,18 @@ class WatchService : LifecycleService() {
             CmfCommand.HEART_RATE_RESTING ->
                 ingest.storeRestingHeartRate(CmfParsers.parseRestingHeartRate(message.payload))
 
-            // Pushed rather than asked for: the watch volunteers these during a fetch,
-            // alongside the steps and the heart rate, so a sync taken after a workout
-            // carries it without anything having to request one.
+            // Asked for on every sync. The watch was expected to volunteer these
+            // alongside the steps and the heart rate and does not, so nothing arrives
+            // unless it is requested.
             CmfCommand.WORKOUT_SUMMARY -> {
                 val workouts = CmfWorkouts.parseWorkoutSummaries(message.payload)
-                if (workouts.isEmpty()) {
+                if (message.payload.isEmpty()) {
+                    // Not a parse failure — an answer. The watch is saying it has no
+                    // workouts stored, which is what it says even for a session it has
+                    // kept the heart rate of, and calling that a malformed record sent a
+                    // reader looking for a bug in the parser.
+                    ProtocolLog.note("Workouts: none stored on the watch")
+                } else if (workouts.isEmpty()) {
                     ProtocolLog.note(
                         "Workouts: ${message.payload.size} bytes that are neither " +
                             "${CmfWorkouts.SUMMARY_SHORT}- nor ${CmfWorkouts.SUMMARY_LONG}-byte records",

@@ -21,11 +21,21 @@ data class CumulativeReading(
     val calories: Int,
 )
 
-/** Movement between two readings, which is what Health Connect wants to store. */
+/**
+ * Movement between two readings, which is what Health Connect wants to store.
+ *
+ * All three counters come from the same `ACTIVITY_DATA` record and reset together, so
+ * they are differenced together rather than each being tracked on its own. The interval
+ * exists when steps moved: the watch derives the other two from the same walking, and a
+ * distance without a step behind it would be a counter drifting rather than a wearer
+ * moving.
+ */
 data class IntervalDelta(
     val startSeconds: Long,
     val endSeconds: Long,
     val steps: Int,
+    val distanceMeters: Int = 0,
+    val activeCalories: Int = 0,
 )
 
 /**
@@ -101,11 +111,27 @@ fun stepDeltas(
         // Health Connect will not take one.
         if (start >= reading.timestamp) continue
 
-        out.add(IntervalDelta(startSeconds = start, endSeconds = reading.timestamp, steps = moved))
+        out.add(
+            IntervalDelta(
+                startSeconds = start,
+                endSeconds = reading.timestamp,
+                steps = moved,
+                // The same reset rule, because the same record carries them. Floored at
+                // zero rather than trusted: a counter that goes backwards without the
+                // step count going backwards is a firmware correction, not a wearer
+                // walking in reverse, and Health Connect will not take a negative.
+                distanceMeters = advance(reading.distanceMeters, from.distanceMeters, reset),
+                activeCalories = advance(reading.calories, from.calories, reset),
+            ),
+        )
     }
 
     return out
 }
+
+/** How far a counter that resets with the step count has moved since [from]. */
+private fun advance(now: Int, from: Int, reset: Boolean): Int =
+    (if (reset) now else now - from).coerceAtLeast(0)
 
 /** Midnight of the day [epochSeconds] falls in, as the wearer's own clock reads it. */
 private fun startOfDay(epochSeconds: Long, zone: ZoneId): Long =

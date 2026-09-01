@@ -203,6 +203,7 @@ class SampleIngest(
                 val advance = baseline?.let { activity.last().steps - it.steps }
                 ProtocolLog.note(
                     "Health Connect: wrote ${deltas.sumOf { it.steps }} steps" +
+                        ", ${deltas.sumOf { it.distanceMeters }} m" +
                         (advance?.let { ", counter moved $it" } ?: ", no baseline") +
                         ", ${deltas.size} interval(s) over ${activity.size} reading(s)" +
                         ", ${clock(activity.first().timestamp)}–${clock(activity.last().timestamp)}",

@@ -10,6 +10,17 @@ class StepDeltasTest {
 
     private fun reading(ts: Long, steps: Int) = CumulativeReading(ts, steps, steps / 2, steps / 10)
 
+    /**
+     * A delta with only its step arithmetic left.
+     *
+     * Most of the tests here are about the differencing itself — resets, baselines, the
+     * day boundary — and the other two counters ride along under exactly the same rules.
+     * Blanking them keeps those tests reading as the step tests they are, and leaves the
+     * counters to the tests written for them.
+     */
+    private fun List<IntervalDelta>.stepsOnly(): List<IntervalDelta> =
+        map { it.copy(distanceMeters = 0, activeCalories = 0) }
+
     /** An hour on a numbered day, as an epoch second. Day 1 is the epoch itself. */
     private fun at(day: Int, hour: Int): Long = (day - 1) * 86_400L + hour * 3_600L
 
@@ -34,7 +45,7 @@ class StepDeltasTest {
                 IntervalDelta(100, 200, 200),
                 IntervalDelta(200, 300, 300),
             ),
-            deltas,
+            deltas.stepsOnly(),
         )
     }
 
@@ -58,7 +69,10 @@ class StepDeltasTest {
         // The second interval starts where the counter did, not where the previous
         // reading was: both fall on the same UTC day here, so midnight is behind them and
         // the previous reading is the honest start.
-        assertEquals(listOf(IntervalDelta(500, 1_000, 1000), IntervalDelta(1_000, 2_000, 40)), deltas)
+        assertEquals(
+            listOf(IntervalDelta(500, 1_000, 1000), IntervalDelta(1_000, 2_000, 40)),
+            deltas.stepsOnly(),
+        )
     }
 
     @Test
@@ -74,7 +88,7 @@ class StepDeltasTest {
 
         assertEquals(
             listOf(IntervalDelta(at(day = 2, hour = 0), at(day = 2, hour = 9), 2_100)),
-            deltas,
+            deltas.stepsOnly(),
         )
     }
 
@@ -89,7 +103,7 @@ class StepDeltasTest {
 
         assertEquals(
             listOf(IntervalDelta(at(day = 2, hour = 14), at(day = 2, hour = 15), 120)),
-            deltas,
+            deltas.stepsOnly(),
         )
     }
 
@@ -124,7 +138,7 @@ class StepDeltasTest {
 
         assertEquals(
             listOf(IntervalDelta(at(day = 2, hour = 9), at(day = 2, hour = 11), 700)),
-            deltas,
+            deltas.stepsOnly(),
         )
     }
 
@@ -164,7 +178,7 @@ class StepDeltasTest {
                 IntervalDelta(at(day = 2, hour = 9), at(day = 2, hour = 10), 500),
                 IntervalDelta(at(day = 2, hour = 10), at(day = 2, hour = 11), 30),
             ),
-            deltas,
+            deltas.stepsOnly(),
         )
     }
 
@@ -174,7 +188,7 @@ class StepDeltasTest {
         // would double whatever came before.
         val deltas = stepDeltas(listOf(reading(100, 5000), reading(200, 5300)))
 
-        assertEquals(listOf(IntervalDelta(100, 200, 300)), deltas)
+        assertEquals(listOf(IntervalDelta(100, 200, 300)), deltas.stepsOnly())
     }
 
     @Test
@@ -191,5 +205,43 @@ class StepDeltasTest {
     fun `an empty run is handled`() {
         assertTrue(stepDeltas(emptyList()).isEmpty())
         assertTrue(stepDeltas(emptyList(), previous = reading(1, 1)).isEmpty())
+    }
+
+    @Test
+    fun `distance and calories are differenced alongside the steps`() {
+        // Without this they never reached Health Connect at all, and every other app on
+        // the phone showed nought kilometres however far the wearer had walked.
+        val deltas = stepDeltas(
+            listOf(CumulativeReading(200, 1_200, 900, 60)),
+            previous = CumulativeReading(100, 1_000, 750, 50),
+        )
+
+        assertEquals(listOf(IntervalDelta(100, 200, 200, 150, 10)), deltas)
+    }
+
+    @Test
+    fun `a midnight reset makes the reading its own distance too`() {
+        // They reset together because they arrive together, in one record. Treating the
+        // drop as a negative would have written nothing for the morning.
+        val deltas = stepDeltas(
+            listOf(CumulativeReading(2_000, 40, 30, 2)),
+            previous = CumulativeReading(1_000, 9_000, 7_000, 400),
+            zone = utc,
+        )
+
+        assertEquals(listOf(IntervalDelta(1_000, 2_000, 40, 30, 2)), deltas)
+    }
+
+    @Test
+    fun `a counter that slips backwards on its own is floored rather than negative`() {
+        // A firmware correction, not a wearer walking in reverse — and Health Connect
+        // refuses a negative distance outright, which would cost the steps in the same
+        // batch if it were allowed through.
+        val deltas = stepDeltas(
+            listOf(CumulativeReading(200, 1_200, 700, 40)),
+            previous = CumulativeReading(100, 1_000, 750, 50),
+        )
+
+        assertEquals(listOf(IntervalDelta(100, 200, 200, 0, 0)), deltas)
     }
 }

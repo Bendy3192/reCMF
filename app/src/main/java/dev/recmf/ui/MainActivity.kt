@@ -12,6 +12,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import android.annotation.SuppressLint
 import androidx.core.net.toUri
@@ -116,6 +117,18 @@ class MainActivity : ComponentActivity() {
                 val watchfaces by model.watchfaces.collectAsStateWithLifecycle()
                 val watchfaceInstall by model.watchfaceInstall.collectAsStateWithLifecycle()
 
+                // Distance and calories were added after people had already granted the
+                // permissions that existed then, and the dialog above only opens when
+                // Health Connect is switched on — which someone using it already did,
+                // once, months ago. So an install that is otherwise working but missing
+                // the newer permissions is asked here, once a launch. Health Connect caps
+                // how often an app may ask, so this cannot become nagging.
+                LaunchedEffect(state.settings.healthConnectEnabled) {
+                    if (state.settings.healthConnectEnabled && !model.hasExtraHealthPermissions()) {
+                        requestHealthConnect.launch(HealthConnectSync.ALL_PERMISSIONS)
+                    }
+                }
+
                 // Which face the chosen file will displace, remembered across the trip out
                 // to the system picker — the activity can be recreated while it is open.
                 var replacing by rememberSaveable { mutableIntStateOf(-1) }
@@ -194,7 +207,7 @@ class MainActivity : ComponentActivity() {
                     onAutoSyncSeconds = model::setAutoSyncSeconds,
                     onHealthConnectEnabled = { enabled ->
                         model.setHealthConnectEnabled(enabled)
-                        if (enabled) requestHealthConnect.launch(HealthConnectSync.REQUIRED_PERMISSIONS)
+                        if (enabled) requestHealthConnect.launch(HealthConnectSync.ALL_PERMISSIONS)
                     },
                     onPhoneAlarmsEnabled = model::setPhoneAlarmsEnabled,
                 )

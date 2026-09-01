@@ -7,6 +7,8 @@ import android.content.Context
 import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
@@ -18,6 +20,8 @@ import androidx.health.connect.client.records.metadata.DataOrigin
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Length
 import androidx.health.connect.client.units.Percentage
 import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.HeartRateSampleEntity
@@ -77,10 +81,17 @@ class HealthConnectSync(private val context: Context) {
             else -> HealthConnectAvailability.NOT_INSTALLED
         }
 
-    suspend fun hasPermissions(): Boolean {
-        val granted = client?.permissionController?.getGrantedPermissions() ?: return false
-        return granted.containsAll(REQUIRED_PERMISSIONS)
-    }
+    suspend fun hasPermissions(): Boolean = grantedPermissions().containsAll(REQUIRED_PERMISSIONS)
+
+    /** Whether the newer measurements may be written; false is not a failure. */
+    suspend fun hasExtraPermissions(): Boolean =
+        grantedPermissions().containsAll(EXTRA_PERMISSIONS)
+
+    private suspend fun grantedPermissions(): Set<String> =
+        client?.permissionController?.getGrantedPermissions() ?: emptySet()
+
+    /** So the note about them is made once a run rather than once a sync. */
+    private var extrasNoted = false
 
     /**
      * What reCMF has already written for the day [timestampSeconds] falls in, as a
@@ -109,15 +120,13 @@ class HealthConnectSync(private val context: Context) {
         val zone = ZoneId.systemDefault()
         val day = Instant.ofEpochSecond(timestampSeconds).atZone(zone).toLocalDate()
         val dayStart = day.atStartOfDay(zone).toInstant()
+        val upTo = Instant.ofEpochSecond(timestampSeconds)
 
         return try {
             val response = client.readRecords(
                 ReadRecordsRequest(
                     recordType = StepsRecord::class,
-                    timeRangeFilter = TimeRangeFilter.between(
-                        dayStart,
-                        Instant.ofEpochSecond(timestampSeconds),
-                    ),
+                    timeRangeFilter = TimeRangeFilter.between(dayStart, upTo),
                     dataOriginFilter = setOf(DataOrigin(context.packageName)),
                 ),
             )
@@ -130,11 +139,30 @@ class HealthConnectSync(private val context: Context) {
             val lastEnd = response.records.maxOfOrNull { it.endTime.epochSecond }
                 ?: dayStart.epochSecond
 
+            // The other two counters need the same treatment for the same reason. Left at
+            // zero they would make the first reading after a reinstall look like a day's
+            // walking, and the day's distance would be written twice.
+            val distance = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = DistanceRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(dayStart, upTo),
+                    dataOriginFilter = setOf(DataOrigin(context.packageName)),
+                ),
+            ).records.sumOf { it.distance.inMeters }.toInt()
+
+            val calories = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = ActiveCaloriesBurnedRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(dayStart, upTo),
+                    dataOriginFilter = setOf(DataOrigin(context.packageName)),
+                ),
+            ).records.sumOf { it.energy.inKilocalories }.toInt()
+
             CumulativeReading(
                 timestamp = lastEnd,
                 steps = written,
-                distanceMeters = 0,
-                calories = 0,
+                distanceMeters = distance,
+                calories = calories,
             )
         } catch (e: Exception) {
             // Reading is a courtesy here, not the job. Permission may have been revoked,
@@ -157,9 +185,28 @@ class HealthConnectSync(private val context: Context) {
         restingHeartRate: List<RestingHeartRateSampleEntity> = emptyList(),
     ): WriteResult {
         val client = this.client ?: return WriteResult.unavailable()
-        if (!hasPermissions()) return WriteResult.unavailable()
+        val granted = grantedPermissions()
+        if (!granted.containsAll(REQUIRED_PERMISSIONS)) return WriteResult.unavailable()
 
         val stepsWritten = insert(client, steps.map(::toStepsRecord))
+
+        // Separate inserts so one refusal costs one measurement. These are a courtesy on
+        // top of the steps — every other app on the phone reads distance from Health
+        // Connect, and without these it reads zero however far the wearer walked — and
+        // losing the steps because a distance record was rejected would be a poor trade.
+        if (granted.containsAll(EXTRA_PERMISSIONS)) {
+            insert(client, steps.filter { it.distanceMeters > 0 }.map(::toDistanceRecord))
+            insert(client, steps.filter { it.activeCalories > 0 }.map(::toActiveCaloriesRecord))
+        } else if (steps.isNotEmpty() && !extrasNoted) {
+            // Said out loud once, because the alternative is a wearer wondering why every
+            // other app shows zero kilometres while reCMF's own screen shows the walk.
+            extrasNoted = true
+            ProtocolLog.note(
+                "Health Connect: distance and calories are not permitted — " +
+                    "turn Health Connect off and on again to be asked",
+            )
+        }
+
         val heartRateWritten = insert(client, toHeartRateRecords(heartRate))
         val spo2Written = insert(client, spo2.map(::toSpo2Record))
         val restingWritten = insert(client, restingHeartRate.map(::toRestingHeartRateRecord))
@@ -265,6 +312,45 @@ class HealthConnectSync(private val context: Context) {
             metadata = Metadata.autoRecorded(
                 device = device,
                 clientRecordId = "recmf-steps-${delta.endSeconds}",
+            ),
+        )
+    }
+
+    private fun toDistanceRecord(delta: IntervalDelta): DistanceRecord {
+        val start = Instant.ofEpochSecond(delta.startSeconds)
+        val end = Instant.ofEpochSecond(delta.endSeconds)
+
+        return DistanceRecord(
+            startTime = start,
+            startZoneOffset = zoneOffsetAt(start),
+            endTime = end,
+            endZoneOffset = zoneOffsetAt(end),
+            distance = Length.meters(delta.distanceMeters.toDouble()),
+            metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-distance-${delta.endSeconds}",
+            ),
+        )
+    }
+
+    /**
+     * Active rather than total: the watch counts against a daily goal of a few hundred,
+     * which is a figure that excludes simply being alive. Written as total it would be
+     * read as a resting metabolism of four hundred kilocalories a day.
+     */
+    private fun toActiveCaloriesRecord(delta: IntervalDelta): ActiveCaloriesBurnedRecord {
+        val start = Instant.ofEpochSecond(delta.startSeconds)
+        val end = Instant.ofEpochSecond(delta.endSeconds)
+
+        return ActiveCaloriesBurnedRecord(
+            startTime = start,
+            startZoneOffset = zoneOffsetAt(start),
+            endTime = end,
+            endZoneOffset = zoneOffsetAt(end),
+            energy = Energy.kilocalories(delta.activeCalories.toDouble()),
+            metadata = Metadata.autoRecorded(
+                device = device,
+                clientRecordId = "recmf-calories-${delta.endSeconds}",
             ),
         )
     }
@@ -390,5 +476,25 @@ class HealthConnectSync(private val context: Context) {
             HealthPermission.getWritePermission(SleepSessionRecord::class),
             HealthPermission.getReadPermission(SleepSessionRecord::class),
         )
+
+        /**
+         * Distance and active calories, which arrived after people were already using the
+         * app.
+         *
+         * Deliberately not in [REQUIRED_PERMISSIONS]. That set is what [hasPermissions]
+         * tests before writing anything at all, so adding to it would stop every phone
+         * that granted the old set from recording steps, heart rate or sleep — a working
+         * install broken by a new feature it never asked for. Here they are asked for,
+         * used when granted, and skipped when not.
+         */
+        val EXTRA_PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getWritePermission(DistanceRecord::class),
+            HealthPermission.getReadPermission(DistanceRecord::class),
+            HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
+            HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+        )
+
+        /** Everything worth asking for at once, which is what the dialog offers. */
+        val ALL_PERMISSIONS: Set<String> = REQUIRED_PERMISSIONS + EXTRA_PERMISSIONS
     }
 }

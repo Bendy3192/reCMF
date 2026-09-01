@@ -248,6 +248,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val healthConnectAvailability: HealthConnectAvailability get() = healthConnect.availability()
 
     /**
+     * Whether distance and calories may be written.
+     *
+     * True when Health Connect is not usable at all, because there is then nothing to ask
+     * for and a permission dialog that cannot be answered is worse than none.
+     */
+    suspend fun hasExtraHealthPermissions(): Boolean =
+        healthConnectAvailability != HealthConnectAvailability.AVAILABLE ||
+            healthConnect.hasExtraPermissions()
+
+    /**
      * Whether the user has granted notification access. It is granted in system settings
      * rather than by a permission dialog, so there is nothing to request — only to check
      * and to link to.
