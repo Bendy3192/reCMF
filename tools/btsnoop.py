@@ -45,6 +45,8 @@ import sys
 import zlib
 
 # Hard-coded in the watch firmware, the same on every device.
+AES_BLOCK = 16
+
 AES_IV = bytes([0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
                 0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x5A])
 
@@ -105,12 +107,22 @@ def frames(blob: bytes):
         yield ts, direction, cmd1, cmd2, value[FRAME_HEADER:FRAME_HEADER + body_len]
 
 
-def decrypt(key: bytes, data: bytes) -> bytes:
-    return subprocess.run(
+def decrypt(key: bytes, data: bytes) -> bytes | None:
+    """None for a body AES cannot have produced, rather than a crash.
+
+    A capture holds whatever went over the air, and that includes frames from another
+    app's session under another key, truncated writes, and the odd body whose length is
+    not a whole number of blocks. One of those must not end the run: the frames worth
+    reading are usually the ones after it.
+    """
+    if not data or len(data) % AES_BLOCK:
+        return None
+    done = subprocess.run(
         ["openssl", "enc", "-aes-128-cbc", "-d", "-nopad",
          "-K", key.hex(), "-iv", AES_IV.hex()],
-        input=data, capture_output=True, check=True,
-    ).stdout
+        input=data, capture_output=True,
+    )
+    return done.stdout if done.returncode == 0 else None
 
 
 def plaintext(raw: bytes) -> bytes | None:
@@ -240,7 +252,8 @@ def main() -> None:
         elif key is None:
             shown = f"[encrypted, {len(body)} B]"
         else:
-            decrypted = plaintext(decrypt(key, body))
+            raw = decrypt(key, body)
+            decrypted = plaintext(raw) if raw is not None else None
             shown = decrypted.hex() if decrypted else f"[undecipherable, {len(body)} B]"
 
         print(f"{clock(ts)} {direction} {cmd1:04x}/{cmd2:04x}  {shown}")
