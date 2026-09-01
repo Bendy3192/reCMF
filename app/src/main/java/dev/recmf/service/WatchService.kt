@@ -904,7 +904,13 @@ class WatchService : LifecycleService() {
         sendingAgps = file
 
         ProtocolLog.note("GPS data: sending ${file.size} bytes, checksum ${checksum.toString(16)}")
-        connection.send(
+
+        // On the data channel, like every other bulk transfer and unlike the settings.
+        // Sent on the command channel instead, this is simply not answered: the watch
+        // does not refuse it, it does not hear it. Read off the capture rather than
+        // reasoned about — the official app writes 905e, 905f and 9060 to one handle and
+        // GPS_COORDS to another, and the replies come back on the data channel's own.
+        connection.sendOnDataChannel(
             CmfCommand.DATA_TRANSFER_AGPS_INIT_REQUEST,
             CmfAgps.transferRequest(size = file.size, crc32 = checksum),
         )
@@ -1395,7 +1401,7 @@ class WatchService : LifecycleService() {
                 sendingAgps = null
                 if (message.payload.firstOrNull() == CmfAgps.FINISHED) {
                     ProtocolLog.note("GPS data: the watch has the whole almanac")
-                    connection.send(
+                    connection.sendOnDataChannel(
                         CmfCommand.DATA_TRANSFER_AGPS_FINISH_ACK_2,
                         CmfAgps.FINISH_ACK,
                     )
