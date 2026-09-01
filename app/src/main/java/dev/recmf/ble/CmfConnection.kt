@@ -341,8 +341,18 @@ class CmfConnection(
         when (val decoded = codec.decode(value)) {
             is CmfDecoded.Pending -> Unit
 
-            is CmfDecoded.Acknowledgement ->
+            is CmfDecoded.Acknowledgement -> {
                 ProtocolLog.acknowledged(decoded.of, decoded.payload)
+
+                // Passed on as well as logged, for the one opcode where an
+                // acknowledgement may not be one: GPS_COORDS frames arrive from the watch
+                // with nothing outstanding to confirm, spaced like a question repeated.
+                // Only that one, so nothing else has to think about whether a reply it
+                // sees is a reply.
+                if (decoded.of == CmfCommand.GPS_COORDS) {
+                    _messages.emit(CmfMessage(decoded.of, decoded.payload))
+                }
+            }
 
             is CmfDecoded.Dropped -> {
                 Log.w(TAG, "Dropped ${decoded.cmd ?: "frame"}: ${decoded.reason}")

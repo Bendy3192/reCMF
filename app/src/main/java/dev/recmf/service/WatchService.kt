@@ -173,6 +173,9 @@ class WatchService : LifecycleService() {
      */
     private var agpsProgressNoted = 0
 
+    /** When the watch was last told where it is, so an answer cannot become a loop. */
+    private var gpsSeedSentAtMillis = 0L
+
     /** What the file calls itself, and what it displaces. Meaningful only mid-transfer. */
     private var watchfaceName: String = ""
     private var watchfaceReplaces: Int = 0
@@ -1098,6 +1101,7 @@ class WatchService : LifecycleService() {
         ProtocolLog.note(
             "GPS: seeding the watch with ${current.weatherCity ?: "the weather location"}",
         )
+        gpsSeedSentAtMillis = System.currentTimeMillis()
         connection.send(
             CmfCommand.GPS_COORDS,
             CmfLocation.gpsCoords(
@@ -1106,6 +1110,34 @@ class WatchService : LifecycleService() {
                 epochSeconds = System.currentTimeMillis() / 1000,
             ),
         )
+    }
+
+    /**
+     * Answers a watch that appears to be asking where it is.
+     *
+     * `0xffff/0xa06a` is the opcode that acknowledges `GPS_COORDS`, and most of the time
+     * that is all it is. But three of them arrived during an outdoor workout — thirteen
+     * seconds after the connection, then two seconds later, then twenty-one — with
+     * nothing sent for them to acknowledge and the watch unable to find itself. Spaced
+     * like that, they read as a question repeated because nobody answered.
+     *
+     * So this answers, once, and then holds off. **The guard is the point**: if the frame
+     * really is an acknowledgement, then answering it produces another acknowledgement,
+     * which would answer that, and the two would talk until the battery gave out. Nothing
+     * goes out within [GPS_SEED_QUIET_MILLIS] of the last one, so the worst case is one
+     * extra frame rather than a loop.
+     *
+     * What it can answer with is a city, which is a seed and not a track. If the watch
+     * does stop asking, that is worth knowing: it would mean this watch will take a
+     * position from the phone, and a position from the phone is a route where its own
+     * receiver is being jammed.
+     */
+    private suspend fun onGpsCoordsFrame() {
+        val since = System.currentTimeMillis() - gpsSeedSentAtMillis
+        if (since < GPS_SEED_QUIET_MILLIS) return
+
+        ProtocolLog.note("GPS: the watch asked again, answering")
+        sendGpsSeed()
     }
 
     private suspend fun readBackSettings() {
@@ -1479,6 +1511,8 @@ class WatchService : LifecycleService() {
 
             CmfCommand.DATA_CHUNK_REQUEST_AGPS -> handleAgpsRequest(message.payload)
 
+            CmfCommand.GPS_COORDS -> onGpsCoordsFrame()
+
             CmfCommand.DATA_TRANSFER_AGPS_FINISH_ACK_1 -> {
                 if (sendingAgps == null) return
                 sendingAgps = null
@@ -1824,6 +1858,15 @@ class WatchService : LifecycleService() {
          * enough apart that a watch reconnecting all day does not re-download all day.
          */
         private const val ALMANAC_REFRESH_MILLIS = 36L * 60 * 60 * 1000
+
+        /**
+         * How long to stay quiet after telling the watch where it is.
+         *
+         * Long enough that an acknowledgement mistaken for a question cannot start a
+         * conversation, short enough that a watch genuinely asking is not left waiting
+         * through a workout.
+         */
+        private const val GPS_SEED_QUIET_MILLIS = 20_000L
 
         /** Long enough for the watch to have acted before it is asked what it did. */
         private const val WATCHFACE_SETTLE_MILLIS = 600L
