@@ -65,6 +65,9 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
@@ -87,6 +90,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.ClipEntry
@@ -475,8 +479,28 @@ private fun FloatingTabDock(
                     label = "dock label",
                 )
 
+                // A spring rather than a curve, and one loose enough to overshoot.
+                //
+                // This is most of what the newer Material feels like, and it needs none of
+                // the newer Material: a tab that springs past its size and settles reads as
+                // something that answered, where the same movement on a fixed curve reads
+                // as a screen redrawing. It is small on purpose — a bounce you can name is
+                // a bounce that will annoy by the hundredth tap.
+                val scale by animateFloatAsState(
+                    targetValue = if (isSelected) 1f else 0.92f,
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessMediumLow,
+                    ),
+                    label = "dock scale",
+                )
+
                 Box(
                     modifier = Modifier
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
                         // Slightly tighter than the dock's own corners, so the two read
                         // as one shape inside another rather than as two competing ones.
                         .clip(RoundedCornerShape(20.dp))
