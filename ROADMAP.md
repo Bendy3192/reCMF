@@ -280,11 +280,31 @@ Gadgetbridge checks. The one observed was 97872 bytes in four records: 48384, 25
 that is not any obvious digest of any obvious span. Validation walks the records rather
 than trusting the magic, because a download cut short starts right and stops mid-record.
 
-Still open: where the file comes from. The official app calls it EPO and keeps an
-`epoUpdateTime` per device, so it re-downloads every few days, but the address is not in
-any log that survived — it downloads into an external cache directory and deletes it after
-sending. Until that is found the file has to be handed to reCMF, as Gadgetbridge does with
-its own AGPS support.
+Still open, and searched for properly: where the file comes from. The official app calls it
+EPO and keeps an `epoUpdateTime` per device, so it re-downloads every few days. What was
+tried, so nobody repeats it:
+
+- Its own logs. Two of them, 1.2 MB between them, list every URL it fetched that day —
+  authentication, the watchface CDN, telemetry, and nothing else. The file goes to an
+  external cache directory and is deleted after sending, and the logs rotate daily, so the
+  download had already been rolled out of them.
+- Its APK, which is Flutter, so the Dart code sits in `libapp.so` inside the split APK,
+  stored uncompressed and greppable. It yields `epoUpdateTime`, one lone `/epo/`, and no
+  URL — and no `agps`, `gnss`, `ephemeris`, `almanac` or `orbit` anywhere at all. Its URLs
+  are assembled at runtime from a `https://%s/%s/%s` template, so the whole address is not
+  in the binary to be found.
+
+The hosts it does carry are a small set, and the one that looks like a device cloud —
+`dc-api.nothingtech.link` — would want an account token, so finding the address might not
+be enough on its own.
+
+What is left is intercepting its HTTPS, which on Flutter means more than the usual proxy:
+its Dart HTTP client ignores the Android system proxy entirely, so this needs the library
+patched or the traffic caught below the app. Half a day, and it may still end at a token.
+
+Until then the file is handed to reCMF by hand, as Gadgetbridge asks of its own users. It
+lasts a few days; a fresh one costs a one-minute capture of the official app, since the
+transfer carries the file in the clear.
 
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather
