@@ -101,8 +101,14 @@ class UpdateWorker(
         if (notes == null) {
             builder.setContentText(applicationContext.getString(R.string.update_notification_text))
         } else {
+            // The collapsed line is the first actual change, not the first line: with
+            // several releases to report the first line is a heading, and a notification
+            // reading "build 140" says nothing at all.
+            val first = notes.lineSequence().firstOrNull { it.startsWith("\u2022 ") }
+                ?: notes.lineSequence().first()
+
             builder
-                .setContentText(notes.lineSequence().first())
+                .setContentText(first)
                 .setStyle(NotificationCompat.BigTextStyle().bigText(notes))
         }
 

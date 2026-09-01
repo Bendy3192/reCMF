@@ -54,7 +54,7 @@ class Updater(private val context: Context) {
         val update = UpdateCheck.update(tag, currentVersionCode)
             ?: return@withContext UpdateState.UpToDate
 
-        UpdateState.Available(update.copy(notes = notes(update)))
+        UpdateState.Available(update.copy(notes = notes(update, currentVersionCode)))
     }
 
     /**
@@ -133,14 +133,28 @@ class Updater(private val context: Context) {
     }
 
     /**
-     * What the release says changed, or null.
+     * What has changed since [installed], or null.
+     *
+     * Two files, in order of how much they say. The whole changelog covers every release
+     * the phone has missed, which for a phone left alone a while is the only version of
+     * this worth reading — a single release's notes would describe the last hour of a
+     * month's work. A single release's notes are the fallback, for a release published
+     * before the whole changelog was an asset.
      *
      * Best effort by design. The changelog is a courtesy — it says why the wearer is
      * updating — and an update that could otherwise be installed must not be lost because
      * a second file failed to download.
      */
-    private fun notes(update: AvailableUpdate): String? = try {
-        val connection = (URL(update.notesUrl).openConnection() as HttpURLConnection).apply {
+    private fun notes(update: AvailableUpdate, installed: Int): String? {
+        val changelog = fetchText(update.changelogUrl)?.let { UpdateCheck.notesSince(it, installed) }
+        if (changelog != null) return changelog
+
+        return fetchText(update.notesUrl)?.let(UpdateCheck::readableNotes)
+    }
+
+    /** A small text asset, or null for anything at all that went wrong. */
+    private fun fetchText(url: String): String? = try {
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             instanceFollowRedirects = true
             connectTimeout = TIMEOUT_MILLIS
             readTimeout = TIMEOUT_MILLIS
@@ -149,16 +163,15 @@ class Updater(private val context: Context) {
 
         try {
             if (connection.responseCode !in 200..299) {
-                Log.i(TAG, "No release notes: ${connection.responseCode}")
+                Log.i(TAG, "No release notes at $url: ${connection.responseCode}")
                 null
             } else {
                 // Bounded: this is a text file the build writes, but it arrives over the
                 // network and nothing here should read an arbitrary number of bytes into
-                // memory on the strength of that.
-                val body = connection.inputStream.bufferedReader()
-                    .use { it.readAtMost(MAX_NOTES_CHARS) }
-
-                UpdateCheck.readableNotes(body)
+                // memory on the strength of that. The file is written newest release
+                // first, so a cut here loses the oldest entries — which is the right end
+                // to lose.
+                connection.inputStream.bufferedReader().use { it.readAtMost(MAX_NOTES_CHARS) }
             }
         } finally {
             connection.disconnect()
@@ -248,8 +261,11 @@ class Updater(private val context: Context) {
         const val USER_AGENT = "reCMF"
         const val BUFFER = 64 * 1024
 
-        /** A changelog is a few lines; anything larger is not one. */
-        const val MAX_NOTES_CHARS = 8 * 1024
+        /**
+         * Every release's notes together, which is larger than one release's few lines
+         * but still a text file measured in kilobytes.
+         */
+        const val MAX_NOTES_CHARS = 64 * 1024
         const val APK_NAME = "recmf"
     }
 }

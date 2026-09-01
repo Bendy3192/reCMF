@@ -244,11 +244,59 @@ jobs:
             echo "Built from \`$GITHUB_SHA\`."
           } > notes.md
 
+          # And the same again for every release there has ever been, newest first.
+          #
+          # notes.md covers one release, which is the wrong span for the person most
+          # likely to read it: someone who updates every build already knows what
+          # changed, while someone who opens the app after two months would be shown a
+          # single line about a colour. The app reads this file instead and shows the
+          # part of it that is newer than the build on the phone.
+          #
+          # Rebuilt from the tags on every release rather than kept in the repository, so
+          # it cannot drift from what was actually published.
+          # How many past releases the file carries. Far more than anyone reads, and
+          # still a few kilobytes of text.
+          SECTIONS=50
+
+          section() {
+            printf '## build %s\n' "$1"
+            if [ -n "$2" ]; then
+              git log --no-merges --pretty='- %s' "$2" | head -50
+            else
+              echo "- The first release built from this repository."
+            fi
+            echo
+          }
+
+          # Newest first, so a download cut short loses the oldest entries rather than
+          # the ones the reader is most likely to want.
+          mapfile -t published < <(git tag --list 'build-*' \
+            | sed 's/^build-//' \
+            | grep -E '^[0-9]+$' \
+            | sort -rn \
+            | awk -v v="$version" '$1 < v')
+
+          {
+            section "$version" "${prev:+build-$prev..HEAD}"
+
+            older_kept=$SECTIONS
+            if [ "${#published[@]}" -lt "$older_kept" ]; then
+              older_kept=${#published[@]}
+            fi
+
+            i=0
+            while [ "$i" -lt "$older_kept" ]; do
+              # Each release spans from the one before it, which is the next entry down.
+              section "${published[$i]}" "${published[$((i + 1))]:+build-${published[$((i + 1))]}..build-${published[$i]}}"
+              i=$((i + 1))
+            done
+          } > changelog.md
+
           # notes.md ships as an asset as well as being the release body. The app reads
           # it to say what an update contains, and it has to come from the same
           # quota-free download path the APK does — asking the API for the body is what
           # made the update check fail with 403 on mobile data in the first place.
-          gh release create "build-$version" recmf.apk notes.md \
+          gh release create "build-$version" recmf.apk notes.md changelog.md \
             --title "build $version" \
             --notes-file notes.md \
             --latest

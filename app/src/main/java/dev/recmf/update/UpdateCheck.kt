@@ -6,6 +6,10 @@ package dev.recmf.update
 /**
  * A build newer than this one, and where to get it.
  *
+ * @param notesUrl what this one release changed.
+ * @param changelogUrl every release's notes in one file, so a phone that has been left
+ *   alone for twenty builds can be told what all twenty of them did rather than what the
+ *   last one did.
  * @param notes what changed, as the release says, or null when it could not be read. Not
  *   worth failing an update over: a version the wearer cannot describe is still a version
  *   they can install.
@@ -15,6 +19,7 @@ data class AvailableUpdate(
     val name: String,
     val apkUrl: String,
     val notesUrl: String,
+    val changelogUrl: String,
     val notes: String? = null,
 )
 
@@ -65,6 +70,21 @@ object UpdateCheck {
      */
     const val NOTES_NAME: String = "notes.md"
 
+    /**
+     * Every release's notes, newest first, republished whole on each release.
+     *
+     * [NOTES_NAME] covers one release, which is the wrong span for the person most likely
+     * to be reading it. Someone who updates every build already knows what changed; the
+     * one who opens the app after two months sees a single line about a colour and no sign
+     * of the two months. So the whole thing ships too, and the app shows the part of it
+     * that is newer than what the phone is running.
+     *
+     * It is a separate asset rather than a longer [NOTES_NAME] because the release body is
+     * [NOTES_NAME], and a release page repeating its own history every time would bury
+     * what that release actually did.
+     */
+    const val CHANGELOG_NAME: String = "changelog.md"
+
     const val LATEST_RELEASE_URL: String = "https://github.com/$REPOSITORY/releases/latest"
 
     /**
@@ -111,6 +131,7 @@ object UpdateCheck {
             name = tag.replace('-', ' '),
             apkUrl = downloadUrl(tag, APK_NAME),
             notesUrl = downloadUrl(tag, NOTES_NAME),
+            changelogUrl = downloadUrl(tag, CHANGELOG_NAME),
         )
     }
 
@@ -132,8 +153,98 @@ object UpdateCheck {
         .joinToString("\n") { "• $it" }
         .takeIf { it.isNotBlank() }
 
+    /**
+     * The part of the whole changelog that is news to a phone running [installed].
+     *
+     * The file is sections headed `## build <version code>`, newest first, each holding
+     * the commit subjects of that release. Everything at or below [installed] is dropped,
+     * which is the entire point: a phone twenty builds behind is told about twenty builds
+     * rather than about the last one.
+     *
+     * Several releases are kept apart under their own headings rather than run together.
+     * Twenty unattributed bullets read as one enormous release; the headings say how long
+     * the phone has been away, which is usually the more interesting fact.
+     *
+     * Long histories are cut at [MAX_CHANGELOG_LINES] with an ellipsis, because past a
+     * screenful nobody is reading and the release page is a tap away.
+     *
+     * @return null when nothing in the file is newer, which includes a file that is not
+     *   one of ours — a caller with a single release's notes to fall back on should use
+     *   them.
+     */
+    fun notesSince(changelog: String, installed: Int): String? {
+        val newer = sections(changelog)
+            .filter { (version, entries) -> version > installed && entries.isNotEmpty() }
+            .sortedByDescending { (version, _) -> version }
+        if (newer.isEmpty()) return null
+
+        val out = StringBuilder()
+        var lines = 0
+        var cut = false
+
+        for ((version, entries) in newer) {
+            if (cut) break
+
+            // One release is what this looked like before there was a whole file to read,
+            // and a lone heading over a lone list says nothing the card has not already.
+            if (newer.size > 1) {
+                if (lines >= MAX_CHANGELOG_LINES) {
+                    cut = true
+                    break
+                }
+                if (out.isNotEmpty()) out.append('\n')
+                out.append(TAG_PREFIX.removeSuffix("-")).append(' ').append(version).append('\n')
+                lines++
+            }
+
+            for (entry in entries) {
+                if (lines >= MAX_CHANGELOG_LINES) {
+                    cut = true
+                    break
+                }
+                out.append("• ").append(entry).append('\n')
+                lines++
+            }
+        }
+
+        // Only when something was actually left out: a history that happens to end on the
+        // limit has not been cut, and an ellipsis would send the reader looking for more
+        // that is not there.
+        if (cut) out.append("…")
+
+        return out.toString().trimEnd('\n').takeIf { it.isNotBlank() }
+    }
+
+    /** Every `## build N` heading with the `- ` lines under it, in the order written. */
+    private fun sections(changelog: String): List<Pair<Int, List<String>>> {
+        val found = mutableListOf<Pair<Int, MutableList<String>>>()
+
+        for (raw in changelog.lineSequence()) {
+            val line = raw.trim()
+            val version = versionOfHeading(line)
+
+            if (version != null) {
+                found += version to mutableListOf()
+            } else if (line.startsWith("- ")) {
+                // Anything before the first heading belongs to no release and is dropped,
+                // which is how a preamble stays out of the notes.
+                found.lastOrNull()?.second?.add(line.removePrefix("- "))
+            }
+        }
+
+        return found
+    }
+
+    private fun versionOfHeading(line: String): Int? =
+        line.removePrefix(HEADING).takeIf { it != line }?.trim()?.toIntOrNull()
+
+    private const val HEADING = "## build "
+
     /** Longer than this is not a summary, and no notification shows it anyway. */
     private const val MAX_NOTE_LINES = 8
+
+    /** A screenful. Past this the release page says it better than a card can. */
+    private const val MAX_CHANGELOG_LINES = 40
 
     private const val TAG_PREFIX = "build-"
 }

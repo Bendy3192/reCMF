@@ -2,6 +2,7 @@ package dev.recmf.update
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class UpdateCheckTest {
@@ -49,6 +50,8 @@ class UpdateCheckTest {
                     "/releases/download/build-58/${UpdateCheck.APK_NAME}",
                 notesUrl = "https://github.com/${UpdateCheck.REPOSITORY}" +
                     "/releases/download/build-58/${UpdateCheck.NOTES_NAME}",
+                changelogUrl = "https://github.com/${UpdateCheck.REPOSITORY}" +
+                    "/releases/download/build-58/${UpdateCheck.CHANGELOG_NAME}",
             ),
             UpdateCheck.update("build-58", currentVersionCode = 57),
         )
@@ -72,6 +75,108 @@ class UpdateCheckTest {
                 "• Read the watch's own settings, and show them",
             UpdateCheck.readableNotes(body),
         )
+    }
+
+    /** The shape the workflow writes: newest release first, each under its own heading. */
+    private fun changelog(vararg releases: Pair<Int, List<String>>): String =
+        releases.joinToString("\n") { (version, entries) ->
+            "## build $version\n" + entries.joinToString("\n") { "- $it" } + "\n"
+        }
+
+    @Test
+    fun `a phone several builds behind is told about all of them`() {
+        // The reason this exists. Someone who updates every build already knows what
+        // changed; someone who opens the app after twenty builds was being shown the last
+        // one and no sign of the other nineteen.
+        val file = changelog(
+            140 to listOf("Put each card's colour on the card it describes"),
+            139 to listOf("Ask for the workouts instead of waiting for them"),
+            138 to listOf("Draw the exercises", "Let the tabs spring"),
+        )
+
+        assertEquals(
+            """
+            build 140
+            • Put each card's colour on the card it describes
+
+            build 139
+            • Ask for the workouts instead of waiting for them
+
+            build 138
+            • Draw the exercises
+            • Let the tabs spring
+            """.trimIndent(),
+            UpdateCheck.notesSince(file, installed = 137),
+        )
+    }
+
+    @Test
+    fun `releases the phone already has are left out`() {
+        val file = changelog(
+            140 to listOf("newest"),
+            139 to listOf("also new"),
+            138 to listOf("already installed"),
+            137 to listOf("older still"),
+        )
+
+        assertEquals(
+            "build 140\n• newest\n\nbuild 139\n• also new",
+            UpdateCheck.notesSince(file, installed = 138),
+        )
+    }
+
+    @Test
+    fun `one release on its own reads as it always did`() {
+        // A heading above a single list says nothing the update card has not already said
+        // in the line above it.
+        val file = changelog(140 to listOf("Put each card's colour on the card it describes"))
+
+        assertEquals(
+            "• Put each card's colour on the card it describes",
+            UpdateCheck.notesSince(file, installed = 139),
+        )
+    }
+
+    @Test
+    fun `a very long history is cut rather than shown whole`() {
+        // Forty lines is already more than anyone reads standing at a bus stop, and the
+        // release page is a tap away.
+        val file = changelog(*(1..60).reversed().map { it to listOf("change $it") }.toTypedArray())
+
+        val notes = UpdateCheck.notesSince(file, installed = 0)!!
+
+        assertTrue(notes.endsWith("…"), "a cut history has to say it was cut")
+        assertTrue(notes.startsWith("build 60"), "the newest release comes first")
+        // Twenty headings and twenty changes is the forty this is allowed.
+        assertEquals(20, notes.lines().count { it.startsWith("• ") })
+    }
+
+    @Test
+    fun `a history that ends on the limit is not marked as cut`() {
+        // Twenty releases of one change each is exactly forty lines. Saying there is more
+        // sends the reader looking for something that is not there.
+        val file = changelog(*(1..20).reversed().map { it to listOf("change $it") }.toTypedArray())
+
+        assertTrue(UpdateCheck.notesSince(file, installed = 0)!!.endsWith("change 1"))
+    }
+
+    @Test
+    fun `nothing newer means nothing to say, so the single release notes can be tried`() {
+        val file = changelog(140 to listOf("newest"))
+
+        assertNull(UpdateCheck.notesSince(file, installed = 140))
+        assertNull(UpdateCheck.notesSince(file, installed = 200))
+        // Not one of ours at all, which is what a 404 page saved to a file looks like.
+        assertNull(UpdateCheck.notesSince("<html>Not Found</html>", installed = 1))
+        assertNull(UpdateCheck.notesSince("", installed = 1))
+    }
+
+    @Test
+    fun `anything before the first heading belongs to no release`() {
+        // A preamble would otherwise be attributed to whichever release came first.
+        val file = "- a line with no release above it\n" + changelog(140 to listOf("real"))
+
+        assertEquals("• real", UpdateCheck.notesSince(file, installed = 139))
     }
 
     @Test
