@@ -43,6 +43,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardColors
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
@@ -534,6 +535,36 @@ private fun FloatingTabDock(
     }
 }
 
+/**
+ * Three corner radii, by what a card is for.
+ *
+ * A screen of identically-rounded cards is a screen you read from the top down, because
+ * nothing in it claims to matter more than anything else. Giving the shapes a hierarchy
+ * costs nothing and lets the eye skip: the wide soft ones are the readings, the middling
+ * ones are the things with a switch, the tight ones are plumbing.
+ */
+private val HeroCardShape = RoundedCornerShape(28.dp)
+private val FeatureCardShape = RoundedCornerShape(20.dp)
+private val UtilityCardShape = RoundedCornerShape(12.dp)
+
+/**
+ * A card's colour by whether the thing it controls is switched on.
+ *
+ * The watch tab is a column of settings, most of them off most of the time, and in one
+ * flat grey the ones that are actually doing something are indistinguishable from the ones
+ * that are not. A tonal container says "this is running" without a word, and matches the
+ * tiles on the health screen, which have been coloured this way all along.
+ */
+@Composable
+private fun featureCardColors(active: Boolean): CardColors = if (active) {
+    CardDefaults.cardColors(
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    )
+} else {
+    CardDefaults.cardColors()
+}
+
 @Composable
 private fun ConnectionCard(
     state: HomeUiState,
@@ -613,7 +644,10 @@ private fun TodayCard(
     sleep: SleepSummary?,
     goal: Int,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = HeroCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             CardTitle(R.drawable.ic_metric_steps, R.string.today)
 
@@ -847,7 +881,10 @@ private val ACCENTS = listOf(
  */
 @Composable
 private fun ChartsCard(charts: HealthCharts) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = HeroCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             CardTitle(R.drawable.ic_ui_charts, R.string.charts_today)
 
@@ -900,7 +937,10 @@ private fun ChartsCard(charts: HealthCharts) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun AutoSyncCard(selectedSeconds: Int, onAutoSyncSeconds: (Int) -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             CardTitle(R.drawable.ic_ui_sync, R.string.auto_sync)
 
@@ -984,7 +1024,10 @@ private fun HealthConnectCard(
     availability: HealthConnectAvailability,
     onEnabled: (Boolean) -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1077,7 +1120,10 @@ private fun WatchSettingsCard(
     connected: Boolean,
     onChange: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             CardTitle(R.drawable.ic_watch, R.string.watch_settings)
             Text(
@@ -1404,7 +1450,11 @@ private fun WeatherCard(
         mutableStateOf(state.settings.weatherCity.orEmpty())
     }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+        colors = featureCardColors(state.settings.weatherEnabled),
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1549,7 +1599,10 @@ private fun NotificationsCard(
     onAllBlocked: (List<String>, Boolean) -> Unit,
     onGrantAccess: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1872,7 +1925,10 @@ private val RING_STROKE = 10.dp
 private fun ProtocolLogCard() {
     var expanded by remember { mutableStateOf(false) }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1973,7 +2029,11 @@ private fun AlarmsCard(
         onChange(WatchSetting.ALARMS) { current -> current.copy(alarms = transform(current.alarms)) }
     }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+        colors = featureCardColors(state.settings.notificationsEnabled && hasAccess),
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CardTitle(R.drawable.ic_ui_alarm, R.string.alarms)
             Text(
@@ -2156,7 +2216,10 @@ private fun UpdateCard(
     onCheck: () -> Unit,
     onInstall: (AvailableUpdate) -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CardTitle(R.drawable.ic_ui_download, R.string.updates)
             Text(
@@ -2264,7 +2327,11 @@ private fun GpsDataCard(
     onAuto: (Boolean) -> Unit,
     onInstallAgps: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+        colors = featureCardColors(mirroring),
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CardTitle(R.drawable.ic_ui_satellite, R.string.gps_data)
             Text(
@@ -2306,7 +2373,10 @@ private fun GpsDataCard(
 
 @Composable
 private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CardTitle(R.drawable.ic_ui_ping, R.string.find_watch)
             Text(
@@ -2346,7 +2416,11 @@ private fun WatchfaceCard(
         // On its own tab this is the whole screen, so an empty one would read as broken.
         // The list arrives moments after a connection, so the honest thing to say is that
         // it has not arrived yet.
-        Card(Modifier.fillMaxWidth()) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = FeatureCardShape,
+            colors = featureCardColors(auto),
+        ) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CardTitle(R.drawable.ic_ui_faces, R.string.watchfaces)
                 Text(
@@ -2363,7 +2437,10 @@ private fun WatchfaceCard(
     // "add" — something goes, and the person doing it should be the one to say what.
     var replacing by rememberSaveable { mutableIntStateOf(-1) }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+    ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             CardTitle(R.drawable.ic_ui_faces, R.string.watchfaces)
             Text(

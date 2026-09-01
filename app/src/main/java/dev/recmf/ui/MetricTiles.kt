@@ -5,6 +5,16 @@ package dev.recmf.ui
 
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -107,12 +117,35 @@ fun MetricTile(
 ) {
     val content = accent.content()
 
+    // Pressed, the tile gives a little and springs back rather than only flashing a
+    // ripple. A ripple says the tap was received; giving under the finger says the thing
+    // itself is soft, which is the difference between a screen that responds and one that
+    // reacts. Two per cent, because the tile is small and any more reads as a wobble.
+    val pressed = remember { MutableInteractionSource() }
+    val isPressed by pressed.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 0.98f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMediumLow,
+        ),
+        label = "tile press",
+    )
+
     Card(
         // Clipped before it is made clickable, so the ripple stops at the card's corners
         // instead of filling the rectangle behind them.
         modifier = modifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .clip(CardDefaults.shape)
-            .clickable(onClick = onClick),
+            .clickable(
+                interactionSource = pressed,
+                indication = LocalIndication.current,
+                onClick = onClick,
+            ),
         colors = CardDefaults.cardColors(containerColor = accent.container()),
     ) {
         Column(
@@ -138,9 +171,14 @@ fun MetricTile(
                 )
             }
 
+            // The reading is the reason the tile exists, so it is given the weight to
+            // say so: a size up, and heavy enough to be read across a room rather than
+            // sitting at the same volume as its own label.
             Text(
                 value,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                ),
                 color = content,
                 maxLines = 1,
             )
