@@ -1,0 +1,5 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <!-- A clock with its two bells, which is what tells it apart from a plain one. -->
+    <path android:fillColor="@android:color/white" android:pathData="M12.9,12.4V7.5h-2v6l4.6,2.8 1,-1.7z" />
+    <path android:strokeColor="@android:color/white" android:strokeWidth="2" android:strokeLineCap="round" android:pathData="M12,13.5m-7.5,0a7.5,7.5 0 1,0 15,0a7.5,7.5 0 1,0 -15,0M2.5,4.5L5.5,2M21.5,4.5L18.5,2" />
+</vector>

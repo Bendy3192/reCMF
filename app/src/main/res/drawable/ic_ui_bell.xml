@@ -1,0 +1,4 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <!-- A bell, for the things the phone passes on to the wrist. -->
+    <path android:fillColor="@android:color/white" android:pathData="M12,22a2.2,2.2 0 0,0 2.2,-2.2H9.8A2.2,2.2 0 0,0 12,22zM18.5,17.2v-6.2c0,-3.4 -2.3,-6.1 -5.5,-6.7V3.5a1,1 0 0,0 -2,0v0.8c-3.2,0.6 -5.5,3.3 -5.5,6.7v6.2L3.5,19v0.6h17V19z" />
+</vector>

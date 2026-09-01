@@ -1,0 +1,4 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <!-- A bolt: this card is about what the system will let the app keep doing. -->
+    <path android:fillColor="@android:color/white" android:pathData="M13.5,2L5,13.5h5.5L9.5,22 19,10h-6z" />
+</vector>

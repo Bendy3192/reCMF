@@ -1,0 +1,5 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <!-- Arcs widening from a point on the ground: a signal arriving from the sky,
+         which is what this card is about and what the watch is waiting for. -->
+    <path android:fillColor="@android:color/white" android:pathData="M5,17a2.5,2.5 0 1,0 0,5a2.5,2.5 0 1,0 0,-5zM3,10.5v3.2c4.2,0 7.6,3.4 7.6,7.6h3.2C13.8,15.5 9,10.5 3,10.5zM3,4.5v3.2c7.4,0 13.4,6 13.4,13.4h3.2C19.6,12.1 12.2,4.5 3,4.5z" />
+</vector>

@@ -473,16 +473,28 @@ private fun FloatingTabDock(
                         .clip(RoundedCornerShape(percent = 50))
                         .background(background)
                         .clickable { onSelect(index) }
-                        // Four tabs now, one of them a long word in some languages, so the
-                        // pills are a touch tighter than they were with three.
-                        .padding(horizontal = 13.dp, vertical = 12.dp),
+                        // Stacked icon and label, so the pill is only as wide as the word.
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = stringResource(entry.labelRes),
-                        color = content,
-                        style = MaterialTheme.typography.labelLarge,
-                    )
+                    // Icon above label rather than beside it: four tabs already had the
+                    // pills squeezed to fit a long word, and a fifth is coming. Stacked,
+                    // the pill is as wide as the longest word alone, and the icon is what
+                    // the thumb aims at once the tabs are familiar.
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            painter = painterResource(entry.iconRes),
+                            contentDescription = null,
+                            tint = content,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = stringResource(entry.labelRes),
+                            color = content,
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
                 }
             }
         }
@@ -570,7 +582,7 @@ private fun TodayCard(
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(stringResource(R.string.today), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_metric_steps, R.string.today)
 
             Row(
                 Modifier.fillMaxWidth(),
@@ -804,10 +816,7 @@ private val ACCENTS = listOf(
 private fun ChartsCard(charts: HealthCharts) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text(
-                stringResource(R.string.charts_today),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            CardTitle(R.drawable.ic_ui_charts, R.string.charts_today)
 
             if (charts.heartRate.size >= 2) {
                 ChartSection(stringResource(R.string.chart_heart_rate)) {
@@ -860,7 +869,7 @@ private fun ChartsCard(charts: HealthCharts) {
 private fun AutoSyncCard(selectedSeconds: Int, onAutoSyncSeconds: (Int) -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.auto_sync), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_ui_sync, R.string.auto_sync)
 
             // FlowRow, not Row: five chips do not fit a narrow screen, and a Row squeezes
             // the last one into a one-character-wide column rather than wrapping it.
@@ -949,10 +958,7 @@ private fun HealthConnectCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    stringResource(R.string.health_connect),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                CardTitle(R.drawable.ic_metric_heart, R.string.health_connect)
                 Switch(
                     checked = state.settings.healthConnectEnabled,
                     onCheckedChange = onEnabled,
@@ -1040,7 +1046,7 @@ private fun WatchSettingsCard(
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(stringResource(R.string.watch_settings), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_watch, R.string.watch_settings)
             Text(
                 stringResource(R.string.watch_settings_explainer),
                 style = MaterialTheme.typography.bodySmall,
@@ -1273,6 +1279,34 @@ private fun SportTypesSection(selected: List<CmfActivityType>, onChange: (List<C
 private fun CmfActivityType.readableName(): String =
     name.split("_").joinToString(" ") { word -> word.lowercase().replaceFirstChar { it.uppercase() } }
 
+/**
+ * A card's title with its own picture.
+ *
+ * The watch tab is a long scroll — settings, weather, notifications, alarms, find, GPS,
+ * updates, background work, the log — and a column of identically-weighted headings is a
+ * column you have to read. A glyph turns it into something you can aim at: the weather is
+ * the one with the sun.
+ *
+ * Deliberately not applied to every heading in the app. The rows inside a card already
+ * carry their own meaning — a switch says what it is, a time says what it is — and giving
+ * each of those a picture too would be the same noise this is meant to cut through.
+ */
+@Composable
+private fun CardTitle(@DrawableRes icon: Int, @StringRes title: Int) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(
+            painter = painterResource(icon),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(stringResource(title), style = MaterialTheme.typography.titleMedium)
+    }
+}
+
 @Composable
 private fun SettingSwitch(label: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(
@@ -1344,7 +1378,7 @@ private fun WeatherCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.weather), style = MaterialTheme.typography.titleMedium)
+                CardTitle(R.drawable.ic_ui_weather, R.string.weather)
                 Switch(
                     checked = state.settings.weatherEnabled,
                     onCheckedChange = onEnabled,
@@ -1459,10 +1493,7 @@ private fun BackgroundWorkCard(onAllow: () -> Unit) {
         ),
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                stringResource(R.string.background_work),
-                style = MaterialTheme.typography.titleMedium,
-            )
+            CardTitle(R.drawable.ic_ui_power, R.string.background_work)
             Text(
                 stringResource(R.string.background_work_explainer),
                 style = MaterialTheme.typography.bodyMedium,
@@ -1492,10 +1523,7 @@ private fun NotificationsCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    stringResource(R.string.notifications),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                CardTitle(R.drawable.ic_ui_bell, R.string.notifications)
                 Switch(
                     checked = state.settings.notificationsEnabled && hasAccess,
                     onCheckedChange = onEnabled,
@@ -1818,10 +1846,7 @@ private fun ProtocolLogCard() {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    stringResource(R.string.protocol_log_title),
-                    style = MaterialTheme.typography.titleMedium,
-                )
+                CardTitle(R.drawable.ic_ui_list, R.string.protocol_log_title)
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(stringResource(if (expanded) R.string.action_hide else R.string.action_show))
                 }
@@ -1917,7 +1942,7 @@ private fun AlarmsCard(
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.alarms), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_ui_alarm, R.string.alarms)
             Text(
                 stringResource(R.string.alarms_explainer),
                 style = MaterialTheme.typography.bodyMedium,
@@ -2100,7 +2125,7 @@ private fun UpdateCard(
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.updates), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_ui_download, R.string.updates)
             Text(
                 stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodyMedium,
@@ -2208,7 +2233,7 @@ private fun GpsDataCard(
 ) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.gps_data), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_ui_satellite, R.string.gps_data)
             Text(
                 stringResource(R.string.gps_data_explainer),
                 style = MaterialTheme.typography.bodyMedium,
@@ -2250,7 +2275,7 @@ private fun GpsDataCard(
 private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(stringResource(R.string.find_watch), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_ui_ping, R.string.find_watch)
             Text(
                 stringResource(R.string.find_watch_explainer),
                 style = MaterialTheme.typography.bodyMedium,
@@ -2290,7 +2315,7 @@ private fun WatchfaceCard(
         // it has not arrived yet.
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(stringResource(R.string.watchfaces), style = MaterialTheme.typography.titleMedium)
+                CardTitle(R.drawable.ic_ui_faces, R.string.watchfaces)
                 Text(
                     stringResource(R.string.watchfaces_waiting),
                     style = MaterialTheme.typography.bodyMedium,
@@ -2307,7 +2332,7 @@ private fun WatchfaceCard(
 
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(stringResource(R.string.watchfaces), style = MaterialTheme.typography.titleMedium)
+            CardTitle(R.drawable.ic_ui_faces, R.string.watchfaces)
             Text(
                 stringResource(R.string.watchfaces_explainer),
                 style = MaterialTheme.typography.bodyMedium,
@@ -2396,17 +2421,20 @@ private fun WatchfaceCard(
  * split waited until there was more than one metric to put on the first — a tab holding a
  * single card is a worse arrangement than no tabs at all.
  */
-private enum class HomeTab(@param:StringRes val labelRes: Int) {
-    HEALTH(R.string.tab_health),
+private enum class HomeTab(
+    @param:StringRes val labelRes: Int,
+    @param:DrawableRes val iconRes: Int,
+) {
+    HEALTH(R.string.tab_health, R.drawable.ic_metric_heart),
 
     // Between the two rather than after them: sleep is a measurement, and the watch tab
     // is where the settings live. The dock reads health, sleep, faces, watch.
-    SLEEP(R.string.tab_sleep),
+    SLEEP(R.string.tab_sleep, R.drawable.ic_metric_sleep),
 
     // Its own tab rather than a card buried in the watch settings: switching and
     // installing a face is a thing people come to do, not a setting they adjust once.
-    FACES(R.string.tab_faces),
-    DEVICE(R.string.tab_device),
+    FACES(R.string.tab_faces, R.drawable.ic_ui_faces),
+    DEVICE(R.string.tab_device, R.drawable.ic_watch),
 }
 
 /** One log line, as both the screen and the clipboard render it. */
