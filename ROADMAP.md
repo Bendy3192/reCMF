@@ -932,6 +932,14 @@ total — every reading after it is a counter against a counter.
 Bytes seen on a real watch that nothing here explains yet. Written down so the next capture
 can be compared against them rather than starting over.
 
+- **`009b/0001` inbound, eight bytes.** The reply to asking which monitors are on, and it
+  says nothing of the sort: `b6cf3ac0b7abef4a`, `cae99f3a7f645333`, `b72524ac9aec51a6` —
+  a different eight on every connection, full entropy. The CRC inside the encrypted body
+  checks out, so this is what the watch meant to send rather than a decryption gone wrong.
+  Nothing in it resembles the channel-and-flag pairs reCMF writes to the same command, and
+  the official app's writes there are the same short pairs under encryption, so there is no
+  richer format to copy from. Whatever it is, it is not the settings that were asked for.
+
 - **`ffff/0051`, one byte.** Reads `0x38` in every capture of it, once per connection.
   The guess was that it was the watch refusing the pointless `BATTERY` request reCMF used
   to send; that request is gone and the frame still arrives, so the guess was wrong. It is

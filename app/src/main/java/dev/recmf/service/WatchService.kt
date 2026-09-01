@@ -45,6 +45,7 @@ import dev.recmf.media.MediaWatcher
 import dev.recmf.media.NowPlaying
 import dev.recmf.gps.AlmanacSource
 import dev.recmf.protocol.CmfAgps
+import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfMusic
 import dev.recmf.protocol.CmfCommand
@@ -183,6 +184,14 @@ class WatchService : LifecycleService() {
 
     /** What the watch was last told is playing, so an unchanged track is not resent. */
     private var lastSentNowPlaying: NowPlaying? = null
+
+    /**
+     * The sport menu the watch last reported, so an unchanged one is not rewritten.
+     *
+     * Cleared on every connection: a watch that has been reset or used with another app
+     * since is a watch whose menu is not knowable from here.
+     */
+    private var sportsOnWatch: List<CmfActivityType>? = null
 
     /**
      * One now-playing send at a time.
@@ -731,6 +740,10 @@ class WatchService : LifecycleService() {
         val nowMillis = System.currentTimeMillis()
 
         emptySleepReported = false
+
+        // Not knowable across a connection: the watch may have been reset or had its sport
+        // menu changed in another app while this one was not listening.
+        sportsOnWatch = null
 
         connection.send(
             CmfCommand.TIME,
@@ -1309,7 +1322,14 @@ class WatchService : LifecycleService() {
 
         // The most destructive of the lot: the watch replaces its whole sport menu with
         // whatever list arrives, so sending reCMF's default would delete most of it.
+        //
+        // Skipped when the watch has just said it holds this very list. A fresh connection
+        // sends everything configured, because the watch may have been reset or used with
+        // another app — but a list it reported seconds ago is not a thing to be told
+        // about, and rewriting the sport menu on every connection is the most destructive
+        // frame this app sends, sent for nothing.
         ifSet(WatchSetting.SPORTS) {
+            if (preferences.sportTypes == sportsOnWatch) return@ifSet
             connection.send(CmfCommand.SPORTS_SET, CmfSettings.sportTypes(preferences.sportTypes))
         }
     }
@@ -1473,11 +1493,18 @@ class WatchService : LifecycleService() {
                 adopt = { settings.adoptTimeFormatFromWatch(it) },
             )
 
-            CmfCommand.SPORTS_SET -> readBack(
-                value = CmfSettings.parseSportTypes(message.payload),
-                describe = { "Sports on the watch: " + it.joinToString(", ") { type -> type.name } },
-                adopt = { settings.adoptSportTypesFromWatch(it) },
-            )
+            CmfCommand.SPORTS_SET -> {
+                // Remembered as well as read: what the watch holds is what it need not be
+                // told again. See the send in applyWatchPreferences.
+                sportsOnWatch = CmfSettings.parseSportTypes(message.payload)
+                readBack(
+                    value = sportsOnWatch,
+                    describe = {
+                        "Sports on the watch: " + it.joinToString(", ") { type -> type.name }
+                    },
+                    adopt = { settings.adoptSportTypesFromWatch(it) },
+                )
+            }
 
             // Never seen inbound, and five different payload shapes sent to it were all
             // acknowledged and all ignored. A capture of the official app shows why it
@@ -1724,6 +1751,19 @@ class WatchService : LifecycleService() {
 
             CmfCommand.BATTERY ->
                 CmfParsers.parseBattery(message.payload)?.let { WatchStatus.battery.value = it }
+
+            // The reply to asking which monitors are on, and it says nothing of the sort.
+            //
+            // Eight bytes whose CRC checks out, so this is what the watch meant to send —
+            // not a decryption gone wrong — and every one of them is different on every
+            // connection. Nothing in it looks like the channel-and-flag pairs reCMF writes
+            // to the same command, and the official app's own writes here decrypt to the
+            // same short pairs, so there is no richer format to copy.
+            //
+            // Noted rather than dropped as unhandled: a frame arriving once a connection
+            // with a fault marker beside it reads as something broken, and it is not.
+            CmfCommand.HEART_MONITORING_ENABLED_SET ->
+                ProtocolLog.note("Monitoring reply, still unread: ${message.payload.toHex()}")
 
             CmfCommand.FIRMWARE_VERSION_RET ->
                 WatchStatus.firmware.value = CmfParsers.parseFirmwareVersion(message.payload)
