@@ -51,8 +51,19 @@ object ProtocolLog {
     }
 
     /** The watch confirming a command it applied. */
-    fun acknowledged(cmd: CmfCommand) {
-        record(Direction.ACK, cmd.name, "applied")
+    /**
+     * [payload] is empty for an ordinary confirmation and shown when it is not.
+     *
+     * An acknowledging opcode is not always an acknowledgement: frames arrived under one
+     * during a workout with nothing outstanding to confirm, and reading them as "applied"
+     * hid whatever they were actually saying.
+     */
+    fun acknowledged(cmd: CmfCommand, payload: ByteArray = ByteArray(0)) {
+        record(
+            Direction.ACK,
+            cmd.name,
+            if (payload.isEmpty()) "applied" else "${payload.size} B: ${payload.toHex()}",
+        )
     }
 
     fun dropped(

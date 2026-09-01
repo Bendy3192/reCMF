@@ -26,10 +26,23 @@ sealed interface CmfDecoded {
     class Command(val cmd: CmfCommand, val payload: ByteArray) : CmfDecoded
 
     /**
-     * The watch confirming a command it applied. Carries no payload: the information is
-     * that it was accepted.
+     * A frame under an acknowledging opcode: `<cmd1>/0x0003` for a generic command,
+     * `0xffff/0xaxxx` for a vendor one.
+     *
+     * Usually that is the watch confirming something it applied, and [payload] is empty.
+     * Not always, and that is why the bytes are carried rather than discarded: four
+     * `0xffff/0xa06a` frames arrived during a workout, minutes apart, when nothing had
+     * been sent for them to acknowledge — which looks much more like the watch asking for
+     * a position than like it confirming one. Thrown away, that question was invisible.
+     *
+     * Not a data class: [payload] is a [ByteArray], which would compare by identity.
      */
-    data class Acknowledgement(val of: CmfCommand, val cmd1: Int, val cmd2: Int) : CmfDecoded
+    class Acknowledgement(
+        val of: CmfCommand,
+        val cmd1: Int,
+        val cmd2: Int,
+        val payload: ByteArray = ByteArray(0),
+    ) : CmfDecoded
 
     /** A chunk was buffered; more are expected before the payload is complete. */
     data object Pending : CmfDecoded
@@ -143,7 +156,14 @@ class CmfCodec(
 
         val cmd = frame.command
             ?: return CmfCommand.acknowledgedBy(frame.cmd1, frame.cmd2)
-                ?.let { CmfDecoded.Acknowledgement(it, frame.cmd1, frame.cmd2) }
+                ?.let {
+                    CmfDecoded.Acknowledgement(
+                        of = it,
+                        cmd1 = frame.cmd1,
+                        cmd2 = frame.cmd2,
+                        payload = decryptUnknownBody(frame) ?: ByteArray(0),
+                    )
+                }
                 ?: CmfDecoded.Dropped(
                     CmfDropReason.UNKNOWN_COMMAND,
                     cmd = null,

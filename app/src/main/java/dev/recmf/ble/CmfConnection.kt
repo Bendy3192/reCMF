@@ -341,7 +341,8 @@ class CmfConnection(
         when (val decoded = codec.decode(value)) {
             is CmfDecoded.Pending -> Unit
 
-            is CmfDecoded.Acknowledgement -> ProtocolLog.acknowledged(decoded.of)
+            is CmfDecoded.Acknowledgement ->
+                ProtocolLog.acknowledged(decoded.of, decoded.payload)
 
             is CmfDecoded.Dropped -> {
                 Log.w(TAG, "Dropped ${decoded.cmd ?: "frame"}: ${decoded.reason}")
