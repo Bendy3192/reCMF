@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- The same figure upright, so walking and running read as a pair rather than as
+         two unrelated pictures. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M13,4m-2,0a2,2 0 1,0 4,0a2,2 0 1,0 -4,0" />
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,21.5l1,-6 -1.5,-3 0.5,-4 3,-1 2,3 2,1M11.5,8.5L9,11M13,12.5l3,3 0.5,6" />
+</vector>

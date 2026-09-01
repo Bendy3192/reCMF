@@ -49,6 +49,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
@@ -1257,6 +1258,13 @@ private fun SportTypesSection(selected: List<CmfActivityType>, onChange: (List<C
                     onChange(if (isSelected) selected - type else selected + type)
                 },
                 label = { Text(type.readableName()) },
+                leadingIcon = {
+                    Icon(
+                        painter = painterResource(type.iconRes()),
+                        contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize),
+                    )
+                },
             )
         }
     }

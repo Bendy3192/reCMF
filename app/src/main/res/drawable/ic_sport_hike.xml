@@ -1,0 +1,11 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- A ridge line. Hiking and mountain walking are about the ground, not the gait,
+         so the picture is the ground. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M2,20L9,8l3.5,6 2,-3L22,20z" />
+</vector>

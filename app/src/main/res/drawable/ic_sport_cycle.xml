@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Two wheels and a frame. The wheels are rings rather than discs, which is what
+         makes it a bicycle at a glance and not a pair of dots. -->
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M5.5,17.5m-3.5,0a3.5,3.5 0 1,0 7,0a3.5,3.5 0 1,0 -7,0M18.5,17.5m-3.5,0a3.5,3.5 0 1,0 7,0a3.5,3.5 0 1,0 -7,0M5.5,17.5l4,-5.5h5l4,5.5M9.5,12L8,8h4.5M15,8h3" />
+</vector>

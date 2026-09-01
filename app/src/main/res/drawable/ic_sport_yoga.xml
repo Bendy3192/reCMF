@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Seated, wide and low: the silhouette of stillness, which is what separates this
+         from every other figure in the set. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M12,5m-2.25,0a2.25,2.25 0 1,0 4.5,0a2.25,2.25 0 1,0 -4.5,0" />
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M12,9v5M12,14L6,18M12,14l6,4M8,14L4,15.5M16,14l4,1.5" />
+</vector>
