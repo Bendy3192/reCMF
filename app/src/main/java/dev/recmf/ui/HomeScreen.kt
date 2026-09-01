@@ -286,7 +286,10 @@ private fun TabContent(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         // Room for the floating dock, which sits over the content rather than beside it.
-        contentPadding = PaddingValues(bottom = 96.dp),
+        // Clears the floating dock, which is a stacked icon and label rather than the
+        // single line it used to be. Too little and the last card sits under it, which is
+        // exactly what happened when the icons went in and this stayed at 96.
+        contentPadding = PaddingValues(bottom = 112.dp),
     ) {
         // On both tabs: it is the answer to "is any of this current?", and neither tab
         // means anything without it.
@@ -470,7 +473,10 @@ private fun FloatingTabDock(
 
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(percent = 50))
+                        // A rounded rectangle rather than the stadium the dock itself is:
+                        // at 50 percent, a box this tall becomes a blob wider than the
+                        // word it holds.
+                        .clip(RoundedCornerShape(18.dp))
                         .background(background)
                         .clickable { onSelect(index) }
                         // Stacked icon and label, so the pill is only as wide as the word.
