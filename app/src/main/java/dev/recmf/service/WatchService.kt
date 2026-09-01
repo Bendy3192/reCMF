@@ -47,6 +47,7 @@ import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfMusic
 import dev.recmf.protocol.CmfCommand
 import dev.recmf.protocol.CmfFrame
+import dev.recmf.protocol.CmfLocation
 import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.protocol.CmfWatchfaceFile
@@ -702,6 +703,8 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.FIRMWARE_VERSION_GET)
         connection.send(CmfCommand.SERIAL_NUMBER_GET)
 
+        sendGpsSeed()
+
         readBackSettings()
 
         // Before the settings go out rather than after, so a connection that finds the
@@ -897,6 +900,48 @@ class WatchService : LifecycleService() {
      * asks "what does the watch actually say", and until this ran there, checking whether
      * a setting had landed meant reconnecting the Bluetooth link by hand.
      */
+    /**
+     * Tells the watch roughly where it is, so its own receiver has somewhere to start.
+     *
+     * The watch has a GNSS receiver and records its own tracks; the phone is not in that
+     * loop. What the receiver lacks on a cold start is any idea which satellites are
+     * overhead, and working that out unaided means reading their orbits off the satellites
+     * themselves at fifty bits a second — minutes under open sky and effectively never
+     * between buildings. A rough position and the time cut the search from every satellite
+     * to the handful that should be above it.
+     *
+     * Rough is the operative word: a hundred kilometres would do, so the city already
+     * chosen for the weather is used rather than the phone's own position. That keeps
+     * reCMF off the location-permission path entirely, which the manifest goes out of its
+     * way to stay off, and a location permission for something a city name already answers
+     * would be a poor trade.
+     *
+     * This is not the whole story. The official app also uploads an almanac file, which is
+     * what makes its first fix near-instant. That transfer's opening command is not known
+     * here or to Gadgetbridge, whose AGPS support answers the watch's requests for chunks
+     * but never sends the request that would start one, so it stays open.
+     */
+    private suspend fun sendGpsSeed() {
+        val current = settings.current()
+        if (!CmfLocation.worthSending(current.weatherLatitude, current.weatherLongitude)) {
+            // Silent rather than noisy: an install with no city set is the ordinary state
+            // of a fresh install, not a fault, and this runs on every connection.
+            return
+        }
+
+        ProtocolLog.note(
+            "GPS: seeding the watch with ${current.weatherCity ?: "the weather location"}",
+        )
+        connection.send(
+            CmfCommand.GPS_COORDS,
+            CmfLocation.gpsCoords(
+                latitude = current.weatherLatitude,
+                longitude = current.weatherLongitude,
+                epochSeconds = System.currentTimeMillis() / 1000,
+            ),
+        )
+    }
+
     private suspend fun readBackSettings() {
         // First, and it stays first: this is what tied `ffff/a055` to it. That frame had
         // been arriving unattributed for months, and it kept arriving right behind this

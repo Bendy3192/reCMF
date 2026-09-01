@@ -216,6 +216,43 @@ seconds mirrored, read out as 14:10 on the watch's own screen. Every write is no
 by an `ALARMS_GET`, so the log line describes what the watch stored rather than what it was
 holding beforehand — an acknowledgement alone says only that the frame arrived.
 
+**Workouts** are read but not yet stored. The watch volunteers `WORKOUT_SUMMARY` during an
+activity fetch, so a sync taken after a workout has been carrying one all along:
+
+```
+WORKOUT_SUMMARY  32 or 54 bytes, the length picks which
+  0   u32 LE  start, epoch seconds        4   u16 LE  duration, seconds
+  6   u8      sport type                  26  u32 LE  end
+  30  u8      1 if a track was recorded
+
+WORKOUT_GPS      12 bytes a point
+  0   u32 LE  timestamp   4  i32 LE  longitude   8  i32 LE  latitude   (degrees x 1e7)
+```
+
+Longitude before latitude is unusual enough that the app checks: a latitude past the poles
+is what a swapped pair would look like, and it says so in the log rather than plotting it.
+
+**GPS, and why a fix takes forever.** The watch has its own receiver, so the phone is not in
+the loop for recording a track. What the receiver lacks on a cold start is any idea which
+satellites are overhead, and unaided it reads their orbits off the satellites at fifty bits
+a second — minutes under open sky, effectively never between buildings.
+
+Two things help, and only one of them is known. `GPS_COORDS` (`0xffff/0x906a`) tells the
+watch roughly where it is: twelve **big-endian** bytes, epoch seconds then latitude then
+longitude, degrees times ten million. It is sent right after the handshake, from the city
+already chosen for the weather rather than from the phone's own position — a hundred
+kilometres is accurate enough for choosing satellites, and it keeps reCMF off the
+location-permission path the manifest deliberately avoids.
+
+The other is the almanac file the official app uploads, which is what makes its first fix
+near-instant. **Nobody has this.** Gadgetbridge names all six AGPS opcodes, answers the
+watch's requests for file chunks, and recognises an AGPS file by the ASCII magic
+`000000010000` — but it never sends `DATA_TRANSFER_AGPS_INIT_REQUEST` (`0xffff/0x905e`), so
+no transfer ever starts, and its `parseAsAgps` is a `// TODO`. The opening payload and where
+the file comes from would both have to come from a capture of the official app. The chunk
+half is already built here: `a05f`/`905f` is the same ask-by-offset scheme as the watchface
+transfer, whose engine works.
+
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather
 than of the watch, and it shows: the tone plays on the alarm stream, because the phone
