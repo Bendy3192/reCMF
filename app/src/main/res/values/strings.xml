@@ -202,6 +202,6 @@
     <string name="metric_stat_min">Lowest</string>
     <string name="tab_faces">Faces</string>
     <string name="watchfaces_waiting">Connect the watch to see the faces it holds and switch between them.</string>
-    <string name="alarms_mirror_phone">Mirror the phone's alarms</string>
-    <string name="alarms_mirror_explainer">The watch will hold whatever the phone's clock holds, and the alarms set on the watch itself are replaced. Reading the phone's clock needs root; without it this stays off.</string>
+    <string name="alarms_mirror_phone">Mirror the phone\'s alarms</string>
+    <string name="alarms_mirror_explainer">The watch will hold whatever the phone\'s clock holds, and the alarms set on the watch itself are replaced. Reading the phone\'s clock needs root; without it this stays off.</string>
 </resources>
