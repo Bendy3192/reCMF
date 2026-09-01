@@ -113,6 +113,7 @@ class MainActivity : ComponentActivity() {
                 val lastSleep by model.lastSleep.collectAsStateWithLifecycle()
                 val charts by model.charts.collectAsStateWithLifecycle()
                 val weekly by model.weekly.collectAsStateWithLifecycle()
+                val workouts by model.workouts.collectAsStateWithLifecycle()
                 val sleepSession by model.lastSleepSession.collectAsStateWithLifecycle()
                 val watchfaces by model.watchfaces.collectAsStateWithLifecycle()
                 val watchfaceInstall by model.watchfaceInstall.collectAsStateWithLifecycle()
@@ -169,6 +170,7 @@ class MainActivity : ComponentActivity() {
                     sleepSession = sleepSession,
                     charts = charts,
                     weekly = weekly,
+                    workouts = workouts,
                     watchfaces = watchfaces,
                     watchfaceInstall = watchfaceInstall,
                     onNotificationAppBlocked = model::setNotificationBlocked,

@@ -46,6 +46,13 @@ interface SampleDao {
     )
     suspend fun workoutHeartRateSince(since: Long): List<HeartRateSampleEntity>
 
+    /** The same, as something a screen can watch. */
+    @Query(
+        "SELECT * FROM heart_rate_samples WHERE duringWorkout = 1 AND timestamp >= :since " +
+            "AND bpm BETWEEN 25 AND 250 ORDER BY timestamp",
+    )
+    fun workoutHeartRate(since: Long): Flow<List<HeartRateSampleEntity>>
+
     @Query("SELECT * FROM spo2_samples WHERE syncedAt IS NULL ORDER BY timestamp LIMIT :limit")
     suspend fun pendingSpo2(limit: Int): List<Spo2SampleEntity>
 
@@ -180,7 +187,19 @@ interface SampleDao {
     @Query("DELETE FROM activity_samples WHERE syncedAt IS NOT NULL AND timestamp < :before")
     suspend fun pruneActivity(before: Long): Int
 
-    @Query("DELETE FROM heart_rate_samples WHERE syncedAt IS NOT NULL AND timestamp < :before")
+    /**
+     * Workout pulse is kept, however old.
+     *
+     * The rest of this table is a staging buffer on the way to Health Connect and is
+     * dropped once it has arrived. These rows are not: they are the only record that a
+     * workout happened, because the watch will not hand over a summary of one, and a
+     * workouts screen that forgets everything older than a week is not a workouts screen.
+     * A session is a few hundred rows and they arrive a few times a week.
+     */
+    @Query(
+        "DELETE FROM heart_rate_samples " +
+            "WHERE syncedAt IS NOT NULL AND timestamp < :before AND duringWorkout = 0",
+    )
     suspend fun pruneHeartRate(before: Long): Int
 
     @Query("DELETE FROM spo2_samples WHERE syncedAt IS NOT NULL AND timestamp < :before")

@@ -86,6 +86,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -145,6 +146,7 @@ fun HomeScreen(
     sleepSession: SleepSession?,
     charts: HealthCharts,
     weekly: WeeklySeries,
+    workouts: List<WorkoutRow>,
     watchfaces: WatchfaceList?,
     watchfaceInstall: WatchfaceInstall?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -199,6 +201,7 @@ fun HomeScreen(
                         sleepSession = sleepSession,
                         charts = charts,
                         weekly = weekly,
+                        workouts = workouts,
                         watchfaces = watchfaces,
                         watchfaceInstall = watchfaceInstall,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -232,6 +235,11 @@ fun HomeScreen(
                     onSelect = { scope.launch { pager.animateScrollToPage(it) } },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
+                        // Inset from both edges rather than sized to its contents. The
+                        // pills take an equal share each now, so the dock spans what it is
+                        // given — and what it is given should be the screen less a margin,
+                        // not the screen itself.
+                        .padding(horizontal = 16.dp)
                         .padding(bottom = 24.dp),
                 )
             } else {
@@ -255,6 +263,7 @@ private fun TabContent(
     sleepSession: SleepSession?,
     charts: HealthCharts,
     weekly: WeeklySeries,
+    workouts: List<WorkoutRow>,
     watchfaces: WatchfaceList?,
     watchfaceInstall: WatchfaceInstall?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -318,6 +327,14 @@ private fun TabContent(
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
                 if (!isBatteryExempt) {
                     item { BackgroundWorkCard(onAllowBackgroundWork) }
+                }
+            }
+
+            HomeTab.WORKOUTS -> {
+                if (workouts.isEmpty()) {
+                    item { NoWorkoutsCard() }
+                } else {
+                    items(workouts, key = { it.startSeconds }) { WorkoutCard(it) }
                 }
             }
 
@@ -498,6 +515,11 @@ private fun FloatingTabDock(
 
                 Box(
                     modifier = Modifier
+                        // An equal share each, so the dock fits whatever number of tabs
+                        // there are in whatever language. Sized to the longest word, five
+                        // tabs ran past the edge of a narrow phone in Russian — and the
+                        // word that did it was a real one, not a contrived example.
+                        .weight(1f)
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
@@ -507,8 +529,10 @@ private fun FloatingTabDock(
                         .clip(RoundedCornerShape(20.dp))
                         .background(background)
                         .clickable { onSelect(index) }
-                        // Stacked icon and label, so the pill is only as wide as the word.
-                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                        // Stacked icon and label, and the width now comes from the share
+                        // above rather than from the word, so this is breathing room
+                        // rather than measurement.
+                        .padding(horizontal = 4.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     // Icon above label rather than beside it: four tabs already had the
@@ -527,6 +551,11 @@ private fun FloatingTabDock(
                             text = stringResource(entry.labelRes),
                             color = content,
                             style = MaterialTheme.typography.labelSmall,
+                            // One line, and cut rather than wrapped: a two-line label
+                            // would make its pill taller than its neighbours and the
+                            // whole dock would step.
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
                     }
                 }
@@ -1533,6 +1562,118 @@ private fun WeatherCard(
  * looked the same whether no place had been resolved, the provider could not be reached,
  * or the watch simply had not been asked yet.
  */
+/**
+ * One workout.
+ *
+ * Deliberately does not pretend to be a sport. Every other companion app puts a running
+ * shoe on the card and a distance under it; this watch hands over neither, so the card
+ * says what it has — when, how long, how hard — and draws the pulse that is the whole
+ * evidence the session happened at all.
+ */
+@Composable
+private fun WorkoutCard(workout: WorkoutRow) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text(
+                        text = WORKOUT_DAY.format(
+                            Instant.ofEpochSecond(workout.startSeconds)
+                                .atZone(ZoneId.systemDefault()),
+                        ),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = stringResource(
+                            R.string.workout_when,
+                            WORKOUT_TIME.format(
+                                Instant.ofEpochSecond(workout.startSeconds)
+                                    .atZone(ZoneId.systemDefault()),
+                            ),
+                            readableDuration(workout.seconds),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Icon(
+                    painter = painterResource(R.drawable.ic_sport_generic),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            HorizontalDivider()
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                GoalReading(stringResource(R.string.workout_average), workout.averageBpm)
+                GoalReading(stringResource(R.string.workout_peak), workout.maxBpm)
+            }
+
+            LineChart(
+                points = workout.pulse,
+                color = MaterialTheme.colorScheme.primary,
+                minimumSpan = MINIMUM_BPM_SPAN,
+            )
+        }
+    }
+}
+
+/**
+ * What the workouts tab says before there are any.
+ *
+ * Says why rather than showing an empty list: a wearer who has done workouts and sees
+ * nothing here would reasonably conclude the app is broken, and the truth — that the watch
+ * only tells reCMF about a session while it is measuring the pulse — is both the reason
+ * and the instruction.
+ */
+@Composable
+private fun NoWorkoutsCard() {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CardTitle(R.drawable.ic_sport_generic, R.string.tab_workouts)
+            Text(
+                stringResource(R.string.workouts_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Hours and minutes, or minutes alone for anything under an hour. */
+@Composable
+private fun readableDuration(seconds: Long): String {
+    val minutes = seconds / 60
+    return if (minutes >= 60) {
+        stringResource(R.string.duration_hm, minutes / 60, minutes % 60)
+    } else {
+        stringResource(R.string.duration_m, minutes)
+    }
+}
+
+private val WORKOUT_DAY: DateTimeFormatter =
+    DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
+
+private val WORKOUT_TIME: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
+
+/** A pulse that barely moved should not be drawn as a mountain range. */
+private const val MINIMUM_BPM_SPAN = 20f
+
 @Composable
 private fun WeatherStatusLine(weather: WeatherStatus) {
     val (textRes, isError) = when {
@@ -2538,7 +2679,8 @@ private enum class HomeTab(
     HEALTH(R.string.tab_health, R.drawable.ic_metric_heart),
 
     // Between the two rather than after them: sleep is a measurement, and the watch tab
-    // is where the settings live. The dock reads health, sleep, faces, watch.
+    // is where the settings live. The dock reads health, workouts, sleep, faces, watch.
+    WORKOUTS(R.string.tab_workouts, R.drawable.ic_sport_run),
     SLEEP(R.string.tab_sleep, R.drawable.ic_metric_sleep),
 
     // Its own tab rather than a card buried in the watch settings: switching and

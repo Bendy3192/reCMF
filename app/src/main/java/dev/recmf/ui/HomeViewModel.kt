@@ -51,6 +51,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import dev.recmf.health.workoutSessions
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
@@ -65,6 +66,24 @@ data class HealthCharts(
     val stepsByHour: List<Float> = emptyList(),
     val spo2: List<ChartPoint> = emptyList(),
 )
+
+/**
+ * One workout, as far as this watch will admit to one.
+ *
+ * There is no sport here and no distance, because the watch keeps neither where reCMF can
+ * reach it: it answers a request for workout summaries with an empty payload and sends
+ * only the pulse it took while the session ran. What is here is what that pulse says —
+ * when it started, when it stopped, and how hard the wearer was working.
+ */
+data class WorkoutRow(
+    val startSeconds: Long,
+    val endSeconds: Long,
+    val averageBpm: Int,
+    val maxBpm: Int,
+    val pulse: List<ChartPoint>,
+) {
+    val seconds: Long get() = endSeconds - startSeconds
+}
 
 /**
  * One day of one measurement.
@@ -462,6 +481,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), WeeklySeries())
 
     /**
+     * The workouts, newest first.
+     *
+     * Built rather than read: this watch keeps no summary of a session and will not answer
+     * a request for one, so what a workout *is* here is a run of pulse the watch marked as
+     * taken during exercise. See `workoutSessions` for where the edges are drawn.
+     *
+     * Ninety days, which is as far back as the table is allowed to keep them — workout
+     * pulse is the one thing in it that is not pruned once Health Connect has it.
+     */
+    val workouts: StateFlow<List<WorkoutRow>> = dao.workoutHeartRate(startOfWorkoutHistory())
+        .map { samples ->
+            val ordered = samples.sortedBy { it.timestamp }
+
+            workoutSessions(ordered.map { it.timestamp })
+                .map { session ->
+                    val during = ordered.filter { it.timestamp in session }
+                    WorkoutRow(
+                        startSeconds = session.first,
+                        endSeconds = session.last,
+                        averageBpm = during.sumOf { it.bpm } / during.size,
+                        maxBpm = during.maxOf { it.bpm },
+                        pulse = during.map { ChartPoint(it.timestamp, it.bpm.toFloat()) },
+                    )
+                }
+                .reversed()
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    private fun startOfWorkoutHistory(): Long =
+        java.time.Instant.now().epochSecond - WORKOUT_HISTORY_SECONDS
+
+    /**
      * Groups readings into the seven days ending today, in the phone's own time zone.
      *
      * A day the watch said nothing about comes back null rather than absent, so the strip
@@ -630,6 +681,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         /** A week, which is also everything the staging table keeps. */
         const val DAYS_IN_STRIP = 7
+
+        /**
+         * How far back the workouts screen looks.
+         *
+         * Longer than the week the rest of the table keeps, because workout pulse is not
+         * pruned: it is the only record of a session there is.
+         */
+        const val WORKOUT_HISTORY_SECONDS = 90L * 24 * 60 * 60
 
         fun startOfToday(): Long =
             LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toEpochSecond()

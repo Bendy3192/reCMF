@@ -210,4 +210,9 @@
     <string name="watchfaces_waiting">Connect the watch to see the faces it holds and switch between them.</string>
     <string name="alarms_mirror_phone">Mirror the phone\'s alarms</string>
     <string name="alarms_mirror_explainer">The watch will hold whatever the phone\'s clock holds, and the alarms set on the watch itself are replaced. Reading the phone\'s clock needs root; without it this stays off.</string>
+    <string name="tab_workouts">Workouts</string>
+    <string name="workout_when">%1$s, %2$s</string>
+    <string name="workout_average">Average</string>
+    <string name="workout_peak">Peak</string>
+    <string name="workouts_empty">No workouts yet. The watch keeps no summary of a session and will not hand one over, so a workout shows up here once it has sent the pulse it measured during it — which arrives on the next sync after the session ends.</string>
 </resources>

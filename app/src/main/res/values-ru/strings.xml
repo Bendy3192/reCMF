@@ -211,4 +211,9 @@
     <string name="watchfaces_waiting">Подключите часы, чтобы увидеть их циферблаты и переключаться между ними.</string>
     <string name="alarms_mirror_phone">Повторять будильники телефона</string>
     <string name="alarms_mirror_explainer">Часы будут держать то же, что и часы телефона, а будильники, заведённые на самих часах, заменятся. Для чтения будильников телефона нужен root; без него переключатель ничего не даст.</string>
+    <string name="tab_workouts">Тренировки</string>
+    <string name="workout_when">%1$s, %2$s</string>
+    <string name="workout_average">Средний пульс</string>
+    <string name="workout_peak">Максимум</string>
+    <string name="workouts_empty">Тренировок пока нет. Часы не хранят сводку занятия и не отдают её, поэтому тренировка появляется здесь, когда придёт пульс, снятый во время неё — на ближайшей синхронизации после её окончания.</string>
 </resources>
