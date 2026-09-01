@@ -724,27 +724,16 @@ class WatchService : LifecycleService() {
     }
 
     /**
-     * Asks the watch what it is actually set to.
-     *
-     * The reply arrives under the matching SET opcode, not a distinct one: the `0x0002`
-     * half of a pair is answered by its `0x0001` half, every time it has been tried on
-     * this watch — the serial number, the alarms, both reminders, raise-to-wake, the clock
-     * format, the sport list, Do Not Disturb, the goals and the battery.
-     *
-     * Also runs on a *manual* sync, and only a manual one. It is a dozen small frames, too
-     * many to spend every five minutes on a timer — but pressing Sync is how a person
-     * asks "what does the watch actually say", and until this ran there, checking whether
-     * a setting had landed meant reconnecting the Bluetooth link by hand.
-     */
-    /**
      * Sends a watchface file, replacing the one in [replacedIndex].
      *
      * The watch drives this: it is told what is coming and how big, and then asks for the
      * file a stretch at a time by offset. So this method only opens the transfer — the
      * chunks are answered from [handleWatchfaceRequest] as the asks arrive.
      *
-     * The watch holds a fixed six faces, so there is no such thing as adding one. Every
-     * install displaces something, and the frame that opens the transfer has to name what.
+     * The watch holds up to six faces and will not simply take a seventh, so every install
+     * displaces something and the frame that opens the transfer has to name what. Six is a
+     * ceiling rather than a fixed count: deleting faces on the watch leaves fewer, and the
+     * list it sends is the only thing that says how many there are now.
      */
     private suspend fun installWatchface(uri: Uri, replacedIndex: Int) {
         val listed = WatchStatus.watchfaces.value
@@ -893,6 +882,19 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.WATCHFACE_GET)
     }
 
+    /**
+     * Asks the watch what it is actually set to.
+     *
+     * The reply arrives under the matching SET opcode, not a distinct one: the `0x0002`
+     * half of a pair is answered by its `0x0001` half, every time it has been tried on
+     * this watch — the serial number, the alarms, both reminders, raise-to-wake, the clock
+     * format, the sport list, Do Not Disturb, the goals and the battery.
+     *
+     * Also runs on a *manual* sync, and only a manual one. It is a dozen small frames, too
+     * many to spend every five minutes on a timer — but pressing Sync is how a person
+     * asks "what does the watch actually say", and until this ran there, checking whether
+     * a setting had landed meant reconnecting the Bluetooth link by hand.
+     */
     private suspend fun readBackSettings() {
         // First, and it stays first: this is what tied `ffff/a055` to it. That frame had
         // been arriving unattributed for months, and it kept arriving right behind this
