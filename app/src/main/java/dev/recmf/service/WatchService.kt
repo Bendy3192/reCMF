@@ -1346,8 +1346,17 @@ class WatchService : LifecycleService() {
                 ingest.storeActivity(samples)
             }
 
-            CmfCommand.HEART_RATE_MANUAL_AUTO, CmfCommand.HEART_RATE_WORKOUT ->
+            CmfCommand.HEART_RATE_MANUAL_AUTO ->
                 ingest.storeHeartRate(CmfParsers.parseHeartRate(message.payload))
+
+            // Kept apart from the reading above, which is the whole point: the watch will
+            // not hand over a workout summary, so a run of pulse sent under this command
+            // is the only evidence that a workout happened at all.
+            CmfCommand.HEART_RATE_WORKOUT ->
+                ingest.storeHeartRate(
+                    CmfParsers.parseHeartRate(message.payload),
+                    duringWorkout = true,
+                )
 
             CmfCommand.HEART_RATE_RESTING ->
                 ingest.storeRestingHeartRate(CmfParsers.parseRestingHeartRate(message.payload))

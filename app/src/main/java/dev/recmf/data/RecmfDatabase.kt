@@ -19,7 +19,7 @@ import androidx.sqlite.execSQL
         RestingHeartRateSampleEntity::class,
         StressSampleEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class RecmfDatabase : RoomDatabase() {
@@ -83,12 +83,33 @@ abstract class RecmfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Marks which heart-rate samples came from a workout.
+         *
+         * The watch sends workout pulse under its own command and this app stored it
+         * exactly like the ordinary reading, which threw the distinction away. It is the
+         * only evidence of a workout the watch offers — it keeps a session's pulse and no
+         * summary of it — so without this there is nothing to build a session from.
+         *
+         * The rows already here cannot be back-filled: the command they arrived under was
+         * not written down, and guessing from how closely they are spaced would invent
+         * workouts. They default to false, which is the honest reading of "not known".
+         */
+        private val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "ALTER TABLE `heart_rate_samples` " +
+                        "ADD COLUMN `duringWorkout` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
         fun get(context: Context): RecmfDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 RecmfDatabase::class.java,
                 "recmf.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
         }
     }
 }

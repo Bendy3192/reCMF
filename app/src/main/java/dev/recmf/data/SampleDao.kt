@@ -33,6 +33,19 @@ interface SampleDao {
     @Query("SELECT * FROM heart_rate_samples WHERE syncedAt IS NULL ORDER BY timestamp LIMIT :limit")
     suspend fun pendingHeartRate(limit: Int): List<HeartRateSampleEntity>
 
+    /**
+     * Workout pulse, for working out where the sessions were.
+     *
+     * Not filtered by [HeartRateSampleEntity.syncedAt]: a session is built from every
+     * sample around it, including the ones already written, or a workout that spans two
+     * syncs would come out as two sessions with a seam down the middle.
+     */
+    @Query(
+        "SELECT * FROM heart_rate_samples WHERE duringWorkout = 1 AND timestamp >= :since " +
+            "ORDER BY timestamp",
+    )
+    suspend fun workoutHeartRateSince(since: Long): List<HeartRateSampleEntity>
+
     @Query("SELECT * FROM spo2_samples WHERE syncedAt IS NULL ORDER BY timestamp LIMIT :limit")
     suspend fun pendingSpo2(limit: Int): List<Spo2SampleEntity>
 

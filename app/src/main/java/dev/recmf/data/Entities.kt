@@ -32,6 +32,21 @@ data class HeartRateSampleEntity(
     @PrimaryKey val timestamp: Long,
     val bpm: Int,
     val syncedAt: Long? = null,
+
+    /**
+     * Whether the watch sent this as workout pulse rather than as its ordinary reading.
+     *
+     * The two arrive under different commands and used to be stored identically, which
+     * threw away the only evidence this watch gives that a workout happened at all — it
+     * keeps the pulse of a session and no summary of it. A run of these, close together,
+     * *is* the workout.
+     *
+     * A timestamp that arrives both ways keeps whichever came last, since the row is
+     * replaced wholesale. Workout pulse comes seconds apart and the ordinary reading
+     * minutes apart, so a collision is rare, and losing the flag on one sample of a run
+     * does not lose the run.
+     */
+    val duringWorkout: Boolean = false,
 )
 
 /**

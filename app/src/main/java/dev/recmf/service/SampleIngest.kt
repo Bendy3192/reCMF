@@ -16,6 +16,7 @@ import dev.recmf.data.SettingsStore
 import dev.recmf.health.CumulativeReading
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.stepDeltas
+import dev.recmf.health.workoutSessions
 import dev.recmf.protocol.ActivitySample
 import dev.recmf.protocol.HeartRateSample
 import dev.recmf.protocol.CmfParsers
@@ -108,13 +109,27 @@ class SampleIngest(
         storeSleep(session)
     }
 
-    suspend fun storeHeartRate(samples: List<HeartRateSample>) {
+    /**
+     * @param duringWorkout whether the watch sent these as workout pulse. It is the only
+     *   evidence this watch gives that a workout happened — it keeps a session's pulse and
+     *   answers a request for the summary with nothing — so it has to survive the trip
+     *   into the table.
+     */
+    suspend fun storeHeartRate(samples: List<HeartRateSample>, duringWorkout: Boolean = false) {
         // A zero here means the watch could not read a pulse that minute. Storing it
         // would drag every average down, so drop it at the door.
         val usable = samples.filter { it.isValid }
         if (usable.isEmpty()) return
 
-        dao.insertHeartRate(usable.map { HeartRateSampleEntity(timestamp = it.timestamp, bpm = it.bpm) })
+        dao.insertHeartRate(
+            usable.map {
+                HeartRateSampleEntity(
+                    timestamp = it.timestamp,
+                    bpm = it.bpm,
+                    duringWorkout = duringWorkout,
+                )
+            },
+        )
     }
 
     suspend fun storeSpo2(samples: List<Spo2Sample>) {
@@ -234,6 +249,8 @@ class SampleIngest(
 
             uploaded += deltas.size + result.heartRateTimestamps.size +
                 result.spo2Timestamps.size + result.restingHeartRateTimestamps.size
+
+            writeWorkoutSessions(heartRate)
         }
 
         if (uploaded > 0) {
@@ -241,6 +258,35 @@ class SampleIngest(
             settings.setLastSync(now)
             WatchStatus.lastSyncEpochSeconds.value = now
             Log.i(TAG, "Wrote $uploaded samples to Health Connect")
+        }
+    }
+
+    /**
+     * Turns the workout pulse in this batch into exercise sessions.
+     *
+     * Only sessions this batch touched are written. Rebuilding every session on every sync
+     * would rewrite months of them for no reason; keying off what just arrived means a
+     * workout is written when it happens and extended while it goes on, and nothing else
+     * is disturbed.
+     *
+     * The samples around them are read back from the table rather than taken from the
+     * batch, because a workout that spans two syncs would otherwise come out as two
+     * sessions with a seam where the batch ended.
+     */
+    private suspend fun writeWorkoutSessions(batch: List<HeartRateSampleEntity>) {
+        val arrived = batch.filter { it.duringWorkout }.map { it.timestamp }
+        val earliest = arrived.minOrNull() ?: return
+
+        val around = dao.workoutHeartRateSince(earliest - SESSION_CONTEXT_SECONDS)
+        val sessions = workoutSessions(around.map { it.timestamp })
+            .filter { session -> arrived.any { it in session } }
+        if (sessions.isEmpty()) return
+
+        if (healthConnect.writeWorkouts(sessions)) {
+            ProtocolLog.note(
+                "Health Connect: wrote ${sessions.size} workout(s), " +
+                    sessions.joinToString(", ") { "${clock(it.first)}–${clock(it.last)}" },
+            )
         }
     }
 
@@ -272,5 +318,14 @@ class SampleIngest(
 
         /** A week of history stays queryable in-app after it has been handed off. */
         const val RETENTION_SECONDS = 7L * 24 * 60 * 60
+
+        /**
+         * How far back to look for the rest of a session the newest samples belong to.
+         *
+         * Longer than any workout anybody does in one go, so a session is never cut short
+         * by the window it was read through; short enough that this is not a query over
+         * the whole table on every sync.
+         */
+        const val SESSION_CONTEXT_SECONDS = 12L * 60 * 60
     }
 }

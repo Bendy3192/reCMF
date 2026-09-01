@@ -9,6 +9,7 @@ import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
@@ -31,6 +32,7 @@ import dev.recmf.protocol.CmfSleepStage
 import dev.recmf.protocol.SleepSession
 import java.time.Instant
 import java.time.ZoneId
+import kotlin.reflect.KClass
 
 /** Whether Health Connect can be used on this device at all. */
 enum class HealthConnectAvailability {
@@ -89,6 +91,10 @@ class HealthConnectSync(private val context: Context) {
 
     private suspend fun grantedPermissions(): Set<String> =
         client?.permissionController?.getGrantedPermissions() ?: emptySet()
+
+    /** Whether this granted set allows writing one particular kind of record. */
+    private fun Set<String>.mayWrite(type: KClass<out Record>): Boolean =
+        contains(HealthPermission.getWritePermission(type))
 
     /** So the note about them is made once a run rather than once a sync. */
     private var extrasNoted = false
@@ -194,15 +200,24 @@ class HealthConnectSync(private val context: Context) {
         // top of the steps — every other app on the phone reads distance from Health
         // Connect, and without these it reads zero however far the wearer walked — and
         // losing the steps because a distance record was rejected would be a poor trade.
-        if (granted.containsAll(EXTRA_PERMISSIONS)) {
+        //
+        // Checked one permission at a time rather than all of them together. Grouping them
+        // means the day a new optional measurement is added, every phone that granted the
+        // old group stops recording the old measurements too — which is the trap this set
+        // exists to avoid in the first place.
+        if (granted.mayWrite(DistanceRecord::class)) {
             insert(client, steps.filter { it.distanceMeters > 0 }.map(::toDistanceRecord))
+        }
+        if (granted.mayWrite(ActiveCaloriesBurnedRecord::class)) {
             insert(client, steps.filter { it.activeCalories > 0 }.map(::toActiveCaloriesRecord))
-        } else if (steps.isNotEmpty() && !extrasNoted) {
+        }
+
+        if (!granted.containsAll(EXTRA_PERMISSIONS) && steps.isNotEmpty() && !extrasNoted) {
             // Said out loud once, because the alternative is a wearer wondering why every
             // other app shows zero kilometres while reCMF's own screen shows the walk.
             extrasNoted = true
             ProtocolLog.note(
-                "Health Connect: distance and calories are not permitted — " +
+                "Health Connect: distance, calories or workouts are not permitted — " +
                     "turn Health Connect off and on again to be asked",
             )
         }
@@ -312,6 +327,49 @@ class HealthConnectSync(private val context: Context) {
             metadata = Metadata.autoRecorded(
                 device = device,
                 clientRecordId = "recmf-steps-${delta.endSeconds}",
+            ),
+        )
+    }
+
+    /**
+     * Writes the sessions worked out from the watch's workout pulse.
+     *
+     * Kept apart from [write] because these are not staged samples: they are derived from
+     * samples, they change as a session goes on, and the same session is written again
+     * with a later end rather than added to. The record is keyed on where the session
+     * started, so a second write replaces the first.
+     *
+     * The type is "other workout" and not a guess. The watch knows perfectly well whether
+     * this was a run or a rowing machine and does not say — it answers a request for
+     * workout summaries with nothing at all — and filing a walk as a run because most
+     * workouts are runs would put a wrong fact in a health record to avoid an honest gap.
+     *
+     * @return true when Health Connect took them, or when there was nothing to write.
+     */
+    suspend fun writeWorkouts(sessions: List<LongRange>): Boolean {
+        if (sessions.isEmpty()) return true
+
+        val client = this.client ?: return false
+        if (!grantedPermissions().mayWrite(ExerciseSessionRecord::class)) return false
+
+        return insert(client, sessions.map(::toExerciseRecord))
+    }
+
+    private fun toExerciseRecord(session: LongRange): ExerciseSessionRecord {
+        val start = Instant.ofEpochSecond(session.first)
+        val end = Instant.ofEpochSecond(session.last)
+
+        return ExerciseSessionRecord(
+            startTime = start,
+            startZoneOffset = zoneOffsetAt(start),
+            endTime = end,
+            endZoneOffset = zoneOffsetAt(end),
+            exerciseType = ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT,
+            metadata = Metadata.autoRecorded(
+                device = device,
+                // Keyed on the start, so a session written again as it goes on replaces
+                // itself instead of stacking up as overlapping exercise.
+                clientRecordId = "recmf-workout-${session.first}",
             ),
         )
     }
@@ -492,6 +550,8 @@ class HealthConnectSync(private val context: Context) {
             HealthPermission.getReadPermission(DistanceRecord::class),
             HealthPermission.getWritePermission(ActiveCaloriesBurnedRecord::class),
             HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+            HealthPermission.getWritePermission(ExerciseSessionRecord::class),
+            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         )
 
         /** Everything worth asking for at once, which is what the dialog offers. */
