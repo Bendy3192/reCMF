@@ -211,11 +211,10 @@ eight and a morning can hold more: one that has already gone off is now tomorrow
 yields its slot to what is still to come. The records themselves go out in time order,
 which is what the watch stores.
 
-Still open: the watch acknowledges `ALARMS_SET` and stores nothing. The bytes now match the
-list the official app left on it, field for field, and a read taken immediately after the
-write still shows the blank alarm that was there before. What differs from that known-good
-list is the number of records — it had four, ours has had four to seven — and nothing else
-that can be seen.
+Confirmed end to end on the watch: `→ 0000c738` out and `← 38c70000` back, the same 51000
+seconds mirrored, read out as 14:10 on the watch's own screen. Every write is now followed
+by an `ALARMS_GET`, so the log line describes what the watch stored rather than what it was
+holding beforehand — an acknowledgement alone says only that the frame arrived.
 
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather
