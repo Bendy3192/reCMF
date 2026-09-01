@@ -161,6 +161,17 @@ class WatchService : LifecycleService() {
      */
     private var sendingAgps: ByteArray? = null
 
+    /**
+     * How far along the last note said the almanac was.
+     *
+     * The chunks go out on the data channel, which does not write to the protocol log at
+     * all — so an upload showed only the watch's half of it, thirty-odd asks with nothing
+     * answering them, which reads like a stall rather than like progress. Logging every
+     * chunk would be thirty lines and ninety kilobytes of hex; logging the quarters says
+     * the same thing in four.
+     */
+    private var agpsProgressNoted = 0
+
     /** What the file calls itself, and what it displaces. Meaningful only mid-transfer. */
     private var watchfaceName: String = ""
     private var watchfaceReplaces: Int = 0
@@ -902,6 +913,7 @@ class WatchService : LifecycleService() {
 
         val checksum = CmfAgps.checksum(file)
         sendingAgps = file
+        agpsProgressNoted = 0
 
         ProtocolLog.note("GPS data: sending ${file.size} bytes, checksum ${checksum.toString(16)}")
 
@@ -932,6 +944,12 @@ class WatchService : LifecycleService() {
             CmfCommand.DATA_CHUNK_WRITE_AGPS,
             file.copyOfRange(request.offset, end),
         )
+
+        val quarter = request.percent / 25
+        if (quarter > agpsProgressNoted) {
+            agpsProgressNoted = quarter
+            ProtocolLog.note("GPS data: ${quarter * 25}% sent")
+        }
     }
 
     private fun failWatchfaceInstall(reason: String) {
