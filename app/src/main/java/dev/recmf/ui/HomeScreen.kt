@@ -1943,9 +1943,13 @@ private fun AlarmsCard(
                     )
                     if (alarm.days.isNotEmpty()) {
                         Text(
+                            // Resolved through map rather than inside joinToString: that
+                            // one is not inline, and a composable cannot be called from a
+                            // lambda the compiler cannot see into.
                             CmfWeekday.entries
                                 .filter { it in alarm.days }
-                                .joinToString(" ") { stringResource(it.labelRes()) },
+                                .map { stringResource(it.labelRes()) }
+                                .joinToString(" "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
