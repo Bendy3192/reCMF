@@ -51,6 +51,8 @@ import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.protocol.CmfWatchfaceFile
 import dev.recmf.protocol.CmfWeather
+import dev.recmf.protocol.CmfWorkouts
+import dev.recmf.protocol.CmfWorkouts.looksLikeAPlace
 import dev.recmf.protocol.toHex
 import dev.recmf.protocol.MonitoringChannel
 import dev.recmf.protocol.ActivityFetchState
@@ -1106,6 +1108,53 @@ class WatchService : LifecycleService() {
 
             CmfCommand.HEART_RATE_RESTING ->
                 ingest.storeRestingHeartRate(CmfParsers.parseRestingHeartRate(message.payload))
+
+            // Pushed rather than asked for: the watch volunteers these during a fetch,
+            // alongside the steps and the heart rate, so a sync taken after a workout
+            // carries it without anything having to request one.
+            CmfCommand.WORKOUT_SUMMARY -> {
+                val workouts = CmfWorkouts.parseWorkoutSummaries(message.payload)
+                if (workouts.isEmpty()) {
+                    ProtocolLog.note(
+                        "Workouts: ${message.payload.size} bytes that are neither " +
+                            "${CmfWorkouts.SUMMARY_SHORT}- nor ${CmfWorkouts.SUMMARY_LONG}-byte records",
+                    )
+                } else {
+                    // Every field, because this reading came from another project's source
+                    // rather than from this watch, and the log is what will confirm or
+                    // refute it. A duration that disagrees with end-minus-start, or a sport
+                    // that is not the one that was done, says so at a glance.
+                    workouts.forEach { workout ->
+                        ProtocolLog.note(
+                            "Workout: ${workout.type?.name ?: "type ${workout.typeCode}"}, " +
+                                "${clock(workout.startTimestamp)}–${clock(workout.endTimestamp)}, " +
+                                "${workout.durationSeconds}s" +
+                                (if (workout.hasGpsTrack) ", with a track" else ", no track"),
+                        )
+                    }
+                }
+            }
+
+            // The track for one of the above. Nothing asks for it yet — how a track is
+            // requested is not known — but the watch has an opcode for it and it may well
+            // arrive unasked like the summaries do, in which case this says so.
+            CmfCommand.WORKOUT_GPS -> {
+                val points = CmfWorkouts.parseWorkoutGps(message.payload)
+                val first = points.firstOrNull()
+                ProtocolLog.note(
+                    if (first == null) {
+                        "Workout track: ${message.payload.size} bytes that are not " +
+                            "${CmfWorkouts.GPS_POINT_SIZE}-byte points"
+                    } else {
+                        // The first point in full: the field order here is longitude
+                        // before latitude, which is unusual enough that one real
+                        // coordinate settles whether it is right.
+                        "Workout track: ${points.size} points, first at " +
+                            "${first.latitude}, ${first.longitude}" +
+                            (if (first.looksLikeAPlace()) "" else " — which is not a place on Earth")
+                    },
+                )
+            }
 
             // Informational: the timestamp the watch is sending activity from, plus four
             // bytes nobody has identified. Gadgetbridge logs it and does nothing with it.
