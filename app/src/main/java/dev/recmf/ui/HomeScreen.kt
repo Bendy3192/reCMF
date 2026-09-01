@@ -1927,11 +1927,7 @@ private fun AlarmsCard(
                     HorizontalDivider()
                     Text(
                         buildString {
-                            append(
-                                String.format(
-                                    Locale.getDefault(), "%02d:%02d", alarm.hour, alarm.minute,
-                                ),
-                            )
+                            append("%02d:%02d".format(alarm.hour, alarm.minute))
                             if (!alarm.enabled) append("  ·  ")
                         },
                         style = MaterialTheme.typography.titleMedium,

@@ -4,7 +4,7 @@
 package dev.recmf.alarms
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.net.toUri
 import android.util.Log
 import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfAlarms
@@ -28,7 +28,7 @@ object PhoneAlarms {
     /**
      * AOSP's clock, and the one CrDroid ships. Other clocks keep their alarms elsewhere.
      *
-     * Held as text and turned into a [Uri] where it is used, not here: the parsing below is
+     * Held as text and turned into a `Uri` where it is used, not here: the parsing below is
      * ordinary Kotlin and is tested as such, and a `Uri.parse` in this object's setup would
      * drag Android into a test that has no business needing it.
      */
@@ -49,7 +49,7 @@ object PhoneAlarms {
      * that ships a friendlier one, should not need reCMF to be rooted for this.
      */
     private fun throughResolver(context: Context): List<Row>? = try {
-        context.contentResolver.query(Uri.parse(PROVIDER), null, null, null, null)?.use { cursor ->
+        context.contentResolver.query(PROVIDER.toUri(), null, null, null, null)?.use { cursor ->
             val hour = cursor.getColumnIndex("hour")
             val minute = cursor.getColumnIndex("minutes")
             val days = cursor.getColumnIndex("daysofweek")
