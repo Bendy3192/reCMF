@@ -145,10 +145,11 @@ object CmfWorkouts {
     /**
      * Whether a point could be a place on Earth.
      *
-     * Not validation for its own sake: the field order here is taken from another
-     * project's reading rather than from a capture of this watch, and longitude before
-     * latitude is unusual enough to be worth catching if it turns out to be the other way
-     * round. A latitude beyond the poles is the symptom that would say so.
+     * Kept although the order is now corroborated: `GPS_COORDS`, decrypted out of a
+     * capture of the official app, puts longitude first as well, so the watch uses one
+     * convention in both directions. A latitude beyond the poles would still be the
+     * symptom of having it backwards, and this reading has never been checked against a
+     * track the watch actually recorded.
      */
     fun WorkoutGpsPoint.looksLikeAPlace(): Boolean =
         latitude in -90.0..90.0 && longitude in -180.0..180.0 && (latitude != 0.0 || longitude != 0.0)

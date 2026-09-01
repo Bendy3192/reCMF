@@ -237,12 +237,34 @@ the loop for recording a track. What the receiver lacks on a cold start is any i
 satellites are overhead, and unaided it reads their orbits off the satellites at fifty bits
 a second — minutes under open sky, effectively never between buildings.
 
-Two things help, and only one of them is known. `GPS_COORDS` (`0xffff/0x906a`) tells the
-watch roughly where it is: twelve **big-endian** bytes, epoch seconds then latitude then
-longitude, degrees times ten million. It is sent right after the handshake, from the city
-already chosen for the weather rather than from the phone's own position — a hundred
-kilometres is accurate enough for choosing satellites, and it keeps reCMF off the
-location-permission path the manifest deliberately avoids.
+Two things help. `GPS_COORDS` (`0xffff/0x906a`) tells the watch roughly where it is:
+sixteen **big-endian** bytes.
+
+```
+0   u32  epoch seconds, UTC
+4   i32  longitude, degrees x 1e7
+8   i32  latitude,  degrees x 1e7
+12  u32  0x6f8531fd, always
+```
+
+It is sent right after the handshake, from the city already chosen for the weather rather
+than from the phone's own position — a hundred kilometres is accurate enough for choosing
+satellites, and it keeps reCMF off the location-permission path the manifest deliberately
+avoids.
+
+**Longitude comes before latitude, and getting that wrong cost months.** reCMF sent twelve
+bytes with latitude first, guessed rather than read, and the watch never fixed. Two
+captures of the official app a day apart settle it: the second field was the writer's
+longitude, the third their latitude, and the time field matched the capture's own clock to
+the second. The wrong way round turns a position in Moscow into one in Uzbekistan, which
+is worse than sending nothing — the receiver then hunts for satellites two thousand
+kilometres from the ones overhead. It is the same order the watch uses for the points of a
+recorded track, which is the corroboration: one convention in both directions.
+
+The last four bytes were identical in both captures, taken on different days from slightly
+different places, so they are not a checksum of what precedes them nor anything derived
+from it. Read as a coordinate they are 187.1 metres, about the elevation of the city in
+question, which would make them an altitude the app never updates. Sent as observed.
 
 **And the almanac is solved.** This is the transfer that makes the official app's first fix
 near-instant, and nobody had it: Gadgetbridge names all six opcodes, answers the watch's

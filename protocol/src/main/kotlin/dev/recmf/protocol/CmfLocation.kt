@@ -1,7 +1,5 @@
 /*
  * reCMF — Copyright (C) 2026 reCMF contributors. AGPL-3.0-or-later.
- *
- * Layout ported from Gadgetbridge (AGPL-3.0-or-later); see NOTICE.
  */
 package dev.recmf.protocol
 
@@ -16,13 +14,33 @@ object CmfLocation {
      * somewhere to start looking.
      *
      * ```
-     * 0  u32 BE  time, epoch seconds
-     * 4  i32 BE  latitude,  degrees times ten million
-     * 8  i32 BE  longitude, degrees times ten million
+     * 0   u32 BE  time, epoch seconds, UTC
+     * 4   i32 BE  longitude, degrees times ten million
+     * 8   i32 BE  latitude,  degrees times ten million
+     * 12  u32 BE  0x6f8531fd, always
      * ```
      *
      * Big-endian, unlike most payload bodies here — the protocol is mixed and this is one
      * of the ones that is not little-endian.
+     *
+     * **Longitude comes first, and this was got wrong for a long time.** The first version
+     * of this file wrote latitude first, over sixteen bytes' worth of guess in twelve, and
+     * the watch never fixed. Two captures of the official app settle it: the second field
+     * held the writer's longitude and the third their latitude, a day apart and from
+     * slightly different places, and the time field matched the capture's own clock to the
+     * second. Written the other way round, a position in Moscow is sent as one in
+     * Uzbekistan — two thousand kilometres out, which is worse for a receiver than being
+     * told nothing, since it then searches for satellites that are not overhead.
+     *
+     * It is the same order the watch uses for the points of a recorded track, which is the
+     * corroboration: one convention in both directions, unusual as it looks written down.
+     *
+     * The last four bytes are sent as observed. They were identical in both captures —
+     * different days, different positions — so they are neither a checksum of what
+     * precedes them nor anything derived from it. Read as a coordinate they would be
+     * 187.1 metres, which is about the elevation of the city in question and would make
+     * them an altitude the app never updates; read as anything else they are unexplained.
+     * Either way the watch was sent exactly these bytes and did what was wanted.
      *
      * This is a seed, not a track. The watch has its own GNSS receiver and does not need
      * the phone to record a route; what it needs is a hint. A receiver starting from
@@ -33,9 +51,7 @@ object CmfLocation {
      * rather than all of them.
      *
      * It is not the whole answer. The official app also uploads an almanac file, which is
-     * what makes its fixes near-instant; that transfer's opening command is not known to
-     * this project or to Gadgetbridge, whose own AGPS support answers the watch's requests
-     * for file chunks but never sends the request that would start one.
+     * what makes its fixes near-instant; see `CmfAgps`, which sends one.
      *
      * @param latitude degrees north, negative for south
      * @param longitude degrees east, negative for west
@@ -43,8 +59,9 @@ object CmfLocation {
     fun gpsCoords(latitude: Double, longitude: Double, epochSeconds: Long): ByteArray =
         ByteBuffer.allocate(PAYLOAD_SIZE).order(ByteOrder.BIG_ENDIAN)
             .putInt(epochSeconds.toInt())
-            .putInt(scaled(latitude))
             .putInt(scaled(longitude))
+            .putInt(scaled(latitude))
+            .putInt(TRAILER)
             .array()
 
     /**
@@ -60,7 +77,10 @@ object CmfLocation {
             longitude in -180.0..180.0 &&
             !(latitude == 0.0 && longitude == 0.0)
 
-    const val PAYLOAD_SIZE: Int = 12
+    const val PAYLOAD_SIZE: Int = 16
+
+    /** The fourth field, whose meaning is not known. See [gpsCoords]. */
+    private const val TRAILER: Int = 0x6f8531fd
 
     /** Degrees as whole numbers, scaled by ten million. */
     private const val DEGREE_SCALE = 10_000_000.0
