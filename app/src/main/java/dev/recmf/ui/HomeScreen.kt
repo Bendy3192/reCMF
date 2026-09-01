@@ -1371,7 +1371,7 @@ private fun SportTypesSection(selected: List<CmfActivityType>, onChange: (List<C
                 onClick = {
                     onChange(if (isSelected) selected - type else selected + type)
                 },
-                label = { Text(type.readableName()) },
+                label = { Text(stringResource(type.labelRes())) },
                 leadingIcon = {
                     Icon(
                         painter = painterResource(type.iconRes()),
@@ -1383,9 +1383,6 @@ private fun SportTypesSection(selected: List<CmfActivityType>, onChange: (List<C
         }
     }
 }
-
-private fun CmfActivityType.readableName(): String =
-    name.split("_").joinToString(" ") { word -> word.lowercase().replaceFirstChar { it.uppercase() } }
 
 /**
  * A card's title with its own picture.
