@@ -28,6 +28,11 @@ import dev.recmf.ble.ConnectionState
 import dev.recmf.ble.ProtocolLog
 import dev.recmf.ble.ReconnectBackoff
 import dev.recmf.data.RecmfDatabase
+import android.app.AlarmManager
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
+import dev.recmf.alarms.PhoneAlarms
 import dev.recmf.data.SettingsStore
 import dev.recmf.data.SleepSummary
 import dev.recmf.data.WatchPreferences
@@ -59,9 +64,11 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.IOException
@@ -163,6 +170,18 @@ class WatchService : LifecycleService() {
     /** Mirrors into [WatchStatus] so the UI can observe without binding to the service. */
     private val _status = WatchStatus.state
 
+    /**
+     * Fires when the phone's next alarm changes, which is the system's way of saying
+     * somebody edited the clock. Public, needs no permission, and beats polling: an alarm
+     * set at bedtime should reach the watch before bedtime, not at the next five-minute
+     * sync.
+     */
+    private val alarmsChanged = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            lifecycleScope.launch { refreshPhoneAlarms() }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
 
@@ -185,6 +204,13 @@ class WatchService : LifecycleService() {
 
         createNotificationChannel()
         observeConnection()
+
+        ContextCompat.registerReceiver(
+            this,
+            alarmsChanged,
+            IntentFilter(AlarmManager.ACTION_NEXT_ALARM_CLOCK_CHANGED),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
 
         // Pushed on the change rather than polled: a track lasts minutes and the refresh
         // timer is five, so a polled watch would spend half its time showing the song
@@ -256,6 +282,7 @@ class WatchService : LifecycleService() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(alarmsChanged)
         media.stop()
         ringer.stop()
         autoSyncJob?.cancel()
@@ -665,6 +692,11 @@ class WatchService : LifecycleService() {
 
         readBackSettings()
 
+        // Before the settings go out rather than after, so a connection that finds the
+        // phone's alarms changed sends them once instead of sending the old list and then
+        // correcting it.
+        refreshPhoneAlarms()
+
         // No previous on a fresh connection: the watch may have been reset, used with
         // another app, or simply be a different watch, so everything configured goes out.
         val preferences = settings.watchPreferences.first()
@@ -893,6 +925,34 @@ class WatchService : LifecycleService() {
      *   go out: editing an alarm used to re-send the monitoring switches, the goals, the
      *   reminders and the sport list along with it, every time.
      */
+    /**
+     * Copies the phone's alarms into the watch's, when the wearer has asked for that.
+     *
+     * Nothing is sent from here. The list is written into the preferences and the ordinary
+     * machinery notices the change and pushes it, which keeps one path to the watch instead
+     * of two that can disagree.
+     *
+     * A phone that cannot be read at all is left alone rather than treated as a phone with
+     * no alarms: clearing the watch because `su` was denied would be the worst possible
+     * reading of that. An empty list *is* honoured — a phone with no alarms means a watch
+     * with no alarms.
+     */
+    private suspend fun refreshPhoneAlarms() {
+        if (!settings.current().phoneAlarmsEnabled) return
+
+        val fromPhone = withContext(Dispatchers.IO) {
+            PhoneAlarms.read(applicationContext)
+        } ?: run {
+            ProtocolLog.note("Alarms: the phone's clock could not be read")
+            return
+        }
+
+        if (settings.watchPreferences.first().alarms == fromPhone) return
+
+        ProtocolLog.note("Alarms: taking ${fromPhone.size} from the phone")
+        settings.updateWatchPreferences(WatchSetting.ALARMS) { it.copy(alarms = fromPhone) }
+    }
+
     private suspend fun applyWatchPreferences(
         preferences: WatchPreferences,
         previous: WatchPreferences? = null,

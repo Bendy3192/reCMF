@@ -183,6 +183,7 @@ class MainActivity : ComponentActivity() {
                         model.setHealthConnectEnabled(enabled)
                         if (enabled) requestHealthConnect.launch(HealthConnectSync.REQUIRED_PERMISSIONS)
                     },
+                    onPhoneAlarmsEnabled = model::setPhoneAlarmsEnabled,
                 )
             }
         }

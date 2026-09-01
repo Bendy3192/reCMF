@@ -593,6 +593,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setPhoneAlarmsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setPhoneAlarmsEnabled(enabled) }
+    }
+
     fun setHealthConnectEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setHealthConnectEnabled(enabled) }
     }

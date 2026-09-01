@@ -203,4 +203,6 @@
     <string name="metric_stat_min">Минимум</string>
     <string name="tab_faces">Циферблаты</string>
     <string name="watchfaces_waiting">Подключите часы, чтобы увидеть их циферблаты и переключаться между ними.</string>
+    <string name="alarms_mirror_phone">Повторять будильники телефона</string>
+    <string name="alarms_mirror_explainer">Часы будут держать то же, что и часы телефона, а будильники, заведённые на самих часах, заменятся. Для чтения будильников телефона нужен root; без него переключатель ничего не даст.</string>
 </resources>

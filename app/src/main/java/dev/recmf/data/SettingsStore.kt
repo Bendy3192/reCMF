@@ -46,6 +46,14 @@ data class WatchSettings(
     /** Seconds between automatic syncs while connected; zero means only on request. */
     val autoSyncSeconds: Int = 300,
 
+    /**
+     * Whether the watch's alarms mirror the phone's clock.
+     *
+     * Off by default and deliberately so: the watch keeps exactly the list it is sent, so
+     * turning this on replaces whatever alarms were set on the watch itself.
+     */
+    val phoneAlarmsEnabled: Boolean = false,
+
     val weatherEnabled: Boolean = false,
     /** The place the user typed, as the provider resolved it. */
     val weatherCity: String? = null,
@@ -134,6 +142,7 @@ class SettingsStore(private val context: Context) {
             healthConnectEnabled = prefs[KEY_HEALTH_CONNECT] ?: false,
             notificationsEnabled = prefs[KEY_NOTIFICATIONS] ?: false,
             notifyOnlyWhenScreenOff = prefs[KEY_SCREEN_OFF_ONLY] ?: true,
+            phoneAlarmsEnabled = prefs[KEY_PHONE_ALARMS] ?: false,
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
             weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
             weatherCity = prefs[KEY_WEATHER_CITY],
@@ -355,6 +364,10 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_AUTO_SYNC] = seconds }
     }
 
+    suspend fun setPhoneAlarmsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_PHONE_ALARMS] = enabled }
+    }
+
     suspend fun setWeatherEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_WEATHER_ENABLED] = enabled }
     }
@@ -473,6 +486,7 @@ class SettingsStore(private val context: Context) {
         val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
+        val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
         val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
         val KEY_WEATHER_CITY = stringPreferencesKey("weather_city")
         val KEY_WEATHER_LAT = doublePreferencesKey("weather_latitude")

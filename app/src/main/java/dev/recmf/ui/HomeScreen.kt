@@ -162,6 +162,7 @@ fun HomeScreen(
     onInstallUpdate: (AvailableUpdate) -> Unit,
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
+    onPhoneAlarmsEnabled: (Boolean) -> Unit,
 ) {
     val pager = rememberPagerState { HomeTab.entries.size }
     val scope = rememberCoroutineScope()
@@ -211,6 +212,7 @@ fun HomeScreen(
                         onInstallUpdate = onInstallUpdate,
                         onAutoSyncSeconds = onAutoSyncSeconds,
                         onHealthConnectEnabled = onHealthConnectEnabled,
+                        onPhoneAlarmsEnabled = onPhoneAlarmsEnabled,
                     )
                 }
 
@@ -264,6 +266,7 @@ private fun TabContent(
     onInstallUpdate: (AvailableUpdate) -> Unit,
     onAutoSyncSeconds: (Int) -> Unit,
     onHealthConnectEnabled: (Boolean) -> Unit,
+    onPhoneAlarmsEnabled: (Boolean) -> Unit,
 ) {
     // Which measurement is open, if any. Held here rather than in the tile so that the
     // sheet outlives the row scrolling off the screen.
@@ -335,7 +338,14 @@ private fun TabContent(
                         onGrantAccess = onGrantNotificationAccess,
                     )
                 }
-                item { AlarmsCard(watchPreferences.alarms, onWatchPreferences) }
+                item {
+                    AlarmsCard(
+                        alarms = watchPreferences.alarms,
+                        mirroring = state.settings.phoneAlarmsEnabled,
+                        onMirroring = onPhoneAlarmsEnabled,
+                        onChange = onWatchPreferences,
+                    )
+                }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
@@ -1871,6 +1881,8 @@ private fun ProtocolLogCard() {
 @Composable
 private fun AlarmsCard(
     alarms: List<CmfAlarm>,
+    mirroring: Boolean,
+    onMirroring: (Boolean) -> Unit,
     onChange: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
 ) {
     var editing by remember { mutableStateOf<Int?>(null) }
@@ -1887,12 +1899,59 @@ private fun AlarmsCard(
                 style = MaterialTheme.typography.bodyMedium,
             )
 
+            HorizontalDivider()
+
+            SettingSwitch(
+                label = stringResource(R.string.alarms_mirror_phone),
+                checked = mirroring,
+                onCheckedChange = onMirroring,
+            )
+            Text(
+                stringResource(R.string.alarms_mirror_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
             if (alarms.isEmpty()) {
                 Text(
                     stringResource(R.string.alarms_none),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            // While the watch mirrors the phone, the list is shown and not offered for
+            // editing: controls that quietly lose what they are given are worse than none.
+            if (mirroring) {
+                alarms.forEach { alarm ->
+                    HorizontalDivider()
+                    Text(
+                        buildString {
+                            append(
+                                String.format(
+                                    Locale.getDefault(), "%02d:%02d", alarm.hour, alarm.minute,
+                                ),
+                            )
+                            if (!alarm.enabled) append("  ·  ")
+                        },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = if (alarm.enabled) {
+                            MaterialTheme.colorScheme.onSurface
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                    if (alarm.days.isNotEmpty()) {
+                        Text(
+                            CmfWeekday.entries
+                                .filter { it in alarm.days }
+                                .joinToString(" ") { stringResource(it.labelRes()) },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+                return@Column
             }
 
             alarms.forEachIndexed { index, alarm ->
