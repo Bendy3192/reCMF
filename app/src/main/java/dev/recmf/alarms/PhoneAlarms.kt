@@ -10,6 +10,8 @@ import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfWeekday
 import java.io.BufferedReader
+import java.time.DayOfWeek
+import java.time.LocalDateTime
 import java.util.concurrent.TimeUnit
 
 /**
@@ -39,8 +41,8 @@ object PhoneAlarms {
     /** One row of that provider, before it is anything to do with a watch. */
     data class Row(val hour: Int, val minute: Int, val days: Int, val enabled: Boolean)
 
-    fun read(context: Context): List<CmfAlarm>? =
-        (throughResolver(context) ?: throughRoot())?.let(::toWatchAlarms)
+    fun read(context: Context, now: LocalDateTime = LocalDateTime.now()): List<CmfAlarm>? =
+        (throughResolver(context) ?: throughRoot())?.let { toWatchAlarms(it, now) }
 
     /**
      * The way that needs no root, and works only if the provider will talk to us.
@@ -139,28 +141,66 @@ object PhoneAlarms {
         .toList()
 
     /**
-     * The phone's alarms as the watch's.
+     * The phone's alarms as the watch's, nearest first.
      *
      * The repeat masks need no conversion: the clock numbers Monday as bit 0 and the watch
      * numbers Monday as 1, and so on to Sunday, so the two are the same number. That is
      * worth stating because it looks like an omission — read off a real phone, a weekday
      * alarm is 31 and a weekend one is 96, which is what those bits mean on both sides.
      *
-     * The watch holds [CmfAlarms.MAX_ALARMS] and no more, so a phone with more than that
-     * loses some. Enabled ones go first and the earliest goes first within that, because
-     * an alarm that is switched off is the one nobody misses.
+     * The watch holds [CmfAlarms.MAX_ALARMS] and a morning can easily hold more than that,
+     * so something has to go. Ordering by **when each alarm will next ring** is the ordering
+     * that makes the right thing go: one that has been switched off never rings and falls to
+     * the end, and one that has already gone off this morning is now tomorrow's and yields
+     * its place to the ones still to come. Sorting by time of day, which this used to do,
+     * kept a spent six o'clock ahead of a seven o'clock that had not rung yet.
      */
-    fun toWatchAlarms(rows: List<Row>): List<CmfAlarm> = rows
-        .sortedWith(compareByDescending<Row> { it.enabled }.thenBy { it.hour * 60 + it.minute })
-        .take(CmfAlarms.MAX_ALARMS)
-        .map { row ->
-            CmfAlarm(
-                hour = row.hour,
-                minute = row.minute,
-                enabled = row.enabled,
-                days = CmfWeekday.entries.filter { row.days and it.bit != 0 }.toSet(),
-            )
+    fun toWatchAlarms(rows: List<Row>, now: LocalDateTime = LocalDateTime.now()): List<CmfAlarm> =
+        rows
+            .sortedBy { nextRing(it, now) ?: LocalDateTime.MAX }
+            .take(CmfAlarms.MAX_ALARMS)
+            .map { row ->
+                CmfAlarm(
+                    hour = row.hour,
+                    minute = row.minute,
+                    enabled = row.enabled,
+                    days = weekdays(row.days),
+                )
+            }
+
+    /**
+     * When an alarm will next go off, or null if it never will.
+     *
+     * A one-off is today if it is still to come and tomorrow otherwise. A repeating one is
+     * the first of its days from today onwards, today included when the time has not passed.
+     */
+    fun nextRing(row: Row, now: LocalDateTime): LocalDateTime? {
+        if (!row.enabled) return null
+
+        val today = now.toLocalDate()
+        val days = weekdays(row.days)
+
+        if (days.isEmpty()) {
+            val candidate = today.atTime(row.hour, row.minute)
+            return if (candidate.isAfter(now)) candidate else candidate.plusDays(1)
         }
+
+        // Seven days and not eight: a repeat that includes today but has already rung comes
+        // round again next week, which the eighth step would find a day early.
+        for (ahead in 0..6) {
+            val date = today.plusDays(ahead.toLong())
+            if (weekdayOf(date.dayOfWeek) !in days) continue
+            val candidate = date.atTime(row.hour, row.minute)
+            if (candidate.isAfter(now)) return candidate
+        }
+        return today.plusWeeks(1).atTime(row.hour, row.minute)
+    }
+
+    private fun weekdays(mask: Int): Set<CmfWeekday> =
+        CmfWeekday.entries.filter { mask and it.bit != 0 }.toSet()
+
+    /** Both sides run Monday to Sunday in that order, so this is the same index twice. */
+    private fun weekdayOf(day: DayOfWeek): CmfWeekday = CmfWeekday.entries[day.value - 1]
 
     /** Long enough for the root prompt to be answered, short enough not to hang a sync. */
     private const val ROOT_TIMEOUT_SECONDS = 20L
