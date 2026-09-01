@@ -444,13 +444,17 @@ private fun FloatingTabDock(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(percent = 50),
+        // A rounded rectangle rather than a stadium. A stadium curves inward at its ends,
+        // and the first and last pills — now rectangles themselves, being two lines tall —
+        // pushed their corners out through that curve. Matching shapes nest; a capsule
+        // holding rectangles does not.
+        shape = RoundedCornerShape(28.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHighest,
         shadowElevation = 6.dp,
     ) {
         Row(
-            modifier = Modifier.padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            modifier = Modifier.padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             HomeTab.entries.forEachIndexed { index, entry ->
                 val isSelected = index == selected
@@ -473,10 +477,9 @@ private fun FloatingTabDock(
 
                 Box(
                     modifier = Modifier
-                        // A rounded rectangle rather than the stadium the dock itself is:
-                        // at 50 percent, a box this tall becomes a blob wider than the
-                        // word it holds.
-                        .clip(RoundedCornerShape(18.dp))
+                        // Slightly tighter than the dock's own corners, so the two read
+                        // as one shape inside another rather than as two competing ones.
+                        .clip(RoundedCornerShape(20.dp))
                         .background(background)
                         .clickable { onSelect(index) }
                         // Stacked icon and label, so the pill is only as wide as the word.
