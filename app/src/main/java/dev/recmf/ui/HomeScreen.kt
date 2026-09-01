@@ -1601,7 +1601,8 @@ private fun NotificationsCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = UtilityCardShape,
+        shape = FeatureCardShape,
+        colors = featureCardColors(state.settings.notificationsEnabled && hasAccess),
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(
@@ -2032,7 +2033,7 @@ private fun AlarmsCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = FeatureCardShape,
-        colors = featureCardColors(state.settings.notificationsEnabled && hasAccess),
+        colors = featureCardColors(mirroring),
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CardTitle(R.drawable.ic_ui_alarm, R.string.alarms)
@@ -2330,7 +2331,7 @@ private fun GpsDataCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = FeatureCardShape,
-        colors = featureCardColors(mirroring),
+        colors = featureCardColors(auto),
     ) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             CardTitle(R.drawable.ic_ui_satellite, R.string.gps_data)
@@ -2419,7 +2420,6 @@ private fun WatchfaceCard(
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = FeatureCardShape,
-            colors = featureCardColors(auto),
         ) {
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 CardTitle(R.drawable.ic_ui_faces, R.string.watchfaces)
