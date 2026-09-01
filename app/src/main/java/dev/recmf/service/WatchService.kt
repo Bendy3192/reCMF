@@ -1757,6 +1757,14 @@ class WatchService : LifecycleService() {
         // 0x0001 half was sent as a request for one build to settle which was which; it
         // drew nothing, and is gone.
         connection.send(CmfCommand.BATTERY_GET)
+
+        // Workouts have to be asked for. They were expected to arrive with the rest of
+        // the backlog, on the strength of Gadgetbridge handling them that way — but a
+        // four-minute run went unreported across three syncs while its own heart rate
+        // came through in the same exchange, fifty samples five seconds apart. The watch
+        // had it and was waiting to be asked.
+        connection.send(CmfCommand.WORKOUT_SUMMARY_GET)
+
         connection.send(CmfCommand.ACTIVITY_FETCH_1, dev.recmf.protocol.CmfFrame.A5)
     }
 

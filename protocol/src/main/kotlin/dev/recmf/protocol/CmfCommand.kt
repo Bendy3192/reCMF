@@ -164,6 +164,20 @@ enum class CmfCommand(val cmd1: Int, val cmd2: Int) {
     WEATHER_SET_2(0x0066, 0x0001),
     WORKOUT_GPS(0xffff, 0xa05a),
     WORKOUT_SUMMARY(0x0057, 0x0001),
+
+    /**
+     * Asks for the workout summaries, which do not arrive unasked.
+     *
+     * Gadgetbridge only handles them arriving and never sends this, which is where the
+     * belief that they are volunteered came from. On this watch they are not: a four
+     * minute run was recorded — its per-workout heart rate came through, fifty samples
+     * five seconds apart — and no summary followed it across three syncs.
+     *
+     * The opcode is the protocol's own rule rather than a guess: a generic command pairs
+     * `0x0002` to ask with `0x0001` to answer, which is how the alarms, the goals, the
+     * reminders and every other setting on this watch behave.
+     */
+    WORKOUT_SUMMARY_GET(0x0057, 0x0002),
     ;
 
     /**
