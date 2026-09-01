@@ -1050,12 +1050,20 @@ class WatchService : LifecycleService() {
             )
         }
 
-        // The most destructive of the lot: the watch replaces its whole sport menu with
-        // whatever list arrives, so sending reCMF's default would delete most of it.
         ifSet(WatchSetting.ALARMS) {
             connection.send(CmfCommand.ALARMS_SET, CmfAlarms.payload(preferences.alarms))
+
+            // Read them straight back. The watch answers a write with a bare "applied"
+            // that says it received the frame and nothing about what it stored — which is
+            // exactly the gap that hid a reversed time field: the list went out wrong, the
+            // watch said applied, and the only read in the log had happened two seconds
+            // earlier, describing the state before the write. This turns the log line
+            // "Alarms on the watch" into an answer about the write that just happened.
+            connection.send(CmfCommand.ALARMS_GET)
         }
 
+        // The most destructive of the lot: the watch replaces its whole sport menu with
+        // whatever list arrives, so sending reCMF's default would delete most of it.
         ifSet(WatchSetting.SPORTS) {
             connection.send(CmfCommand.SPORTS_SET, CmfSettings.sportTypes(preferences.sportTypes))
         }
