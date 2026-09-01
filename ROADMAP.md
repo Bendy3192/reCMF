@@ -244,14 +244,37 @@ already chosen for the weather rather than from the phone's own position — a h
 kilometres is accurate enough for choosing satellites, and it keeps reCMF off the
 location-permission path the manifest deliberately avoids.
 
-The other is the almanac file the official app uploads, which is what makes its first fix
-near-instant. **Nobody has this.** Gadgetbridge names all six AGPS opcodes, answers the
-watch's requests for file chunks, and recognises an AGPS file by the ASCII magic
-`000000010000` — but it never sends `DATA_TRANSFER_AGPS_INIT_REQUEST` (`0xffff/0x905e`), so
-no transfer ever starts, and its `parseAsAgps` is a `// TODO`. The opening payload and where
-the file comes from would both have to come from a capture of the official app. The chunk
-half is already built here: `a05f`/`905f` is the same ask-by-offset scheme as the watchface
-transfer, whose engine works.
+**And the almanac is solved.** This is the transfer that makes the official app's first fix
+near-instant, and nobody had it: Gadgetbridge names all six opcodes, answers the watch's
+requests for chunks and recognises the file by its magic bytes, but never sends the request
+that starts a transfer, and its own parser is a `// TODO`. Read off a capture of the
+official app doing it, decrypted with the watch's app secret:
+
+```
+TX 905e  01 | size:u32 BE | crc32:u32 LE | ff x 31      forty bytes
+RX a05e  01                                             accepted
+RX a05f  offset:u32 BE | length:u32 BE | percent:u8     3072-byte stretches
+TX 905f  <the bytes at that offset>                     unencrypted, CRC32 per message
+RX a060  01                                             the watch has it all
+TX 9060  a5
+```
+
+The size is big-endian and the checksum little-endian **in the same forty bytes**. The
+chunk asks are the watchface transfer's nine bytes unchanged, so the engine that already
+works is the one this uses.
+
+The file is a run of records, each headed by eight ASCII hex digits of tag and eight of
+length — which is what makes its first twelve bytes spell `000000010000`, the magic
+Gadgetbridge checks. The one observed was 97872 bytes in four records: 48384, 25128 and
+24264 of orbit data, then 32 ASCII characters that look like a checksum computed by a rule
+that is not any obvious digest of any obvious span. Validation walks the records rather
+than trusting the magic, because a download cut short starts right and stops mid-record.
+
+Still open: where the file comes from. The official app calls it EPO and keeps an
+`epoUpdateTime` per device, so it re-downloads every few days, but the address is not in
+any log that survived — it downloads into an external cache directory and deletes it after
+sending. Until that is found the file has to be handed to reCMF, as Gadgetbridge does with
+its own AGPS support.
 
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather

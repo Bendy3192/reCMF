@@ -43,6 +43,7 @@ import dev.recmf.weather.WeatherLocation
 import dev.recmf.weather.WeatherSnapshot
 import dev.recmf.media.MediaWatcher
 import dev.recmf.media.NowPlaying
+import dev.recmf.protocol.CmfAgps
 import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfMusic
 import dev.recmf.protocol.CmfCommand
@@ -151,6 +152,15 @@ class WatchService : LifecycleService() {
      */
     private var sendingWatchface: ByteArray? = null
 
+    /**
+     * The almanac being uploaded, or null.
+     *
+     * Kept apart from the watchface transfer rather than sharing one slot: they use
+     * different opcodes and the watch is perfectly willing to have one in flight, so a
+     * shared field would turn "both at once" from a refusal into a corrupted file.
+     */
+    private var sendingAgps: ByteArray? = null
+
     /** What the file calls itself, and what it displaces. Meaningful only mid-transfer. */
     private var watchfaceName: String = ""
     private var watchfaceReplaces: Int = 0
@@ -250,6 +260,11 @@ class WatchService : LifecycleService() {
                 if (_status.value == ConnectionState.READY && uri != null && replaced >= 0) {
                     installWatchface(uri, replaced)
                 }
+            }
+
+            ACTION_INSTALL_AGPS -> lifecycleScope.launch {
+                val uri = intent.getStringExtra(EXTRA_AGPS_URI)?.toUri()
+                if (_status.value == ConnectionState.READY && uri != null) installAgps(uri)
             }
 
             ACTION_SET_WATCHFACE -> lifecycleScope.launch {
@@ -851,6 +866,68 @@ class WatchService : LifecycleService() {
             WatchfaceInstall.Sending(watchfaceName, request.percent)
     }
 
+    /**
+     * Uploads predicted satellite orbits, so a cold GPS fix takes seconds rather than
+     * never.
+     *
+     * The watch drives this exactly as it drives a watchface: it is told the size and the
+     * checksum, and then asks for the file a stretch at a time. So this only opens the
+     * transfer; the stretches are answered from [handleAgpsRequest].
+     */
+    private suspend fun installAgps(uri: Uri) {
+        if (sendingAgps != null) {
+            ProtocolLog.note("GPS data: another upload is already running")
+            return
+        }
+
+        val file = withContext(Dispatchers.IO) {
+            runCatching { contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+        }
+
+        if (file == null) {
+            ProtocolLog.note("GPS data: the file could not be read")
+            return
+        }
+
+        // Checked before a byte goes out. The watch takes several seconds to swallow this
+        // and has no way to say afterwards that what it swallowed was rubbish — and an
+        // almanac that is wrong is worse than none, because the receiver trusts it.
+        if (!CmfAgps.looksLikeEpo(file)) {
+            ProtocolLog.note(
+                "GPS data: ${file.size} bytes that are not an EPO file — it must begin " +
+                    "000000010000 and its records must tile it exactly",
+            )
+            return
+        }
+
+        val checksum = CmfAgps.checksum(file)
+        sendingAgps = file
+
+        ProtocolLog.note("GPS data: sending ${file.size} bytes, checksum ${checksum.toString(16)}")
+        connection.send(
+            CmfCommand.DATA_TRANSFER_AGPS_INIT_REQUEST,
+            CmfAgps.transferRequest(size = file.size, crc32 = checksum),
+        )
+    }
+
+    /** One stretch of the almanac, at the offset the watch asked for. */
+    private suspend fun handleAgpsRequest(payload: ByteArray) {
+        val file = sendingAgps ?: return
+        val request = CmfAgps.parseChunkRequest(payload)
+
+        if (request == null || request.offset >= file.size) {
+            ProtocolLog.note("GPS data: the watch asked for a piece that is not in the file")
+            sendingAgps = null
+            return
+        }
+
+        val end = minOf(request.offset + request.length, file.size)
+        connection.sendOnDataChannel(
+            CmfCommand.DATA_CHUNK_WRITE_AGPS,
+            file.copyOfRange(request.offset, end),
+        )
+    }
+
     private fun failWatchfaceInstall(reason: String) {
         sendingWatchface = null
         ProtocolLog.note("Watchface: $reason")
@@ -1303,6 +1380,30 @@ class WatchService : LifecycleService() {
 
             CmfCommand.DATA_CHUNK_REQUEST_WATCHFACE -> handleWatchfaceRequest(message.payload)
 
+            CmfCommand.DATA_TRANSFER_AGPS_INIT_REPLY -> {
+                if (sendingAgps == null) return
+                if (message.payload.firstOrNull() != CmfAgps.ACCEPTED) {
+                    ProtocolLog.note("GPS data: the watch refused the upload")
+                    sendingAgps = null
+                }
+            }
+
+            CmfCommand.DATA_CHUNK_REQUEST_AGPS -> handleAgpsRequest(message.payload)
+
+            CmfCommand.DATA_TRANSFER_AGPS_FINISH_ACK_1 -> {
+                if (sendingAgps == null) return
+                sendingAgps = null
+                if (message.payload.firstOrNull() == CmfAgps.FINISHED) {
+                    ProtocolLog.note("GPS data: the watch has the whole almanac")
+                    connection.send(
+                        CmfCommand.DATA_TRANSFER_AGPS_FINISH_ACK_2,
+                        CmfAgps.FINISH_ACK,
+                    )
+                } else {
+                    ProtocolLog.note("GPS data: the watch ended the upload without taking it")
+                }
+            }
+
             // The last word on whether the file was accepted, and the first version of
             // this treated any reply as success. It is not: the official app is answered
             // `01`, and a transfer that ran to the last byte and was then rejected came
@@ -1623,6 +1724,8 @@ class WatchService : LifecycleService() {
         const val ACTION_FIND_WATCH = "dev.recmf.action.FIND_WATCH"
         const val ACTION_SET_WATCHFACE = "dev.recmf.action.SET_WATCHFACE"
         const val EXTRA_WATCHFACE_INDEX = "dev.recmf.extra.WATCHFACE_INDEX"
+        const val ACTION_INSTALL_AGPS = "dev.recmf.action.INSTALL_AGPS"
+        const val EXTRA_AGPS_URI = "dev.recmf.extra.AGPS_URI"
         const val ACTION_INSTALL_WATCHFACE = "dev.recmf.action.INSTALL_WATCHFACE"
         const val EXTRA_WATCHFACE_URI = "dev.recmf.extra.WATCHFACE_URI"
         const val EXTRA_WATCHFACE_REPLACES = "dev.recmf.extra.WATCHFACE_REPLACES"
@@ -1649,6 +1752,15 @@ class WatchService : LifecycleService() {
         fun findWatch(context: Context) {
             context.startForegroundService(
                 Intent(context, WatchService::class.java).setAction(ACTION_FIND_WATCH),
+            )
+        }
+
+        /** Uploads an EPO file, so the watch's own GPS starts from something. */
+        fun installAgps(context: Context, uri: String) {
+            context.startForegroundService(
+                Intent(context, WatchService::class.java)
+                    .setAction(ACTION_INSTALL_AGPS)
+                    .putExtra(EXTRA_AGPS_URI, uri),
             )
         }
 

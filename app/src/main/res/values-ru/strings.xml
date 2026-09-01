@@ -133,6 +133,9 @@
     <string name="find_watch">Найти часы</string>
     <string name="find_watch_explainer">Часы зазвонят и завибрируют — если они в зоне действия Bluetooth.</string>
     <string name="action_find_watch">Позвонить на часы</string>
+    <string name="gps_data">Данные GPS</string>
+    <string name="gps_data_explainer">У часов свой приёмник GPS, но на пустом месте ему приходится вычитывать орбиты спутников с самих спутников — минуты под открытым небом и почти никогда между домами. Если дать орбиты заранее, координаты находятся за секунды. Скачивать файл reCMF пока не умеет, поэтому его нужно выбрать самому; перед отправкой файл проверяется.</string>
+    <string name="action_install_agps">Выбрать файл</string>
 
     <string name="notification_channel_find_phone">Поиск телефона</string>
     <string name="notification_channel_find_phone_description">Звонит, когда вы ищете телефон с часов.</string>

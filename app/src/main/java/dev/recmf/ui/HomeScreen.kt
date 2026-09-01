@@ -155,6 +155,7 @@ fun HomeScreen(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
+    onInstallAgps: () -> Unit,
     onSelectWatchface: (Int) -> Unit,
     onInstallWatchface: (Int) -> Unit,
     updateState: UpdateState,
@@ -205,6 +206,7 @@ fun HomeScreen(
                         onForget = onForget,
                         onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
+                        onInstallAgps = onInstallAgps,
                         onSelectWatchface = onSelectWatchface,
                         onInstallWatchface = onInstallWatchface,
                         updateState = updateState,
@@ -259,6 +261,7 @@ private fun TabContent(
     onForget: () -> Unit,
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
+    onInstallAgps: () -> Unit,
     onSelectWatchface: (Int) -> Unit,
     onInstallWatchface: (Int) -> Unit,
     updateState: UpdateState,
@@ -347,6 +350,7 @@ private fun TabContent(
                     )
                 }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
+                item { GpsDataCard(state.connection.isUsable, onInstallAgps) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
@@ -2160,6 +2164,36 @@ private fun UpdateCard(
 }
 
 /** Rings the watch. Disabled while it is out of range, where the button would do nothing. */
+/**
+ * Uploading predicted satellite orbits, so the watch's own GPS can find itself.
+ *
+ * This looks like an odd thing to put in front of a person, and it is — but the
+ * alternative is worse. The watch has a GPS receiver and, starting cold, it reads the
+ * satellites' orbits off the satellites themselves at fifty bits a second: minutes under
+ * open sky and effectively never between buildings. The official app quietly uploads an
+ * almanac to spare it that. reCMF can too, and now knows how, but it has nowhere to fetch
+ * one from — the address the official app downloads from has not been found — so the file
+ * has to be handed to it.
+ *
+ * The file is checked before a byte goes out. An almanac that is wrong is worse than none,
+ * because the receiver believes it.
+ */
+@Composable
+private fun GpsDataCard(connected: Boolean, onInstallAgps: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(stringResource(R.string.gps_data), style = MaterialTheme.typography.titleMedium)
+            Text(
+                stringResource(R.string.gps_data_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            FilledTonalButton(onClick = onInstallAgps, enabled = connected) {
+                Text(stringResource(R.string.action_install_agps))
+            }
+        }
+    }
+}
+
 @Composable
 private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
     Card(Modifier.fillMaxWidth()) {

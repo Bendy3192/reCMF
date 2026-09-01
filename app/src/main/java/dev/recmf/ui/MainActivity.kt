@@ -131,6 +131,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Its own launcher rather than sharing the face one: the two hand their
+                // result to different places, and a shared launcher would need a mode flag
+                // that survives the trip out to the picker for no gain.
+                val chooseGpsData = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument(),
+                ) { uri -> if (uri != null) model.installAgps(uri.toString()) }
+
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
                 val hasNotificationAccess = model.hasNotificationAccess()
@@ -169,6 +176,11 @@ class MainActivity : ComponentActivity() {
                     onSyncNow = model::syncNow,
                     onFindWatch = model::findWatch,
                     onSelectWatchface = model::selectWatchface,
+                    onInstallAgps = {
+                        // EPO files have no registered type either, so anything is offered
+                        // and the file is checked before a byte goes to the watch.
+                        chooseGpsData.launch(arrayOf("*/*"))
+                    },
                     onInstallWatchface = { slot ->
                         replacing = slot
                         // Watchfaces have no registered type, so anything is offered and
