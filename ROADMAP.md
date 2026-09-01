@@ -263,6 +263,16 @@ The size is big-endian and the checksum little-endian **in the same forty bytes*
 chunk asks are the watchface transfer's nine bytes unchanged, so the engine that already
 works is the one this uses.
 
+Confirmed end to end on hardware: the same 97872-byte file went up in thirty-two asks and
+the watch answered `a060 01`. Its last ask, `0001740000000a5061`, is byte for byte the one
+it made of the official app — 95232 bytes in and 2640 to go, landing exactly on the size
+announced.
+
+The whole transfer runs on the **data channel**, handle `0x0044` outbound and `0x0046` for
+the replies — `GPS_COORDS` is the one that goes on the command channel. Sent on the command
+channel instead, the opening request is not refused, it is simply not heard: the watch says
+nothing at all.
+
 The file is a run of records, each headed by eight ASCII hex digits of tag and eight of
 length — which is what makes its first twelve bytes spell `000000010000`, the magic
 Gadgetbridge checks. The one observed was 97872 bytes in four records: 48384, 25128 and
