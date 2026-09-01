@@ -601,6 +601,16 @@ class WatchService : LifecycleService() {
                 }
         }
 
+        // Turning the mirror on is itself a reason to read the phone. Without this it
+        // would take a reconnection or an edit in the clock before anything happened, and
+        // a switch that does nothing when flicked reads as broken.
+        lifecycleScope.launch {
+            settings.settings
+                .map { it.phoneAlarmsEnabled }
+                .distinctUntilChanged()
+                .collect { enabled -> if (enabled) refreshPhoneAlarms() }
+        }
+
         lifecycleScope.launch {
             settings.settings
                 .map { it.autoSyncSeconds }
@@ -947,7 +957,13 @@ class WatchService : LifecycleService() {
             return
         }
 
-        if (settings.watchPreferences.first().alarms == fromPhone) return
+        if (settings.watchPreferences.first().alarms == fromPhone) {
+            // Said out loud rather than passed over in silence: when the mirror is on, the
+            // log should always show that the phone was read, or the only visible
+            // difference between "nothing changed" and "nothing happened" is nothing.
+            ProtocolLog.note("Alarms: the phone's ${fromPhone.size} are already on the watch")
+            return
+        }
 
         ProtocolLog.note("Alarms: taking ${fromPhone.size} from the phone")
         settings.updateWatchPreferences(WatchSetting.ALARMS) { it.copy(alarms = fromPhone) }
