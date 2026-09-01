@@ -42,9 +42,12 @@ class CmfAlarmsTest {
     }
 
     @Test
-    fun `what we send the watch is what the watch sends us`() {
-        // The other half: the same two alarms, encoded here, must come out as the bytes
-        // above. Parsing them correctly would be no use if we still wrote them reversed.
+    fun `what we send the watch is the mirror of what it sends back`() {
+        // The write is big-endian and the read is little-endian: the watch does not answer
+        // in the order it accepts. Both halves are pinned here against the same two
+        // alarms so the asymmetry is visible rather than inferred, and so nobody
+        // "corrects" one side into agreeing with the other — which is exactly what a
+        // round-trip test tempted someone into doing, twice.
         val payload = CmfAlarms.payload(
             listOf(
                 CmfAlarm(3, 10, enabled = true, days = setOf(CmfWeekday.WEDNESDAY)),
@@ -58,7 +61,13 @@ class CmfAlarmsTest {
             ),
         )
 
-        assertEquals(fromTheWatch.toHex(), payload.toHex())
+        assertEquals(
+            (
+                "00002c88" + "00" + "01" + "04" + "01" + "00".repeat(32) +
+                    "000056b8" + "01" + "01" + "1f" + "01" + "00".repeat(32)
+                ),
+            payload.toHex(),
+        )
     }
 
     @Test
@@ -66,8 +75,8 @@ class CmfAlarmsTest {
         val payload = CmfAlarms.payload(listOf(CmfAlarm(hour = 7, minute = 30)))
 
         assertEquals(CmfAlarms.RECORD_SIZE, payload.size)
-        // 7 * 3600 + 30 * 60 = 27000 = 0x6978, little-endian as the watch stores it.
-        assertEquals("78690000", payload.copyOf(4).toHex())
+        // 7 * 3600 + 30 * 60 = 27000 = 0x6978, big-endian as the watch accepts it.
+        assertEquals("00006978", payload.copyOf(4).toHex())
     }
 
     @Test
@@ -101,12 +110,13 @@ class CmfAlarmsTest {
         assertEquals(23 * 3600, seconds(payload, CmfAlarms.MAX_ALARMS - 1))
     }
 
+    /** The time of one record of a payload we built, so big-endian. */
     private fun seconds(payload: ByteArray, record: Int): Int {
         val at = record * CmfAlarms.RECORD_SIZE
-        return (payload[at].toInt() and 0xff) or
-            ((payload[at + 1].toInt() and 0xff) shl 8) or
-            ((payload[at + 2].toInt() and 0xff) shl 16) or
-            ((payload[at + 3].toInt() and 0xff) shl 24)
+        return ((payload[at].toInt() and 0xff) shl 24) or
+            ((payload[at + 1].toInt() and 0xff) shl 16) or
+            ((payload[at + 2].toInt() and 0xff) shl 8) or
+            (payload[at + 3].toInt() and 0xff)
     }
 
     @Test
@@ -171,31 +181,21 @@ class CmfAlarmsTest {
     }
 
     @Test
-    fun `what payload writes, parse reads`() {
-        val alarms = listOf(
-            CmfAlarm(7, 30, enabled = true, days = setOf(CmfWeekday.MONDAY, CmfWeekday.FRIDAY)),
-            CmfAlarm(9, 5, enabled = false),
-        )
-
-        assertEquals(alarms, CmfAlarms.parse(CmfAlarms.payload(alarms)))
-    }
-
-    @Test
     fun `a reply that is not a whole number of records is refused`() {
         assertNull(CmfAlarms.parse(ByteArray(CmfAlarms.RECORD_SIZE + 7)))
     }
 
     @Test
-    fun `every repeat day survives the round trip`() {
-        val daily = CmfAlarm(6, 0, days = CmfWeekday.entries.toSet())
+    fun `midnight and one minute to midnight both encode`() {
+        val payload = CmfAlarms.payload(listOf(CmfAlarm(0, 0), CmfAlarm(23, 59)))
 
-        assertEquals(daily.days, CmfAlarms.parse(CmfAlarms.payload(listOf(daily)))!!.single().days)
+        assertEquals(listOf(0, 23 * 3600 + 59 * 60), (0 until 2).map { seconds(payload, it) })
     }
 
     @Test
-    fun `midnight and one minute to midnight both survive`() {
-        val edges = listOf(CmfAlarm(0, 0), CmfAlarm(23, 59))
+    fun `every repeat day encodes into the one mask byte`() {
+        val payload = CmfAlarms.payload(listOf(CmfAlarm(6, 0, days = CmfWeekday.entries.toSet())))
 
-        assertEquals(edges, CmfAlarms.parse(CmfAlarms.payload(edges)))
+        assertEquals(0x7f, payload[6].toInt() and 0xff)
     }
 }

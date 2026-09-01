@@ -38,11 +38,11 @@ object CmfAlarms {
      * `ALARMS_SET`: forty bytes per alarm.
      *
      * ```
-     * seconds from midnight : u32 little-endian
+     * seconds from midnight : u32 BIG-endian
      * index                 : u8   position in this list
      * enabled               : u8
      * repeat days           : u8   the [CmfWeekday] bitmask
-     * 0x01                  : u8   unidentified, and 1 in everything the watch reports
+     * 0x01                  : u8   unidentified
      * 24 bytes of zero
      * 8 bytes of label, sent empty
      * ```
@@ -53,18 +53,27 @@ object CmfAlarms {
      * nothing may call this until it holds a list the user actually chose or the watch
      * actually reported.
      *
-     * The records go out **in ascending time of day**. A list in another order was
-     * acknowledged and then not stored: the watch answered `applied` and a read straight
-     * afterwards still showed the single blank alarm it had before. Time order is how the
-     * watch itself stores them and how its own screen lists them, so this sends them the
-     * way it has been seen to accept.
+     * **The watch reads this big-endian and answers little-endian.** That is not a typo
+     * and there is no round trip between [payload] and [parse]; the two are deliberately
+     * mirror images, and a test that fed one into the other would be testing nothing. Both
+     * halves are settled by evidence rather than by symmetry:
      *
-     * The time is seconds since midnight rather than an hour and a minute, and it is
-     * **little-endian**. This was big-endian here for a long time and nothing caught it:
-     * [parse] read it back the same way round, so every round-trip test passed while the
-     * watch was being sent 03:10 as 2,284,126,208 seconds and collapsing the whole list
-     * into a single 00:00. Only the watch's own reply to `ALARMS_GET` settles it, which
-     * is why [CmfAlarmsTest] now pins these bytes rather than only the round trip.
+     * - Write. Gadgetbridge, which works on this watch, builds the record big-endian.
+     *   Sending it little-endian instead produced a watch that stored the index, the
+     *   enabled flag and the repeat mask of every record correctly and threw the time
+     *   away, keeping whatever was in the slot — one alarm came back reading `153:36`.
+     *   A little-endian 14:10 read big-endian is 952,860,672 seconds, which is not a time
+     *   of day, so the watch appears to reject the field and keep the rest.
+     * - Read. The watch's own reply is little-endian: `88 2c 00 00` against a phone whose
+     *   Wednesday alarm was 03:10, and 0x2c88 is 11400 seconds, which is 03:10. It then
+     *   displayed a stored `00 70 08 00` as `153:36`, and 0x87000 seconds is 153.6 hours,
+     *   so the little-endian reading is the watch's own.
+     *
+     * Only enabled alarms belong in the list — a slot spent on one that will not ring is
+     * a slot taken from one that will — and Gadgetbridge likewise skips its unused ones.
+     *
+     * The records go out in ascending time of day, which is the order the watch sorts its
+     * own list into anyway.
      *
      * The last eight bytes are a label, sent empty: Gadgetbridge records that the watch
      * does not display labels at all, and a field that cannot be seen, cannot be read
@@ -77,7 +86,7 @@ object CmfAlarms {
         // Sorting after the cut rather than before it keeps both: the caller still chooses
         // which alarms survive, and the watch still gets them the way round it wants.
         val capped = alarms.take(MAX_ALARMS).sortedBy { it.hour * 60 + it.minute }
-        val buf = ByteBuffer.allocate(capped.size * RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
+        val buf = ByteBuffer.allocate(capped.size * RECORD_SIZE).order(ByteOrder.BIG_ENDIAN)
 
         capped.forEachIndexed { index, alarm ->
             buf.putInt(alarm.hour * 3600 + alarm.minute * 60)
@@ -94,7 +103,10 @@ object CmfAlarms {
     }
 
     /**
-     * Reads back the list the watch holds, in the layout [payload] writes.
+     * Reads back the list the watch holds.
+     *
+     * Little-endian, where [payload] writes big-endian; see there for why, and for why
+     * feeding one into the other proves nothing.
      *
      * An empty payload is an empty list, not a malformed one — confirmed against a watch
      * with no alarms set, which answered `ALARMS_GET` with no bytes at all. That is the

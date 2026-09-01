@@ -177,17 +177,28 @@ none set. The list is adopted on read but not marked as configured, so a connect
 writes back what it just read. Labels are not modelled: the watch does not display them
 and they cannot be read back.
 
-Forty bytes each: seconds from midnight as a **little-endian** u32, then the index in the
-list, enabled, the repeat mask, a byte that is always `01`, twenty-four zeroes and eight
-label bytes. That u32 was written big-endian here for a long time and every test passed,
-because the reader had the same mistake — the two agreed with each other and with nothing
-else. The watch was being sent 03:10 as 2,284,126,208 seconds, and it collapsed the whole
-list into one 00:00. What settled it was the watch's own reply, holding alarms the official
-app had written: `88 2c 00 00 | 00 01 04 01` is 11400 seconds, Wednesdays, and 11400 is
-03:10. Those bytes are now a test, which is the only kind that could have caught this.
+Forty bytes each: seconds from midnight as a u32, then the index in the list, enabled, the
+repeat mask, a byte that is always `01`, twenty-four zeroes and eight label bytes.
 
-The byte order is genuinely mixed across this protocol, so neither answer generalises: the
-goals and the alarms are little-endian, the two reminders are big-endian — `00 003c …` read
+**The watch reads that u32 big-endian and answers little-endian.** There is no round trip
+between the encoder and the decoder, and the two are deliberately mirror images. Getting
+here cost three wrong turns, so both halves are written down with their evidence:
+
+- The decoder was big-endian, matching the encoder, and every round-trip test passed while
+  the watch's own replies were being read as nonsense — `-558439:-32` for an 03:10 alarm.
+  Two records the official app had left on the watch settle it: `88 2c 00 00 | 00 01 04 01`
+  against a phone whose Wednesday alarm was 03:10, and `0x2c88` is 11400 seconds, which is
+  03:10. The watch later displayed a stored `00 70 08 00` as `153:36`, and `0x87000`
+  seconds is 153.6 hours, which is the same reading from the other side.
+- Flipping the encoder to match looked obvious and was wrong. The watch then acknowledged
+  every write, stored the index, the enabled flag and the repeat mask of each record
+  correctly, and threw the time away, leaving whatever was in the slot. A little-endian
+  14:10 read big-endian is 952,860,672 seconds, which is not a time of day, so the field
+  is evidently rejected and the rest kept. Gadgetbridge, which works on this watch, builds
+  the record big-endian.
+
+So the byte order here is not one answer but two, and the protocol is mixed elsewhere as
+well: the goals are little-endian, and the two reminders are big-endian — `00 003c …` reads
 back as sixty minutes, which only works one way round.
 
 The phone's own alarms can be mirrored onto the watch, which needs root: Android has no
