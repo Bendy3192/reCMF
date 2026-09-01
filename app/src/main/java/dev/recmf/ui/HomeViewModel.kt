@@ -509,6 +509,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val watchfaceInstall: StateFlow<WatchfaceInstall?> = WatchStatus.watchfaceInstall
 
     /** Sends a face file, displacing the one at [replacedIndex] in the watch's list. */
+    fun setGpsAlmanacAuto(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setGpsAlmanacAuto(enabled) }
+    }
+
     /** Hands the watch an EPO file, so its own GPS starts from something. */
     fun installAgps(uri: String) {
         WatchService.installAgps(getApplication(), uri)

@@ -280,31 +280,41 @@ Gadgetbridge checks. The one observed was 97872 bytes in four records: 48384, 25
 that is not any obvious digest of any obvious span. Validation walks the records rather
 than trusting the magic, because a download cut short starts right and stops mid-record.
 
-Still open, and searched for properly: where the file comes from. The official app calls it
-EPO and keeps an `epoUpdateTime` per device, so it re-downloads every few days. What was
-tried, so nobody repeats it:
+**And it does not have to be handed one.** The watch's receiver is a MediaTek part, and the
+file's first record is MediaTek's own EPO format exactly: 2304-byte slots of 32 GPS
+satellites, 72 bytes each, six hours apart, the hour counted from the GPS epoch in the
+first three bytes of every satellite record. MediaTek publishes those orbits openly — a
+month at a time, no account, no key, the same file for everyone — at
+`http://epodownload.mediatek.com/EPO.DAT`, and its blocks line up with the official app's
+hour for hour. The app is republishing a three-day slice; reCMF cuts the same slice.
 
-- Its own logs. Two of them, 1.2 MB between them, list every URL it fetched that day —
-  authentication, the watchface CDN, telemetry, and nothing else. The file goes to an
-  external cache directory and is deleted after sending, and the logs rotate daily, so the
-  download had already been rolled out of them.
-- Its APK, which is Flutter, so the Dart code sits in `libapp.so` inside the split APK,
-  stored uncompressed and greppable. It yields `epoUpdateTime`, one lone `/epo/`, and no
-  URL — and no `agps`, `gnss`, `ephemeris`, `almanac` or `orbit` anywhere at all. Its URLs
-  are assembled at runtime from a `https://%s/%s/%s` template, so the whole address is not
-  in the binary to be found.
+The whole 97872-byte file is:
 
-The hosts it does carry are a small set, and the one that looks like a device cloud —
-`dc-api.nothingtech.link` — would want an account token, so finding the address might not
-be enough on its own.
+```
+tag 1  48384  12 slots x 56 satellites x 72 B   GPS 1-32 and GLONASS 65-88
+tag 2  25128  1 + 12 x 29                       BeiDou, 206 onwards
+tag 3  24264  1 + 12 x 28                       Galileo, 102 onwards
+tag 4     32  ASCII, looks like a checksum
+```
 
-What is left is intercepting its HTTPS, which on Flutter means more than the usual proxy:
-its Dart HTTP client ignores the Android system proxy entirely, so this needs the library
-patched or the traffic caught below the app. Half a day, and it may still end at a token.
+Twelve six-hour slots is three days, which is what the file is good for.
 
-Until then the file is handed to reCMF by hand, as Gadgetbridge asks of its own users. It
-lasts a few days; a fresh one costs a one-minute capture of the official app, since the
-transfer carries the file in the clear.
+**Tag 4 is not checked.** The watch accepted a file whose GPS orbits had been replaced
+wholesale with that field left as it was, and then a file built here from scratch with it
+set to zeroes. What it does verify is the CRC32 in the opening request, which reCMF
+computes over whatever it actually sends. That is what turned this from "capture the
+official app every few days" into something the app just does.
+
+Only GPS is fetched. MediaTek's files for the other three constellations exist but their
+names are not known — `EPO_GR*`, `EPO_GAL*` and `EPO_BDS*` all answer `AccessDenied`, which
+is what that bucket says to a key that is not there. GPS is the one that matters most,
+being what a receiver looks for first, and a GPS-only file was accepted by the watch.
+
+Where the official app fetches its own copy is still unknown, and no longer interesting:
+its logs list every URL of the day and none is this, its Flutter binary yields
+`epoUpdateTime`, one lone `/epo/` and no address at all, and its URLs are assembled at
+runtime from a `https://%s/%s/%s` template. Since MediaTek serves the same data directly,
+none of that has to be answered.
 
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather

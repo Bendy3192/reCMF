@@ -131,8 +131,11 @@
     <string name="find_watch_explainer">Makes the watch ring and vibrate, as long as it is in Bluetooth range.</string>
     <string name="action_find_watch">Ring the watch</string>
     <string name="gps_data">GPS data</string>
-    <string name="gps_data_explainer">The watch has its own GPS, but starting from nothing it has to read the satellites\' orbits off the satellites — minutes in the open, and rarely at all between buildings. Give it those orbits and a fix takes seconds. reCMF cannot fetch the file yet, so it has to be handed one; the file is checked before anything is sent.</string>
-    <string name="action_install_agps">Choose a file</string>
+    <string name="gps_data_explainer">The watch has its own GPS, but starting from nothing it has to read the satellites\' orbits off the satellites — minutes in the open, and rarely at all between buildings. Give it those orbits and a fix takes seconds. reCMF fetches those orbits itself, from the people who publish them, and sends them on every couple of days. Whatever is sent is checked first.</string>
+    <string name="gps_almanac_auto">Fetch the orbits automatically</string>
+    <string name="gps_almanac_never">The watch has not been given orbits yet.</string>
+    <string name="gps_almanac_sent">Orbits sent to the watch %1$s.</string>
+    <string name="action_install_agps">Choose a file instead</string>
 
     <string name="notification_channel_find_phone">Find the phone</string>
     <string name="notification_channel_find_phone_description">Rings when you ask the watch to find your phone.</string>

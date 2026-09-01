@@ -54,6 +54,20 @@ data class WatchSettings(
      */
     val phoneAlarmsEnabled: Boolean = false,
 
+    /**
+     * Whether reCMF fetches satellite orbits for the watch's GPS by itself.
+     *
+     * On by default, because the alternative is a receiver that takes minutes to find
+     * itself in the open and never does indoors. It is a switch rather than a given
+     * because it is the one thing reCMF sends to a third party at all: a plain GET of a
+     * public file from MediaTek, with nothing identifying attached, but a request the app
+     * would not otherwise make.
+     */
+    val gpsAlmanacAuto: Boolean = true,
+
+    /** When the watch was last given orbits, so they are refreshed before they run out. */
+    val almanacSentAtMillis: Long = 0L,
+
     val weatherEnabled: Boolean = false,
     /** The place the user typed, as the provider resolved it. */
     val weatherCity: String? = null,
@@ -143,6 +157,8 @@ class SettingsStore(private val context: Context) {
             notificationsEnabled = prefs[KEY_NOTIFICATIONS] ?: false,
             notifyOnlyWhenScreenOff = prefs[KEY_SCREEN_OFF_ONLY] ?: true,
             phoneAlarmsEnabled = prefs[KEY_PHONE_ALARMS] ?: false,
+            gpsAlmanacAuto = prefs[KEY_ALMANAC_AUTO] ?: true,
+            almanacSentAtMillis = prefs[KEY_ALMANAC_SENT_AT] ?: 0L,
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
             weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
             weatherCity = prefs[KEY_WEATHER_CITY],
@@ -368,6 +384,14 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_PHONE_ALARMS] = enabled }
     }
 
+    suspend fun setGpsAlmanacAuto(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_ALMANAC_AUTO] = enabled }
+    }
+
+    suspend fun setAlmanacSentAt(millis: Long) {
+        context.dataStore.edit { it[KEY_ALMANAC_SENT_AT] = millis }
+    }
+
     suspend fun setWeatherEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_WEATHER_ENABLED] = enabled }
     }
@@ -487,6 +511,8 @@ class SettingsStore(private val context: Context) {
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
+        val KEY_ALMANAC_AUTO = booleanPreferencesKey("gps_almanac_auto")
+        val KEY_ALMANAC_SENT_AT = longPreferencesKey("almanac_sent_at")
         val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
         val KEY_WEATHER_CITY = stringPreferencesKey("weather_city")
         val KEY_WEATHER_LAT = doublePreferencesKey("weather_latitude")

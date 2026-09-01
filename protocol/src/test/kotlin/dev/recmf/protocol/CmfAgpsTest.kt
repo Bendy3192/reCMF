@@ -5,6 +5,7 @@ package dev.recmf.protocol
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -85,6 +86,70 @@ class CmfAgpsTest {
         assertFalse(CmfAgps.looksLikeEpo("000000010000zzzz".toByteArray()))
     }
 
+    /** MediaTek's own layout: 2304-byte slots of 32 satellites, hour in the first three. */
+    private fun epoDat(startHour: Int, slots: Int): ByteArray {
+        val out = ByteArray(slots * 2304)
+        for (s in 0 until slots) {
+            val hour = startHour + s * 6
+            for (sat in 0 until 32) {
+                val at = s * 2304 + sat * 72
+                out[at] = (hour and 0xff).toByte()
+                out[at + 1] = ((hour shr 8) and 0xff).toByte()
+                out[at + 2] = ((hour shr 16) and 0xff).toByte()
+                out[at + 3] = (sat + 1).toByte()
+            }
+        }
+        return out
+    }
+
+    @Test
+    fun `an almanac is built from MediaTek's own orbits`() {
+        // The whole point: the watch's receiver is a MediaTek part, MediaTek publishes the
+        // orbits openly a month at a time, and the official app republishes a slice. This
+        // cuts the same slice, so nothing has to be captured from the official app again.
+        val built = CmfAgps.buildFromEpo(epoDat(408_960, 120), nowHourSinceGpsEpoch = 408_973)!!
+
+        // Twelve six-hour slots is three days, wrapped as record 1 plus the trailer.
+        val body = 12 * 2304
+        assertEquals(16 + body + 16 + 32, built.size)
+        assertTrue(CmfAgps.looksLikeEpo(built))
+        assertEquals("00000001" + "%08x".format(body), built.copyOf(16).toHex().hexAsAscii())
+    }
+
+    @Test
+    fun `it starts at the six-hour boundary at or before now, not after it`() {
+        // Starting at the next boundary would leave the receiver without orbits for the
+        // hours it is in right now, which is exactly when it is looking for satellites.
+        val built = CmfAgps.buildFromEpo(epoDat(408_960, 120), nowHourSinceGpsEpoch = 408_977)!!
+        val firstSlotHour = (built[16].toInt() and 0xff) or
+            ((built[17].toInt() and 0xff) shl 8) or
+            ((built[18].toInt() and 0xff) shl 16)
+
+        assertEquals(408_972, firstSlotHour)
+    }
+
+    @Test
+    fun `a file that does not reach three days ahead is refused rather than truncated`() {
+        // A short file would leave the receiver trusting orbits for hours it never
+        // covered, which is worse than having none at all.
+        assertNull(CmfAgps.buildFromEpo(epoDat(408_960, 8), nowHourSinceGpsEpoch = 408_960))
+        // And one that has run out entirely, as a month-old download would have.
+        assertNull(CmfAgps.buildFromEpo(epoDat(408_960, 120), nowHourSinceGpsEpoch = 500_000))
+    }
+
+    @Test
+    fun `something that is not MediaTek's file is refused`() {
+        assertNull(CmfAgps.buildFromEpo(ByteArray(0), 408_960))
+        assertNull(CmfAgps.buildFromEpo(ByteArray(2305), 408_960))
+    }
+
+    @Test
+    fun `the GPS epoch is where the blocks count from`() {
+        // 2026-09-01 12:00 UTC was hour 408972 in the file the official app sent, which is
+        // what anchors this: get it wrong and the almanac is for the wrong day.
+        assertEquals(408_972, CmfAgps.hoursSinceGpsEpoch(1_788_264_000L))
+    }
+
     @Test
     fun `the watch's ask is read the same way a watchface's is`() {
         // 00000c00 offset, 00000c00 length, 03 percent — the second ask of the real
@@ -105,4 +170,8 @@ class CmfAgpsTest {
         assertEquals(2_640, ask.length)
         assertEquals(97_872, ask.offset + ask.length)
     }
+
+    /** A hex dump of ASCII digits, back to the digits themselves. */
+    private fun String.hexAsAscii(): String =
+        chunked(2).map { it.toInt(16).toChar() }.joinToString("")
 }

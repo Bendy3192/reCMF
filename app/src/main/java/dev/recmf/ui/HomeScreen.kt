@@ -5,6 +5,7 @@ package dev.recmf.ui
 
 import androidx.compose.foundation.layout.Box
 import android.content.Context
+import android.text.format.DateUtils
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -156,6 +157,7 @@ fun HomeScreen(
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
     onInstallAgps: () -> Unit,
+    onGpsAlmanacAuto: (Boolean) -> Unit,
     onSelectWatchface: (Int) -> Unit,
     onInstallWatchface: (Int) -> Unit,
     updateState: UpdateState,
@@ -207,6 +209,7 @@ fun HomeScreen(
                         onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
                         onInstallAgps = onInstallAgps,
+                        onGpsAlmanacAuto = onGpsAlmanacAuto,
                         onSelectWatchface = onSelectWatchface,
                         onInstallWatchface = onInstallWatchface,
                         updateState = updateState,
@@ -262,6 +265,7 @@ private fun TabContent(
     onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
     onInstallAgps: () -> Unit,
+    onGpsAlmanacAuto: (Boolean) -> Unit,
     onSelectWatchface: (Int) -> Unit,
     onInstallWatchface: (Int) -> Unit,
     updateState: UpdateState,
@@ -350,7 +354,15 @@ private fun TabContent(
                     )
                 }
                 item { FindWatchCard(state.connection.isUsable, onFindWatch) }
-                item { GpsDataCard(state.connection.isUsable, onInstallAgps) }
+                item {
+                    GpsDataCard(
+                        connected = state.connection.isUsable,
+                        auto = state.settings.gpsAlmanacAuto,
+                        sentAtMillis = state.settings.almanacSentAtMillis,
+                        onAuto = onGpsAlmanacAuto,
+                        onInstallAgps = onInstallAgps,
+                    )
+                }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
             }
@@ -2179,7 +2191,13 @@ private fun UpdateCard(
  * because the receiver believes it.
  */
 @Composable
-private fun GpsDataCard(connected: Boolean, onInstallAgps: () -> Unit) {
+private fun GpsDataCard(
+    connected: Boolean,
+    auto: Boolean,
+    sentAtMillis: Long,
+    onAuto: (Boolean) -> Unit,
+    onInstallAgps: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.gps_data), style = MaterialTheme.typography.titleMedium)
@@ -2187,6 +2205,32 @@ private fun GpsDataCard(connected: Boolean, onInstallAgps: () -> Unit) {
                 stringResource(R.string.gps_data_explainer),
                 style = MaterialTheme.typography.bodyMedium,
             )
+
+            SettingSwitch(
+                label = stringResource(R.string.gps_almanac_auto),
+                checked = auto,
+                onCheckedChange = onAuto,
+            )
+
+            Text(
+                if (sentAtMillis == 0L) {
+                    stringResource(R.string.gps_almanac_never)
+                } else {
+                    stringResource(
+                        R.string.gps_almanac_sent,
+                        DateUtils.getRelativeTimeSpanString(
+                            sentAtMillis,
+                            System.currentTimeMillis(),
+                            DateUtils.MINUTE_IN_MILLIS,
+                        ).toString(),
+                    )
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Kept even though the download works: a phone with no network, a server
+            // having a bad day, and anyone who would rather hand it a file of their own.
             FilledTonalButton(onClick = onInstallAgps, enabled = connected) {
                 Text(stringResource(R.string.action_install_agps))
             }

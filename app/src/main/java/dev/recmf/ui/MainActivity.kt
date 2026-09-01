@@ -176,6 +176,7 @@ class MainActivity : ComponentActivity() {
                     onSyncNow = model::syncNow,
                     onFindWatch = model::findWatch,
                     onSelectWatchface = model::selectWatchface,
+                    onGpsAlmanacAuto = model::setGpsAlmanacAuto,
                     onInstallAgps = {
                         // EPO files have no registered type either, so anything is offered
                         // and the file is checked before a byte goes to the watch.

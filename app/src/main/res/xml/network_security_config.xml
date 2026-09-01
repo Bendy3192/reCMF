@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  reCMF talks to two things over the network and both are named here, so that anything
+  else is refused by the platform rather than by good intentions.
+
+  MediaTek's orbit server is the odd one: it answers on plain HTTP and not on HTTPS, so
+  the almanac download is exempted from the cleartext ban for that one host. What travels
+  is a public file that is the same for everyone, requested with no account and nothing
+  identifying, so the exposure is that an observer learns the watch wants satellite
+  orbits. Refusing to speak HTTP to it would mean no almanac at all, and no almanac means
+  a GPS fix that takes ten minutes.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">epodownload.mediatek.com</domain>
+    </domain-config>
+</network-security-config>

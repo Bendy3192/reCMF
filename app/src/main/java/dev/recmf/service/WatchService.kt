@@ -43,6 +43,7 @@ import dev.recmf.weather.WeatherLocation
 import dev.recmf.weather.WeatherSnapshot
 import dev.recmf.media.MediaWatcher
 import dev.recmf.media.NowPlaying
+import dev.recmf.gps.AlmanacSource
 import dev.recmf.protocol.CmfAgps
 import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfMusic
@@ -730,6 +731,7 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.SERIAL_NUMBER_GET)
 
         sendGpsSeed()
+        refreshAlmanac()
 
         readBackSettings()
 
@@ -911,21 +913,65 @@ class WatchService : LifecycleService() {
             return
         }
 
+        sendAlmanac(file, "chosen file")
+    }
+
+    /**
+     * Opens the transfer. The chunks are answered from [handleAgpsRequest] as they arrive.
+     *
+     * The opening frame goes on the data channel, like every other bulk transfer and
+     * unlike the settings. Sent on the command channel instead it is simply not answered:
+     * the watch does not refuse it, it does not hear it. Read off a capture rather than
+     * reasoned about — the official app writes 905e, 905f and 9060 to one handle and
+     * GPS_COORDS to another, and the replies come back on the data channel's own.
+     */
+    private suspend fun sendAlmanac(file: ByteArray, what: String) {
         val checksum = CmfAgps.checksum(file)
         sendingAgps = file
         agpsProgressNoted = 0
 
-        ProtocolLog.note("GPS data: sending ${file.size} bytes, checksum ${checksum.toString(16)}")
-
-        // On the data channel, like every other bulk transfer and unlike the settings.
-        // Sent on the command channel instead, this is simply not answered: the watch
-        // does not refuse it, it does not hear it. Read off the capture rather than
-        // reasoned about — the official app writes 905e, 905f and 9060 to one handle and
-        // GPS_COORDS to another, and the replies come back on the data channel's own.
+        ProtocolLog.note(
+            "GPS data: sending ${file.size} bytes of $what, checksum ${checksum.toString(16)}",
+        )
         connection.sendOnDataChannel(
             CmfCommand.DATA_TRANSFER_AGPS_INIT_REQUEST,
             CmfAgps.transferRequest(size = file.size, crc32 = checksum),
         )
+    }
+
+    /**
+     * Keeps the watch's orbits from running out, by fetching new ones itself.
+     *
+     * The file covers three days, so this refreshes well before that — an almanac that has
+     * expired is not merely useless, it is a receiver spending time on satellites that are
+     * no longer where it was told.
+     *
+     * Downloaded rather than asked of the wearer. The address is MediaTek's own, the file
+     * is public and the same for everyone, and the watch's receiver is a MediaTek part
+     * whose format this is: a file built from it was accepted by the watch, which is what
+     * turned this from a thing needing a capture of the official app every few days into
+     * something the app can simply do.
+     */
+    private suspend fun refreshAlmanac() {
+        val current = settings.current()
+        if (!current.gpsAlmanacAuto || sendingAgps != null) return
+
+        val age = System.currentTimeMillis() - current.almanacSentAtMillis
+        if (current.almanacSentAtMillis != 0L && age < ALMANAC_REFRESH_MILLIS) return
+
+        val almanac = withContext(Dispatchers.IO) {
+            AlmanacSource.fetch(System.currentTimeMillis() / 1000)
+        }
+        if (almanac == null) {
+            ProtocolLog.note("GPS data: could not fetch fresh orbits")
+            return
+        }
+
+        // Recorded before the transfer rather than after it. The watch takes several
+        // seconds and says nothing useful if it goes wrong, and a failure that leaves the
+        // timestamp untouched would have this retry on every single connection.
+        settings.setAlmanacSentAt(System.currentTimeMillis())
+        sendAlmanac(almanac, "fresh orbits")
     }
 
     /** One stretch of the almanac, at the offset the watch asked for. */
@@ -1753,6 +1799,12 @@ class WatchService : LifecycleService() {
         const val ACTION_INSTALL_WATCHFACE = "dev.recmf.action.INSTALL_WATCHFACE"
         const val EXTRA_WATCHFACE_URI = "dev.recmf.extra.WATCHFACE_URI"
         const val EXTRA_WATCHFACE_REPLACES = "dev.recmf.extra.WATCHFACE_REPLACES"
+
+        /**
+         * Well inside the three days a file covers, so the watch never runs out — and far
+         * enough apart that a watch reconnecting all day does not re-download all day.
+         */
+        private const val ALMANAC_REFRESH_MILLIS = 36L * 60 * 60 * 1000
 
         /** Long enough for the watch to have acted before it is asked what it did. */
         private const val WATCHFACE_SETTLE_MILLIS = 600L
