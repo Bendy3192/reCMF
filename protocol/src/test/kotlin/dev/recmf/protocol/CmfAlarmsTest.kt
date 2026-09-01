@@ -71,6 +71,45 @@ class CmfAlarmsTest {
     }
 
     @Test
+    fun `the records go out in the watch's own order, whatever order they arrive in`() {
+        // The caller picks which alarms survive — by when they next ring, which is not
+        // time of day — and the watch wants them by time of day. A list in another order
+        // was acknowledged and then not stored.
+        val payload = CmfAlarms.payload(
+            listOf(CmfAlarm(16, 38), CmfAlarm(3, 10), CmfAlarm(6, 10)),
+        )
+
+        assertEquals(
+            listOf(3 * 3600 + 10 * 60, 6 * 3600 + 10 * 60, 16 * 3600 + 38 * 60),
+            (0 until 3).map { seconds(payload, it) },
+        )
+        // And renumbered to match, since the index is the position in the list sent.
+        assertEquals(listOf(0, 1, 2), (0 until 3).map { payload[it * CmfAlarms.RECORD_SIZE + 4].toInt() })
+    }
+
+    @Test
+    fun `sorting for the wire happens after the cut, not before it`() {
+        // Otherwise the eight kept would be the eight earliest in the day rather than the
+        // eight that ring soonest, which is the opposite of what the caller asked for.
+        val late = CmfAlarm(23, 0)
+        val early = List(CmfAlarms.MAX_ALARMS) { CmfAlarm(hour = it, minute = 0) }
+
+        val payload = CmfAlarms.payload(listOf(late) + early)
+
+        assertEquals(CmfAlarms.MAX_ALARMS, payload.size / CmfAlarms.RECORD_SIZE)
+        // The 23:00 was first in, so it survives the cut; 07:00 was ninth and does not.
+        assertEquals(23 * 3600, seconds(payload, CmfAlarms.MAX_ALARMS - 1))
+    }
+
+    private fun seconds(payload: ByteArray, record: Int): Int {
+        val at = record * CmfAlarms.RECORD_SIZE
+        return (payload[at].toInt() and 0xff) or
+            ((payload[at + 1].toInt() and 0xff) shl 8) or
+            ((payload[at + 2].toInt() and 0xff) shl 16) or
+            ((payload[at + 3].toInt() and 0xff) shl 24)
+    }
+
+    @Test
     fun `repeat days become the watch's bitmask`() {
         val payload = CmfAlarms.payload(
             listOf(

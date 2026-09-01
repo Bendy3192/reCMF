@@ -53,6 +53,12 @@ object CmfAlarms {
      * nothing may call this until it holds a list the user actually chose or the watch
      * actually reported.
      *
+     * The records go out **in ascending time of day**. A list in another order was
+     * acknowledged and then not stored: the watch answered `applied` and a read straight
+     * afterwards still showed the single blank alarm it had before. Time order is how the
+     * watch itself stores them and how its own screen lists them, so this sends them the
+     * way it has been seen to accept.
+     *
      * The time is seconds since midnight rather than an hour and a minute, and it is
      * **little-endian**. This was big-endian here for a long time and nothing caught it:
      * [parse] read it back the same way round, so every round-trip test passed while the
@@ -65,7 +71,12 @@ object CmfAlarms {
      * back, and would make the round trip asymmetric is worse than no field.
      */
     fun payload(alarms: List<CmfAlarm>): ByteArray {
-        val capped = alarms.take(MAX_ALARMS)
+        // Which eight is the caller's decision; what order they go out in is not. The
+        // watch stores and displays them by time of day, and the only list it has ever
+        // been seen to accept — the one the official app left on it — was in that order.
+        // Sorting after the cut rather than before it keeps both: the caller still chooses
+        // which alarms survive, and the watch still gets them the way round it wants.
+        val capped = alarms.take(MAX_ALARMS).sortedBy { it.hour * 60 + it.minute }
         val buf = ByteBuffer.allocate(capped.size * RECORD_SIZE).order(ByteOrder.LITTLE_ENDIAN)
 
         capped.forEachIndexed { index, alarm ->
