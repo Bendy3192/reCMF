@@ -86,13 +86,20 @@ class CmfAgpsTest {
         assertFalse(CmfAgps.looksLikeEpo("000000010000zzzz".toByteArray()))
     }
 
-    /** MediaTek's own layout: 2304-byte slots of 32 satellites, hour in the first three. */
-    private fun epoDat(startHour: Int, slots: Int): ByteArray {
-        val out = ByteArray(slots * 2304)
+    /**
+     * MediaTek's own layout: six-hour slots of [satellites] records of 72 bytes, the hour
+     * in the first three of every record.
+     *
+     * Thirty-two is `EPO.DAT`, a month of GPS. Fifty-six is `EPO_GR_3_N.DAT`, three days
+     * of GPS and GLONASS together, and is what the official app sends.
+     */
+    private fun epoDat(startHour: Int, slots: Int, satellites: Int = 32): ByteArray {
+        val slotSize = satellites * 72
+        val out = ByteArray(slots * slotSize)
         for (s in 0 until slots) {
             val hour = startHour + s * 6
-            for (sat in 0 until 32) {
-                val at = s * 2304 + sat * 72
+            for (sat in 0 until satellites) {
+                val at = s * slotSize + sat * 72
                 out[at] = (hour and 0xff).toByte()
                 out[at + 1] = ((hour shr 8) and 0xff).toByte()
                 out[at + 2] = ((hour shr 16) and 0xff).toByte()
@@ -174,4 +181,32 @@ class CmfAgpsTest {
     /** A hex dump of ASCII digits, back to the digits themselves. */
     private fun String.hexAsAscii(): String =
         chunked(2).map { it.toInt(16).toChar() }.joinToString("")
+
+    @Test
+    fun `a file carrying GLONASS as well as GPS is recognised by its slots, not its size`() {
+        // The one that matters where GPS is jammed. Three days of 56 satellites is 48384
+        // bytes, which divides evenly by both 4032 and 2304 — so the shape has to be read
+        // from where the hour changes, and a file this size must not be mistaken for
+        // twenty-one slots of GPS.
+        // Twelve slots from the boundary this hour falls in, which is the whole of what a
+        // three-day file carries and exactly what is wanted.
+        val built = CmfAgps.buildFromEpo(
+            epoDat(408_972, slots = 12, satellites = 56),
+            nowHourSinceGpsEpoch = 408_973,
+        )!!
+
+        val body = 12 * 56 * 72
+        assertEquals(48_384, body)
+        assertEquals(16 + body + 16 + 32, built.size)
+        assertTrue(CmfAgps.looksLikeEpo(built))
+        // The 33rd record of the first slot is a GLONASS satellite, and it survived.
+        assertEquals(33, built[16 + 32 * 72 + 3].toInt())
+    }
+
+    @Test
+    fun `a file with only one slot has no boundary to read and is refused`() {
+        // Six hours of the three days wanted, so it would be refused anyway — but refused
+        // for a stated reason rather than by reading the slot size off the file length.
+        assertNull(CmfAgps.buildFromEpo(epoDat(408_960, slots = 1), 408_960))
+    }
 }

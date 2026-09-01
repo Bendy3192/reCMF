@@ -93,18 +93,22 @@ object CmfAgps {
      *
      * The watch's receiver is a MediaTek part and the file it wants is MediaTek's EPO,
      * wrapped in a container of tag-and-length records. MediaTek publishes the orbits
-     * themselves, openly and without an account, a month at a time; the official app
-     * republishes a three-day slice of them. So this cuts the same slice.
+     * themselves, openly and without an account; the official app republishes a three-day
+     * slice of them. So this cuts the same slice.
      *
-     * `EPO.DAT` is a run of 2304-byte blocks: one six-hour slot, 32 GPS satellites of 72
-     * bytes each, the first three of which are the slot's hour since the GPS epoch. This
-     * takes [SLOTS] slots from the six-hour boundary at or before [nowHourSinceGpsEpoch]
-     * and wraps them as record 1.
+     * A MediaTek EPO file is a run of six-hour slots. Each slot is one satellite record of
+     * 72 bytes per satellite, and the first three bytes of every record are the slot's
+     * hour since the GPS epoch — which is what makes the layout readable without being
+     * told it. This takes [SLOTS] slots from the six-hour boundary at or before
+     * [nowHourSinceGpsEpoch] and wraps them as record 1.
      *
-     * Only GPS. The official app's file also carries GLONASS, BeiDou and Galileo, each
-     * from a MediaTek file whose name is not known — the one that is known is the one that
-     * matters most, since GPS is what a receiver looks for first. A GPS-only file was
-     * built this way and the watch accepted it.
+     * **How many satellites a slot holds is read, not assumed.** MediaTek publishes the
+     * same orbits in more than one shape: `EPO.DAT` is a month of 32 GPS satellites, 2304
+     * bytes to a slot, while `EPO_GR_3_N.DAT` is three days of 56 — GPS 1-32 and then
+     * GLONASS 65-88 — at 4032. The official app's file is the second of those, and the
+     * difference is not academic: where GPS is jammed, GLONASS may be the only
+     * constellation a receiver can hear, and a GPS-only almanac helps it not at all. So
+     * the slot size is found from where the hour first changes, and either file works.
      *
      * The trailing record is 32 ASCII characters that look like a checksum and are not
      * one the watch checks: it accepted a file whose orbits had been replaced wholesale
@@ -112,28 +116,55 @@ object CmfAgps {
      * does verify is the CRC32 in [transferRequest], which is computed here over whatever
      * is actually sent.
      *
-     * @return null if [epoDat] is not a whole number of blocks or does not cover now.
+     * @return null if [epoDat] is not a whole number of slots or does not cover now.
      */
     fun buildFromEpo(epoDat: ByteArray, nowHourSinceGpsEpoch: Int): ByteArray? {
-        if (epoDat.isEmpty() || epoDat.size % EPO_BLOCK != 0) return null
+        val slot = slotSize(epoDat) ?: return null
+        if (epoDat.size % slot != 0) return null
 
-        val blocks = HashMap<Int, ByteArray>(epoDat.size / EPO_BLOCK)
-        for (at in epoDat.indices step EPO_BLOCK) {
-            val hour = (epoDat[at].toInt() and 0xff) or
-                ((epoDat[at + 1].toInt() and 0xff) shl 8) or
-                ((epoDat[at + 2].toInt() and 0xff) shl 16)
-            blocks[hour] = epoDat.copyOfRange(at, at + EPO_BLOCK)
+        val slots = HashMap<Int, ByteArray>(epoDat.size / slot)
+        for (at in epoDat.indices step slot) {
+            slots[hourAt(epoDat, at)] = epoDat.copyOfRange(at, at + slot)
         }
 
         val start = nowHourSinceGpsEpoch - nowHourSinceGpsEpoch.mod(SLOT_HOURS)
         val wanted = (0 until SLOTS).map { start + it * SLOT_HOURS }
         // A file that stops short is worse than none: the receiver would trust orbits for
         // hours the file never covered. Insist on the whole run from now.
-        val body = wanted.map { blocks[it] ?: return null }.fold(ByteArray(0)) { all, b -> all + b }
+        val body = wanted.map { slots[it] ?: return null }.fold(ByteArray(0)) { all, b -> all + b }
 
         return recordHeader(1, body.size) + body +
             recordHeader(4, TRAILER.size) + TRAILER
     }
+
+    /**
+     * How long one six-hour slot is, taken from where the hour first changes.
+     *
+     * Reading it beats trusting the file's length, which cannot tell the two shapes apart:
+     * a three-day 56-satellite file is 48384 bytes, and that divides evenly by both 4032
+     * and 2304. The hour does not lie — every satellite record in a slot carries the same
+     * one, and the next slot's is six higher.
+     *
+     * @return null for a file with no second slot to find the boundary from, which is not
+     *   one this can use anyway: it would cover six hours of the three days needed.
+     */
+    private fun slotSize(epoDat: ByteArray): Int? {
+        if (epoDat.size < 2 * SATELLITE) return null
+
+        val first = hourAt(epoDat, 0)
+        var at = SATELLITE
+        while (at + SATELLITE <= epoDat.size) {
+            if (hourAt(epoDat, at) != first) return at
+            at += SATELLITE
+        }
+        return null
+    }
+
+    /** The hour a satellite record belongs to: three bytes, little-endian, at its start. */
+    private fun hourAt(epoDat: ByteArray, at: Int): Int =
+        (epoDat[at].toInt() and 0xff) or
+            ((epoDat[at + 1].toInt() and 0xff) shl 8) or
+            ((epoDat[at + 2].toInt() and 0xff) shl 16)
 
     /** Hours from the GPS epoch, which is what an EPO block's first three bytes count. */
     fun hoursSinceGpsEpoch(epochSeconds: Long): Int =
@@ -158,8 +189,8 @@ object CmfAgps {
     private const val START: Byte = 0x01
     private const val PADDING: Byte = 0xff.toByte()
 
-    /** One six-hour slot of 32 GPS satellites, 72 bytes each. */
-    private const val EPO_BLOCK = 2304
+    /** One satellite's predicted orbit for one six-hour slot. */
+    private const val SATELLITE = 72
     private const val SLOT_HOURS = 6
 
     /** Twelve slots is three days, which is the span the official app's file covers. */

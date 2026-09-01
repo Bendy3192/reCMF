@@ -4,6 +4,7 @@
 package dev.recmf.gps
 
 import android.util.Log
+import dev.recmf.ble.ProtocolLog
 import dev.recmf.protocol.CmfAgps
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -33,7 +34,35 @@ object AlmanacSource {
      * wants satellite orbits — against a fix that otherwise takes minutes in the open and
      * never at all between buildings.
      */
-    const val URL: String = "http://epodownload.mediatek.com/EPO.DAT"
+    private const val HOST = "http://epodownload.mediatek.com"
+
+    /**
+     * GPS **and GLONASS**, three days at a time, which is the file the official app sends.
+     *
+     * MediaTek's own GPS driver names these: `EPO_GPS_3_N.DAT` for GPS alone and
+     * `EPO_GR_3_N.DAT` for the two together, N running one to ten. Three days of 56
+     * satellites at 72 bytes a slot is 48384 bytes, which is exactly the size of the orbit
+     * record in the file captured from the official app — GPS 1-32 followed by GLONASS
+     * 65-88.
+     *
+     * Worth the extra request. Where GPS is jammed or simply blocked by buildings, GLONASS
+     * may be the only constellation the receiver can hear, and a GPS-only almanac helps it
+     * not at all.
+     *
+     * Which of the ten covers today is not something the file name says, so they are tried
+     * in turn and the first that covers the next three days is used. In practice that is
+     * the first.
+     */
+    private val COMBINED = (1..10).map { "$HOST/EPO_GR_3_$it.DAT" }
+
+    /**
+     * A month of GPS alone, and the fallback.
+     *
+     * This is the file reCMF used before it knew there was a better one, and the watch
+     * accepted an almanac built from it. Kept because a GPS-only almanac is worth far more
+     * than none, and one server path going missing should not cost the feature.
+     */
+    const val URL: String = "$HOST/EPO.DAT"
 
     /** A month of orbits is about 276 KB; well past that means something else answered. */
     private const val MAX_BYTES = 4 * 1024 * 1024
@@ -51,28 +80,47 @@ object AlmanacSource {
      * receiver trusting orbits for hours the file never covered.
      */
     fun fetch(nowEpochSeconds: Long): ByteArray? {
-        val downloaded = download() ?: return null
-        val built = CmfAgps.buildFromEpo(
-            epoDat = downloaded,
-            nowHourSinceGpsEpoch = CmfAgps.hoursSinceGpsEpoch(nowEpochSeconds),
-        )
+        val nowHour = CmfAgps.hoursSinceGpsEpoch(nowEpochSeconds)
+
+        for (url in COMBINED) {
+            // A file that is not there ends the search rather than costing nine more
+            // requests: the ten differ only in which three days they cover, so if the
+            // first cannot be fetched at all, none of them can.
+            val downloaded = download(url) ?: break
+
+            val built = CmfAgps.buildFromEpo(downloaded, nowHour)
+            if (built != null) {
+                // Which constellations the watch was given is worth saying: it is the
+                // difference between a fix where GPS is jammed and no fix at all, and
+                // there is nothing else in the log that would show it.
+                ProtocolLog.note("GPS data: fetched orbits for GPS and GLONASS")
+                Log.i(TAG, "Built ${built.size} bytes from $url")
+                return built
+            }
+            // It exists but covers other days. The next one may be today's.
+        }
+
+        val downloaded = download(URL) ?: return null
+        val built = CmfAgps.buildFromEpo(downloaded, nowHour)
         if (built == null) {
             Log.w(TAG, "Downloaded ${downloaded.size} bytes that do not cover the next three days")
+        } else {
+            ProtocolLog.note("GPS data: fetched orbits for GPS only")
         }
         return built
     }
 
-    private fun download(): ByteArray? {
+    private fun download(from: String): ByteArray? {
         var connection: HttpURLConnection? = null
         return try {
-            connection = (URL(URL).openConnection() as HttpURLConnection).apply {
+            connection = (URL(from).openConnection() as HttpURLConnection).apply {
                 connectTimeout = TIMEOUT_MILLIS
                 readTimeout = TIMEOUT_MILLIS
                 requestMethod = "GET"
             }
 
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                Log.w(TAG, "Orbit server answered ${connection.responseCode}")
+                Log.i(TAG, "Orbit server answered ${connection.responseCode} for $from")
                 return null
             }
 
