@@ -148,22 +148,29 @@ object PhoneAlarms {
      * worth stating because it looks like an omission — read off a real phone, a weekday
      * alarm is 31 and a weekend one is 96, which is what those bits mean on both sides.
      *
-     * The watch holds [CmfAlarms.MAX_ALARMS] and a morning can easily hold more than that,
-     * so something has to go. Ordering by **when each alarm will next ring** is the ordering
-     * that makes the right thing go: one that has been switched off never rings and falls to
-     * the end, and one that has already gone off this morning is now tomorrow's and yields
-     * its place to the ones still to come. Sorting by time of day, which this used to do,
-     * kept a spent six o'clock ahead of a seven o'clock that had not rung yet.
+     * An alarm switched off on the phone is left out entirely rather than sent as a
+     * disabled one. Mirroring it faithfully would be defensible, but it is not what the
+     * list is for: the watch holds [CmfAlarms.MAX_ALARMS] and a morning can hold more than
+     * that, so a slot spent on something that will not ring is a slot taken from something
+     * that will. It also makes the watch's own screen mean one thing — what is going to
+     * wake you — instead of two.
+     *
+     * What survives is then ordered by **when each alarm will next ring**, which is what
+     * makes the right one drop out when there are still too many: one that has already
+     * gone off this morning is now tomorrow's and yields its place to the ones still to
+     * come. Sorting by time of day, which this used to do, kept a spent six o'clock ahead
+     * of a seven o'clock that had not rung yet.
      */
     fun toWatchAlarms(rows: List<Row>, now: LocalDateTime = LocalDateTime.now()): List<CmfAlarm> =
         rows
-            .sortedBy { nextRing(it, now) ?: LocalDateTime.MAX }
+            .mapNotNull { row -> nextRing(row, now)?.let { row to it } }
+            .sortedBy { (_, ringsAt) -> ringsAt }
             .take(CmfAlarms.MAX_ALARMS)
-            .map { row ->
+            .map { (row, _) ->
                 CmfAlarm(
                     hour = row.hour,
                     minute = row.minute,
-                    enabled = row.enabled,
+                    enabled = true,
                     days = weekdays(row.days),
                 )
             }

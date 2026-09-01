@@ -192,10 +192,19 @@ back as sixty minutes, which only works one way round.
 
 The phone's own alarms can be mirrored onto the watch, which needs root: Android has no
 public way to list another app's alarms, and `AlarmManager` gives the next one only. The
-clock's provider answers `content query` under `su`. Ordering is by **when each alarm will
-next ring**, not by time of day, because the watch holds eight and a morning can hold more:
-one that is switched off never rings and falls off the end, and one that has already gone
-off is now tomorrow's and yields its slot to what is still to come.
+clock's provider answers `content query` under `su`. An alarm switched off on the phone is
+left out of the list entirely rather than mirrored as a disabled one — a slot spent on
+something that will not ring is a slot taken from something that will. What is left is
+ordered by **when each alarm will next ring**, not by time of day, because the watch holds
+eight and a morning can hold more: one that has already gone off is now tomorrow's and
+yields its slot to what is still to come. The records themselves go out in time order,
+which is what the watch stores.
+
+Still open: the watch acknowledges `ALARMS_SET` and stores nothing. The bytes now match the
+list the official app left on it, field for field, and a read taken immediately after the
+write still shows the blank alarm that was there before. What differs from that known-good
+list is the number of records — it had four, ours has had four to seven — and nothing else
+that can be seen.
 
 **Find, both ways.** `FIND_WATCH` makes the watch ring; `FIND_PHONE` arrives *from* the
 watch and now rings the phone — the first thing here that is a feature of the phone rather

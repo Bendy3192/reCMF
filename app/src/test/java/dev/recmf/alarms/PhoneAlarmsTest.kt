@@ -3,6 +3,7 @@
  */
 package dev.recmf.alarms
 
+import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfWeekday
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -141,5 +142,24 @@ class PhoneAlarmsTest {
 
         assertEquals(8, alarms.size)
         assertTrue(alarms.all { it.enabled })
+    }
+
+    @Test
+    fun `an alarm switched off leaves the watch even when there is room for it`() {
+        // Not only under pressure from the eight slots: a switched-off alarm is not going
+        // to wake anyone, and a watch that lists it is answering a question nobody asked.
+        val off = PhoneAlarms.Row(hour = 5, minute = 0, days = 0, enabled = false)
+        val on = PhoneAlarms.Row(hour = 9, minute = 0, days = 0, enabled = true)
+
+        val alarms = PhoneAlarms.toWatchAlarms(listOf(off, on), now)
+
+        assertEquals(listOf(CmfAlarm(9, 0, enabled = true)), alarms)
+    }
+
+    @Test
+    fun `a phone with everything switched off sends an empty list`() {
+        val rows = (0 until 4).map { PhoneAlarms.Row(hour = 6 + it, minute = 0, days = 0, enabled = false) }
+
+        assertEquals(emptyList<CmfAlarm>(), PhoneAlarms.toWatchAlarms(rows, now))
     }
 }
