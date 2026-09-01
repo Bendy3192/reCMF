@@ -168,9 +168,12 @@ class CmfAlarmsTest {
     }
 
     @Test
-    fun `an empty list produces an empty payload rather than a wiping one`() {
-        // Worth pinning: the watch keeps exactly what it receives, so this is the
-        // difference between "no change requested" and "delete every alarm".
+    fun `an empty list produces an empty payload, which the watch reads as delete them all`() {
+        // This used to say the opposite — that an empty payload meant "no change
+        // requested" — and that was a guess dressed as a fact. Watched on hardware: with
+        // every phone alarm switched off, reCMF sent this, the watch answered "applied",
+        // and the read straight afterwards came back with nothing. An empty list is a
+        // wipe, so nothing may send one that the user did not ask for.
         assertTrue(CmfAlarms.payload(emptyList()).isEmpty())
     }
 

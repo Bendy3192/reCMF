@@ -113,6 +113,11 @@ object CmfAlarms {
      * case that matters most: it is the difference between "the watch has none" and "the
      * watch did not answer", and reading it wrong in the cautious direction would leave
      * the list permanently unreadable.
+     *
+     * Going the other way, an empty payload **written** to the watch deletes every alarm
+     * it holds. That is settled on hardware, and it is worth knowing before writing one:
+     * with all the phone's alarms switched off, reCMF sent nothing, the watch said applied,
+     * and a read taken immediately afterwards found nothing left.
      */
     fun parse(payload: ByteArray): List<CmfAlarm>? {
         if (payload.size % RECORD_SIZE != 0) return null
