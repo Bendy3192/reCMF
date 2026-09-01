@@ -86,7 +86,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -235,10 +234,9 @@ fun HomeScreen(
                     onSelect = { scope.launch { pager.animateScrollToPage(it) } },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
-                        // Inset from both edges rather than sized to its contents. The
-                        // pills take an equal share each now, so the dock spans what it is
-                        // given — and what it is given should be the screen less a margin,
-                        // not the screen itself.
+                        // A guard, not a measurement: the dock is as wide as its pills
+                        // and one of them carries a word, so this only stops a very long
+                        // word in some future language from reaching the glass.
                         .padding(horizontal = 16.dp)
                         .padding(bottom = 24.dp),
                 )
@@ -300,10 +298,9 @@ private fun TabContent(
             .padding(horizontal = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         // Room for the floating dock, which sits over the content rather than beside it.
-        // Clears the floating dock, which is a stacked icon and label rather than the
-        // single line it used to be. Too little and the last card sits under it, which is
-        // exactly what happened when the icons went in and this stayed at 96.
-        contentPadding = PaddingValues(bottom = 112.dp),
+        // One row tall again — icon and, on the selected tab only, its name beside it —
+        // so this is back to clearing that rather than the two-line pills it grew for.
+        contentPadding = PaddingValues(bottom = 96.dp),
     ) {
         // On both tabs: it is the answer to "is any of this current?", and neither tab
         // means anything without it.
@@ -515,11 +512,6 @@ private fun FloatingTabDock(
 
                 Box(
                     modifier = Modifier
-                        // An equal share each, so the dock fits whatever number of tabs
-                        // there are in whatever language. Sized to the longest word, five
-                        // tabs ran past the edge of a narrow phone in Russian — and the
-                        // word that did it was a real one, not a contrived example.
-                        .weight(1f)
                         .graphicsLayer {
                             scaleX = scale
                             scaleY = scale
@@ -529,34 +521,39 @@ private fun FloatingTabDock(
                         .clip(RoundedCornerShape(20.dp))
                         .background(background)
                         .clickable { onSelect(index) }
-                        // Stacked icon and label, and the width now comes from the share
-                        // above rather than from the word, so this is breathing room
-                        // rather than measurement.
-                        .padding(horizontal = 4.dp, vertical = 8.dp),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    // Icon above label rather than beside it: four tabs already had the
-                    // pills squeezed to fit a long word, and a fifth is coming. Stacked,
-                    // the pill is as wide as the longest word alone, and the icon is what
-                    // the thumb aims at once the tabs are familiar.
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    // The word appears on the tab you are on, and nowhere else.
+                    //
+                    // Five tabs cannot all carry their names on a narrow phone. Sized to
+                    // the longest word they ran past the edge of the screen; given an
+                    // equal share each they fitted and then cut the words in half, and
+                    // "Цифербл…" is not a word. Naming one at a time costs nothing —
+                    // the tab you are on is the one whose name you least need — and it
+                    // holds for any language and any number of tabs, which neither of
+                    // the other two did.
+                    //
+                    // Beside the icon rather than under it, so the pill grows sideways as
+                    // the selection moves. Stacked, the dock would change height whenever
+                    // a label appeared.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             painter = painterResource(entry.iconRes),
-                            contentDescription = null,
+                            contentDescription = stringResource(entry.labelRes),
                             tint = content,
                             modifier = Modifier.size(20.dp),
                         )
-                        Spacer(Modifier.height(2.dp))
-                        Text(
-                            text = stringResource(entry.labelRes),
-                            color = content,
-                            style = MaterialTheme.typography.labelSmall,
-                            // One line, and cut rather than wrapped: a two-line label
-                            // would make its pill taller than its neighbours and the
-                            // whole dock would step.
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+
+                        if (isSelected) {
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = stringResource(entry.labelRes),
+                                color = content,
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                            )
+                        }
                     }
                 }
             }
