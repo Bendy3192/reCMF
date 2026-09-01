@@ -259,7 +259,16 @@ class WatchService : LifecycleService() {
 
                 // Only here, not on the timer: a person pressing Sync is asking what the
                 // watch says, and the answer is worth a dozen frames.
-                if (_status.value == ConnectionState.READY) readBackSettings()
+                if (_status.value == ConnectionState.READY) {
+                    readBackSettings()
+
+                    // Also here, and not only on connect. A phone that keeps hold of the
+                    // watch for days would otherwise never refresh the orbits at all —
+                    // the connect that was meant to trigger it never happens again. This
+                    // also gives a person a way to ask for it, which the card's switch
+                    // alone does not.
+                    refreshAlmanac(becauseAsked = true)
+                }
             }
 
             ACTION_FIND_WATCH -> lifecycleScope.launch {
@@ -731,7 +740,7 @@ class WatchService : LifecycleService() {
         connection.send(CmfCommand.SERIAL_NUMBER_GET)
 
         sendGpsSeed()
-        refreshAlmanac()
+        refreshAlmanac(becauseAsked = false)
 
         readBackSettings()
 
@@ -952,12 +961,22 @@ class WatchService : LifecycleService() {
      * turned this from a thing needing a capture of the official app every few days into
      * something the app can simply do.
      */
-    private suspend fun refreshAlmanac() {
+    private suspend fun refreshAlmanac(becauseAsked: Boolean) {
         val current = settings.current()
-        if (!current.gpsAlmanacAuto || sendingAgps != null) return
+        if (sendingAgps != null) return
+        if (!current.gpsAlmanacAuto) {
+            // Silent unless a person asked, since this runs on every connection.
+            if (becauseAsked) ProtocolLog.note("GPS data: fetching orbits is switched off")
+            return
+        }
 
         val age = System.currentTimeMillis() - current.almanacSentAtMillis
-        if (current.almanacSentAtMillis != 0L && age < ALMANAC_REFRESH_MILLIS) return
+        if (current.almanacSentAtMillis != 0L && age < ALMANAC_REFRESH_MILLIS) {
+            if (becauseAsked) {
+                ProtocolLog.note("GPS data: the watch's orbits are ${age / 3_600_000} hours old")
+            }
+            return
+        }
 
         val almanac = withContext(Dispatchers.IO) {
             AlmanacSource.fetch(System.currentTimeMillis() / 1000)
