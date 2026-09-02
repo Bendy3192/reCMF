@@ -67,10 +67,7 @@ import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
@@ -110,6 +107,7 @@ import dev.recmf.ble.DiscoveredWatch
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
+import dev.recmf.ui.theme.Motion
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.BatteryStatus
@@ -521,6 +519,7 @@ private fun FloatingTabDock(
                     } else {
                         Color.Transparent
                     },
+                    animationSpec = Motion.effects(),
                     label = "dock background",
                 )
                 val content by animateColorAsState(
@@ -529,6 +528,7 @@ private fun FloatingTabDock(
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
                     },
+                    animationSpec = Motion.effects(),
                     label = "dock label",
                 )
 
@@ -539,12 +539,12 @@ private fun FloatingTabDock(
                 // something that answered, where the same movement on a fixed curve reads
                 // as a screen redrawing. It is small on purpose — a bounce you can name is
                 // a bounce that will annoy by the hundredth tap.
+                // A tap on a dock icon is the shortest travel on the screen, so the
+                // fast spatial spring: it is over before the finger lifts, and still
+                // overshoots enough to be felt.
                 val scale by animateFloatAsState(
                     targetValue = if (isSelected) 1f else 0.92f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
+                    animationSpec = Motion.spatialFast(),
                     label = "dock scale",
                 )
 
@@ -751,9 +751,13 @@ private fun WatchBar(state: HomeUiState, onSyncNow: () -> Unit) {
 private fun BatteryRing(battery: BatteryStatus) {
     // Animated, so a battery that has moved since the last sync arrives as a movement
     // rather than as a different number that was always there.
+    // The ring sweeps most of a circle on the first reading after a connect, which is the
+    // longest travel anything here makes — the slow spatial spring, and a spring rather
+    // than a fixed seven hundred milliseconds so that a small correction takes a moment
+    // and a full sweep takes its time.
     val level by animateFloatAsState(
         targetValue = battery.levelPercent / 100f,
-        animationSpec = tween(durationMillis = 700),
+        animationSpec = Motion.spatialSlow(),
         label = "battery",
     )
 
