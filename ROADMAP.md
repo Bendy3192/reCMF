@@ -314,6 +314,18 @@ The whole 97872-byte file is:
 
 ```
 tag 1  48384  12 slots x 56 satellites x 72 B   GPS 1-32 and GLONASS 65-88
+
+**The layout is positional, and getting that wrong is worse than sending nothing.** Every
+satellite sits at a fixed offset in its slot, and one the file has no orbit for is written
+as an empty record *in its own place* rather than left out — `EPO.DAT` does exactly this
+for satellite 13, in all 120 of its slots. MediaTek's month of GPS is the same file
+thirty-two records wide, so a slice cut from it and sent as-is gives a reader expecting
+fifty-six the next slot's first twenty-four satellites read as GLONASS, and every slot
+after the first starting in the wrong place. Wrong orbits for everything, and a receiver
+believes an almanac. reCMF sent exactly that for weeks and the watch never fixed outdoors.
+The GLONASS half is now written as absent, using the empty record from the slot itself —
+its trailing bytes change with the hour, so one copied from another slot would carry
+another slot's tail.
 tag 2  25128  1 + 12 x 29                       BeiDou, 206 onwards
 tag 3  24264  1 + 12 x 28                       Galileo, 102 onwards
 tag 4     32  ASCII, looks like a checksum

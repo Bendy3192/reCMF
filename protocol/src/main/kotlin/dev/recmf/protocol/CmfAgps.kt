@@ -120,7 +120,10 @@ object CmfAgps {
      */
     fun buildFromEpo(epoDat: ByteArray, nowHourSinceGpsEpoch: Int): ByteArray? {
         val slot = slotSize(epoDat) ?: return null
-        if (epoDat.size % slot != 0) return null
+        if (epoDat.size % slot != 0 || slot % SATELLITE != 0) return null
+
+        val satellites = slot / SATELLITE
+        if (satellites != GPS_SATELLITES && satellites != COMBINED_SATELLITES) return null
 
         val slots = HashMap<Int, ByteArray>(epoDat.size / slot)
         for (at in epoDat.indices step slot) {
@@ -131,10 +134,61 @@ object CmfAgps {
         val wanted = (0 until SLOTS).map { start + it * SLOT_HOURS }
         // A file that stops short is worse than none: the receiver would trust orbits for
         // hours the file never covered. Insist on the whole run from now.
-        val body = wanted.map { slots[it] ?: return null }.fold(ByteArray(0)) { all, b -> all + b }
+        val body = wanted
+            .map { combined(slots[it] ?: return null) }
+            .fold(ByteArray(0)) { all, b -> all + b }
 
         return recordHeader(1, body.size) + body +
             recordHeader(4, TRAILER.size) + TRAILER
+    }
+
+    /**
+     * One slot in the shape the watch reads, whatever shape it arrived in.
+     *
+     * **The layout is positional, and this is what a GPS-only file gets wrong.** In the
+     * file the official app sends, every slot is exactly fifty-six records: GPS 1-32 and
+     * then GLONASS 65-88, each satellite at a fixed offset, with a satellite the file has
+     * no orbit for written as an empty record *in its own place* rather than left out.
+     * MediaTek's month of GPS is the same thing thirty-two records wide.
+     *
+     * Handing thirty-two-record slots to a reader expecting fifty-six does not give it
+     * GPS and no GLONASS. It gives it the next slot's first twenty-four satellites read as
+     * GLONASS, and every slot after the first starting in the wrong place — wrong orbits
+     * for everything, which is worse than no almanac at all, because a receiver believes
+     * an almanac. That is what a watch that will not fix outdoors looks like.
+     *
+     * So the GLONASS half is written as absent. The empty record is borrowed from the
+     * slot itself rather than invented: `EPO.DAT` carries one in every slot — satellite 13
+     * has no orbit in any of the 120 observed — and its trailing bytes change with the
+     * hour, so a record copied from a different slot would carry another slot's tail.
+     */
+    private fun combined(slot: ByteArray): ByteArray {
+        if (slot.size == COMBINED_SATELLITES * SATELLITE) return slot
+
+        val absent = absentRecord(slot)
+        var out = slot
+        repeat(COMBINED_SATELLITES - GPS_SATELLITES) { out += absent }
+        return out
+    }
+
+    /**
+     * What this file writes for a satellite it has no orbit for.
+     *
+     * Taken from the slot when it has one, so the hour and whatever is computed from it
+     * are genuine. Falling back to the hour and zeroes when every satellite in the slot
+     * has data: it says the same thing in the same field, and the alternative — copying a
+     * record belonging to another hour — would be a lie about which hour it covers.
+     */
+    private fun absentRecord(slot: ByteArray): ByteArray {
+        for (at in slot.indices step SATELLITE) {
+            if (slot[at + SATELLITE_ID] == 0.toByte()) return slot.copyOfRange(at, at + SATELLITE)
+        }
+
+        return ByteArray(SATELLITE).also {
+            it[0] = slot[0]
+            it[1] = slot[1]
+            it[2] = slot[2]
+        }
     }
 
     /**
@@ -192,6 +246,15 @@ object CmfAgps {
     /** One satellite's predicted orbit for one six-hour slot. */
     private const val SATELLITE = 72
     private const val SLOT_HOURS = 6
+
+    /** Where a record says which satellite it is for. Zero means it is for none. */
+    private const val SATELLITE_ID = 3
+
+    /** `EPO.DAT`: GPS 1-32. */
+    private const val GPS_SATELLITES = 32
+
+    /** What the watch reads: GPS 1-32 then GLONASS 65-88, each at a fixed offset. */
+    private const val COMBINED_SATELLITES = 56
 
     /** Twelve slots is three days, which is the span the official app's file covers. */
     private const val SLOTS = 12

@@ -116,11 +116,66 @@ class CmfAgpsTest {
         // cuts the same slice, so nothing has to be captured from the official app again.
         val built = CmfAgps.buildFromEpo(epoDat(408_960, 120), nowHourSinceGpsEpoch = 408_973)!!
 
-        // Twelve six-hour slots is three days, wrapped as record 1 plus the trailer.
-        val body = 12 * 2304
+        // Twelve six-hour slots of fifty-six satellites, whatever the source held. The
+        // file the official app sends is 48384 bytes of orbit and so is this.
+        val body = 12 * 56 * 72
+        assertEquals(48_384, body)
         assertEquals(16 + body + 16 + 32, built.size)
         assertTrue(CmfAgps.looksLikeEpo(built))
         assertEquals("00000001" + "%08x".format(body), built.copyOf(16).toHex().hexAsAscii())
+    }
+
+    @Test
+    fun `a GPS-only file is padded to the layout the watch reads, not sent short`() {
+        // The layout is positional: GPS 1-32 then GLONASS 65-88, every satellite at a
+        // fixed offset. Thirty-two-record slots handed to a reader expecting fifty-six do
+        // not give it GPS and no GLONASS — they give it the next slot's satellites read
+        // as GLONASS and every slot after the first starting in the wrong place. Wrong
+        // orbits for everything, which is worse than no almanac, because a receiver
+        // believes an almanac.
+        val built = CmfAgps.buildFromEpo(epoDat(408_972, 12), nowHourSinceGpsEpoch = 408_973)!!
+        val body = built.copyOfRange(16, 16 + 12 * 56 * 72)
+
+        fun idAt(slot: Int, position: Int) = body[(slot * 56 + position) * 72 + 3].toInt()
+
+        // The GPS half is MediaTek's, in its own order.
+        assertEquals(1, idAt(slot = 0, position = 0))
+        assertEquals(32, idAt(slot = 0, position = 31))
+        // The GLONASS half says it has nothing, rather than holding somebody else's data.
+        assertEquals(0, idAt(slot = 0, position = 32))
+        assertEquals(0, idAt(slot = 0, position = 55))
+        // And the slot after it starts where the reader will look for it.
+        assertEquals(1, idAt(slot = 1, position = 0))
+    }
+
+    @Test
+    fun `the empty records carry the hour of the slot they were added to`() {
+        // Not a lie about which hour they cover, and not a record borrowed from another
+        // slot: the real file's own empty record has a tail that changes with the hour.
+        val built = CmfAgps.buildFromEpo(epoDat(408_972, 12), nowHourSinceGpsEpoch = 408_973)!!
+        val body = built.copyOfRange(16, 16 + 12 * 56 * 72)
+
+        fun hourAt(slot: Int, position: Int): Int {
+            val at = (slot * 56 + position) * 72
+            return (body[at].toInt() and 0xff) or
+                ((body[at + 1].toInt() and 0xff) shl 8) or
+                ((body[at + 2].toInt() and 0xff) shl 16)
+        }
+
+        assertEquals(408_972, hourAt(slot = 0, position = 40))
+        assertEquals(409_038, hourAt(slot = 11, position = 40))
+    }
+
+    @Test
+    fun `a file that already carries GLONASS is passed through as it is`() {
+        val built = CmfAgps.buildFromEpo(
+            epoDat(408_972, slots = 12, satellites = 56),
+            nowHourSinceGpsEpoch = 408_973,
+        )!!
+        val body = built.copyOfRange(16, 16 + 12 * 56 * 72)
+
+        // The 33rd record is a satellite, not a hole: nothing was padded over it.
+        assertEquals(33, body[32 * 72 + 3].toInt())
     }
 
     @Test
