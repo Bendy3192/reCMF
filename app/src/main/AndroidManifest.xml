@@ -28,6 +28,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!--
+        Coarse only, and requested at the moment the wearer presses "here" on the weather
+        card — never at startup and never in the background. Typing a city still works
+        with nothing granted, which is how this app worked before and remains the default.
+        The Bluetooth scan above keeps neverForLocation: reCMF still does not infer where
+        anyone is from a radio.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!--
       For installing an update reCMF downloaded itself. Declaring it is not enough: the
       user also has to allow reCMF to install apps, in system settings. Android shows its
       own confirmation for every install regardless — there is no silent path here short

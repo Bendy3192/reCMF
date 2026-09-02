@@ -337,4 +337,6 @@
     <string name="sport_parachuting">Parachuting</string>
     <string name="sport_auto_racing">Auto Racing</string>
     <string name="sport_parkour">Parkour</string>
+    <string name="weather_here">Here</string>
+    <string name="weather_no_position">The phone does not know where it is</string>
 </resources>

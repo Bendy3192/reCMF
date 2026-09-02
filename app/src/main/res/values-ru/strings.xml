@@ -338,4 +338,6 @@
     <string name="sport_parachuting">Парашют</string>
     <string name="sport_auto_racing">Автогонки</string>
     <string name="sport_parkour">Паркур</string>
+    <string name="weather_here">Здесь</string>
+    <string name="weather_no_position">Телефон не знает, где он</string>
 </resources>

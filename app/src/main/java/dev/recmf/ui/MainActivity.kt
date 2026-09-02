@@ -24,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.Context
 import dev.recmf.health.HealthConnectSync
+import dev.recmf.weather.PhoneLocation
 import dev.recmf.service.WatchService
 import dev.recmf.ui.theme.ReCmfTheme
 
@@ -50,6 +51,7 @@ class MainActivity : ComponentActivity() {
 
     private val requestHealthConnect =
         registerForActivityResult(PermissionControllerContract()) { }
+
 
     /**
      * Opens the exemption dialog for reCMF specifically.
@@ -130,6 +132,17 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                /**
+                 * Coarse location, for the weather, asked for only when the button is
+                 * pressed. Refusal is an answer rather than a failure: the city can still
+                 * be typed, which is what every version before this one required.
+                 */
+                val askLocation = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestMultiplePermissions(),
+                ) { granted ->
+                    if (granted.values.any { it }) model.useCurrentLocation()
+                }
+
                 // Which face the chosen file will displace, remembered across the trip out
                 // to the system picker — the activity can be recreated while it is open.
                 var replacing by rememberSaveable { mutableIntStateOf(-1) }
@@ -181,6 +194,17 @@ class MainActivity : ComponentActivity() {
                     cityLookup = cityLookup,
                     onWeatherEnabled = model::setWeatherEnabled,
                     onFindCity = model::findCity,
+                    onUseMyLocation = {
+                        // Asked for at the moment it is used, not at startup: this app
+                        // works entirely without it, and a permission dialog on first
+                        // launch for a feature nobody has asked for is how apps teach
+                        // people to refuse everything.
+                        if (PhoneLocation.granted(this@MainActivity)) {
+                            model.useCurrentLocation()
+                        } else {
+                            askLocation.launch(PhoneLocation.PERMISSIONS)
+                        }
+                    },
                     onGrantNotificationAccess = {
                         startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
                     },

@@ -156,6 +156,7 @@ fun HomeScreen(
     cityLookup: CityLookup,
     onWeatherEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
+    onUseMyLocation: () -> Unit,
     onGrantNotificationAccess: () -> Unit,
     onAllowBackgroundWork: () -> Unit,
     onScan: () -> Unit,
@@ -211,6 +212,7 @@ fun HomeScreen(
                         cityLookup = cityLookup,
                         onWeatherEnabled = onWeatherEnabled,
                         onFindCity = onFindCity,
+                        onUseMyLocation = onUseMyLocation,
                         onGrantNotificationAccess = onGrantNotificationAccess,
                         onAllowBackgroundWork = onAllowBackgroundWork,
                         onForget = onForget,
@@ -272,6 +274,7 @@ private fun TabContent(
     cityLookup: CityLookup,
     onWeatherEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
+    onUseMyLocation: () -> Unit,
     onGrantNotificationAccess: () -> Unit,
     onAllowBackgroundWork: () -> Unit,
     onForget: () -> Unit,
@@ -355,7 +358,9 @@ private fun TabContent(
                 item {
                     WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences)
                 }
-                item { WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity) }
+                item {
+                    WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity, onUseMyLocation)
+                }
                 item {
                     NotificationsCard(
                         state = state,
@@ -1468,6 +1473,7 @@ private fun WeatherCard(
     lookup: CityLookup,
     onEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
+    onUseMyLocation: () -> Unit,
 ) {
     var typed by remember(state.settings.weatherCity) {
         mutableStateOf(state.settings.weatherCity.orEmpty())
@@ -1515,6 +1521,16 @@ private fun WeatherCard(
                     Text(stringResource(R.string.action_find))
                 }
 
+                // Beside the search rather than instead of it. Typing a city still works
+                // with no permission at all, which is how this app has always done it and
+                // remains the default; this is for the wearer who has moved.
+                OutlinedButton(
+                    onClick = onUseMyLocation,
+                    enabled = lookup != CityLookup.Searching,
+                ) {
+                    Text(stringResource(R.string.weather_here))
+                }
+
                 when (lookup) {
                     CityLookup.Searching -> Text(
                         stringResource(R.string.weather_searching),
@@ -1523,6 +1539,12 @@ private fun WeatherCard(
 
                     CityLookup.NotFound -> Text(
                         stringResource(R.string.weather_not_found),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+
+                    CityLookup.NoPosition -> Text(
+                        stringResource(R.string.weather_no_position),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
                     )

@@ -46,12 +46,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import dev.recmf.health.workoutSessions
+import dev.recmf.weather.PhoneLocation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
@@ -146,6 +148,9 @@ sealed interface CityLookup {
     data object Searching : CityLookup
     data class Found(val name: String) : CityLookup
     data object NotFound : CityLookup
+
+    /** Asked where the phone is and got no answer — no permission, or nothing knows. */
+    data object NoPosition : CityLookup
 }
 
 /** What the watch itself has told us this session. */
@@ -331,6 +336,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             } else {
                 settingsStore.setWeatherPlace(found.name, found.latitude, found.longitude)
                 CityLookup.Found(found.name)
+            }
+        }
+    }
+
+    /**
+     * Takes the place from the phone instead of from a typed name.
+     *
+     * Ends in the same place a typed city does — a name and a pair of coordinates in the
+     * settings — so nothing downstream knows or cares which way the wearer chose.
+     */
+    fun useCurrentLocation() {
+        viewModelScope.launch {
+            _cityLookup.value = CityLookup.Searching
+
+            val here = withContext(Dispatchers.IO) {
+                PhoneLocation.current(getApplication())
+            }
+
+            _cityLookup.value = if (here == null) {
+                CityLookup.NoPosition
+            } else {
+                settingsStore.setWeatherPlace(here.name, here.latitude, here.longitude)
+                CityLookup.Found(here.name)
             }
         }
     }
