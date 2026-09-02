@@ -815,6 +815,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsStore.setAiKey(key) }
     }
 
+    fun setAiWebSearch(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setAiWebSearch(enabled) }
+    }
+
     fun setAiSystemPrompt(prompt: String) {
         viewModelScope.launch { settingsStore.setAiSystemPrompt(prompt) }
     }

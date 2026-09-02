@@ -178,6 +178,7 @@ fun HomeScreen(
     onAiSystemPrompt: (String) -> Unit,
     onAiProbe: () -> Unit,
     onAiModels: (String) -> Unit,
+    onAiWebSearch: (Boolean) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -257,6 +258,7 @@ fun HomeScreen(
                         onAiSystemPrompt = onAiSystemPrompt,
                         onAiProbe = onAiProbe,
                         onAiModels = onAiModels,
+                        onAiWebSearch = onAiWebSearch,
                         onExportBackup = onExportBackup,
                         onImportBackup = onImportBackup,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -336,6 +338,7 @@ private fun TabContent(
     onAiSystemPrompt: (String) -> Unit,
     onAiProbe: () -> Unit,
     onAiModels: (String) -> Unit,
+    onAiWebSearch: (Boolean) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -501,6 +504,7 @@ private fun TabContent(
                         onPrompt = onAiSystemPrompt,
                         onProbe = onAiProbe,
                         onModels = onAiModels,
+                        onWebSearch = onAiWebSearch,
                     )
                 }
                 item { BackupCard(backupState, onExportBackup, onImportBackup) }
@@ -1382,6 +1386,7 @@ private fun AiCard(
     onPrompt: (String) -> Unit,
     onProbe: () -> Unit,
     onModels: (String) -> Unit,
+    onWebSearch: (Boolean) -> Unit,
 ) {
     var showing by rememberSaveable { mutableStateOf(false) }
     var editingPrompt by rememberSaveable { mutableStateOf(false) }
@@ -1422,7 +1427,7 @@ private fun AiCard(
 
             HorizontalDivider()
 
-            AiEndpointFields(settings, models, onEndpoint, onModels)
+            AiEndpointFields(settings, models, onEndpoint, onModels, onWebSearch)
             AiKeyField(settings, onKey)
             AiPromptField(settings, editingPrompt, { editingPrompt = it }, onPrompt)
 
@@ -1479,6 +1484,7 @@ private fun AiEndpointFields(
     models: AiClient.Models?,
     onEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
     onModels: (String) -> Unit,
+    onWebSearch: (Boolean) -> Unit,
 ) {
     // Held locally while being typed and pushed on the way out, so a store write does not
     // happen on every keystroke and the cursor does not jump.
@@ -1545,6 +1551,17 @@ private fun AiEndpointFields(
     }
     Text(
         stringResource(R.string.ai_wire_explainer),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    SettingSwitch(
+        label = stringResource(R.string.ai_web_search),
+        checked = settings.webSearch,
+        onCheckedChange = onWebSearch,
+    )
+    Text(
+        stringResource(R.string.ai_web_search_explainer),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
@@ -1699,7 +1716,15 @@ private fun AiProbeResult(answer: AiClient.Answer) {
 
     Text(
         when (answer) {
-            is AiClient.Answer.Said -> stringResource(R.string.ai_probe_said, answer.text)
+            is AiClient.Answer.Said -> buildString {
+                append(stringResource(R.string.ai_probe_said, answer.text))
+                // Shown when they come, and silent when they do not — which is most of the
+                // time for a third-party model, and is not a fault worth a message.
+                if (answer.sources.isNotEmpty()) {
+                    append("\n")
+                    append(stringResource(R.string.ai_sources, answer.sources.joinToString(", ")))
+                }
+            }
             is AiClient.Answer.Refused -> answer.reason
                 ?.let { stringResource(R.string.ai_probe_refused, answer.code, it) }
                 ?: stringResource(R.string.ai_probe_refused_bare, answer.code)

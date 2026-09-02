@@ -224,6 +224,9 @@
     <string name="ai_wire_chat">Chat completions</string>
     <string name="ai_wire_responses">Responses</string>
     <string name="ai_wire_explainer">OpenAI, OpenRouter, Groq and most local servers use chat completions. Perplexity\'s Agent API uses Responses — and their Sonar endpoints, which use the other one, retire on 27 September 2026.</string>
+    <string name="ai_web_search">Let it look things up</string>
+    <string name="ai_web_search_explainer">Only applies to the Responses format, where search is a tool that has to be asked for. It costs more per question, and it means the question reaches a search engine as well as the model. Perplexity shows its sources for its own Sonar models; other models search without being able to cite.</string>
+    <string name="ai_sources">Read: %1$s</string>
     <string name="action_ai_models">List the models</string>
     <string name="ai_models_asking">Asking…</string>
     <string name="ai_models_none">This provider does not publish a list. Type the model name from its documentation.</string>

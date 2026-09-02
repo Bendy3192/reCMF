@@ -21,7 +21,7 @@ class AiClient {
 
     /** What came back, in the shapes the screen has words for. */
     sealed interface Answer {
-        data class Said(val text: String) : Answer
+        data class Said(val text: String, val sources: List<String> = emptyList()) : Answer
 
         /** The provider answered and said no. [reason] is its own wording where it gave one. */
         data class Refused(val code: Int, val reason: String?) : Answer
@@ -83,7 +83,17 @@ class AiClient {
         val key = settings.key?.takeIf { it.isNotBlank() } ?: return Answer.NotConfigured
         if (settings.model.isBlank()) return Answer.NotConfigured
 
-        return post(url, key, AiChat.body(settings.model, system, user, settings.wire))
+        return post(
+            url = url,
+            key = key,
+            body = AiChat.body(
+                model = settings.model,
+                system = system,
+                user = user,
+                wire = settings.wire,
+                webSearch = settings.webSearch,
+            ),
+        )
     }
 
     private suspend fun post(url: String, key: String, body: String): Answer =
@@ -115,7 +125,9 @@ class AiClient {
                 }
 
                 val text = connection.inputStream.bufferedReader().use { it.readText() }
-                AiChat.reply(text)?.let { Answer.Said(it) } ?: Answer.Unreadable
+                AiChat.reply(text)
+                    ?.let { Answer.Said(it, AiChat.sources(text)) }
+                    ?: Answer.Unreadable
             } catch (e: IOException) {
                 // The message and not the stack: this one is shown to somebody, and the
                 // useful part of it is "unable to resolve host" rather than a trace.

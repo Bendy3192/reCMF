@@ -32,6 +32,7 @@ object AiChat {
         system: String,
         user: String,
         wire: AiEndpoint.Wire = AiEndpoint.Wire.CHAT,
+        webSearch: Boolean = false,
     ): String = when (wire) {
         AiEndpoint.Wire.CHAT -> JSONObject()
             .put("model", model)
@@ -49,6 +50,14 @@ object AiChat {
             .put("model", model)
             .put("instructions", system)
             .put("input", user)
+            .apply {
+                // Search is a tool here, not something the model does of its own accord.
+                // Asked for by name or it simply does not happen — which is the whole
+                // reason somebody would be pointing this at Perplexity in the first place.
+                if (webSearch) {
+                    put("tools", JSONArray().put(JSONObject().put("type", "web_search")))
+                }
+            }
             .toString()
     }
 
@@ -90,6 +99,32 @@ object AiChat {
                 else -> null
             }
         }.sorted()
+    } catch (e: JSONException) {
+        emptyList()
+    }
+
+    /**
+     * Where an answer said it had been reading, when it says.
+     *
+     * Providers put this in more than one place and under more than one name, so all the
+     * usual ones are tried. It is often empty and that is not a fault: Perplexity returns
+     * citations for its own Sonar models and not for third-party models run through the
+     * Agent API, so an answer from Claude or GPT there is search-grounded without being
+     * able to show its working.
+     */
+    fun sources(json: String): List<String> = try {
+        val root = JSONObject(json)
+        val list = root.optJSONArray("citations")
+            ?: root.optJSONArray("search_results")
+            ?: JSONArray()
+
+        (0 until list.length()).mapNotNull { at ->
+            when (val entry = list.opt(at)) {
+                is String -> entry.takeIf { it.startsWith("http") }
+                is JSONObject -> entry.optString("url").takeIf { it.startsWith("http") }
+                else -> null
+            }
+        }.distinct()
     } catch (e: JSONException) {
         emptyList()
     }

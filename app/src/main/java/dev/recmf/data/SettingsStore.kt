@@ -60,6 +60,15 @@ data class AiSettings(
     val baseUrl: String = "",
     val model: String = "",
     val wire: AiEndpoint.Wire = AiEndpoint.Wire.CHAT,
+    /**
+     * Whether to let the assistant look things up.
+     *
+     * Only means anything in the Responses shape, where search is a tool that has to be
+     * asked for. On by default, because looking things up is the reason somebody would
+     * point this at Perplexity at all — and off is one tap away for somebody who would
+     * rather their question did not reach a search engine.
+     */
+    val webSearch: Boolean = true,
     val key: String? = null,
     /** Editable, because a prompt somebody cannot read is a prompt they cannot trust. */
     val systemPrompt: String = "",
@@ -444,6 +453,7 @@ class SettingsStore(private val context: Context) {
             coachEnabled = prefs[KEY_AI_COACH] ?: false,
             baseUrl = prefs[KEY_AI_BASE_URL] ?: DEFAULT_AI_BASE_URL,
             model = prefs[KEY_AI_MODEL] ?: "",
+            webSearch = prefs[KEY_AI_WEB_SEARCH] ?: true,
             wire = prefs[KEY_AI_WIRE]
                 ?.let { name -> AiEndpoint.Wire.entries.firstOrNull { it.name == name } }
                 ?: AiEndpoint.Wire.CHAT,
@@ -480,6 +490,10 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { prefs ->
             if (sealed == null) prefs.remove(KEY_AI_KEY) else prefs[KEY_AI_KEY] = sealed
         }
+    }
+
+    suspend fun setAiWebSearch(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_AI_WEB_SEARCH] = enabled }
     }
 
     suspend fun setAiSystemPrompt(prompt: String) {
@@ -630,6 +644,7 @@ class SettingsStore(private val context: Context) {
         val KEY_AI_KEY = stringPreferencesKey("ai_key_sealed")
         val KEY_AI_PROMPT = stringPreferencesKey("ai_system_prompt")
         val KEY_AI_WIRE = stringPreferencesKey("ai_wire")
+        val KEY_AI_WEB_SEARCH = booleanPreferencesKey("ai_web_search")
 
         /**
          * Where requests go unless told otherwise.
