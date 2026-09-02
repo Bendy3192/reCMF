@@ -78,6 +78,14 @@
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
 
+    <!--
+        Read only, and asked for nowhere else in this file: reCMF has no heart-rate
+        variability of its own to write. The watch it talks to reports one pulse a minute
+        with no intervals behind it, so HRV can only ever arrive here from another device
+        that measures it — which is the whole reason for reading it.
+    -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
+
     <uses-feature
         android:name="android.hardware.bluetooth_le"
         android:required="true" />

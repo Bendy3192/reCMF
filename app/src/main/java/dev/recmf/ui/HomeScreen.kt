@@ -116,6 +116,7 @@ import dev.recmf.ai.AiClient
 import dev.recmf.ai.AiContext
 import dev.recmf.ai.AiEndpoint
 import dev.recmf.data.AiSettings
+import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.ui.theme.Motion
@@ -185,6 +186,8 @@ fun HomeScreen(
     onAiModels: (String) -> Unit,
     onAiWebSearch: (Boolean) -> Unit,
     onAiProfile: (AiContext.Profile) -> Unit,
+    held: List<HealthConnectSync.Held>?,
+    onSurveyHealthConnect: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -269,6 +272,8 @@ fun HomeScreen(
                         onAiModels = onAiModels,
                         onAiWebSearch = onAiWebSearch,
                         onAiProfile = onAiProfile,
+                        held = held,
+                        onSurveyHealthConnect = onSurveyHealthConnect,
                         onExportBackup = onExportBackup,
                         onImportBackup = onImportBackup,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -353,6 +358,8 @@ private fun TabContent(
     onAiModels: (String) -> Unit,
     onAiWebSearch: (Boolean) -> Unit,
     onAiProfile: (AiContext.Profile) -> Unit,
+    held: List<HealthConnectSync.Held>?,
+    onSurveyHealthConnect: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -509,6 +516,7 @@ private fun TabContent(
 
                 item { SectionHeading(R.string.section_data) }
                 item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
+                item { HealthConnectSurveyCard(held, onSurveyHealthConnect) }
                 item { AutoSyncCard(state.settings.autoSyncSeconds, onAutoSyncSeconds) }
                 item {
                     GpsDataCard(
@@ -1891,6 +1899,90 @@ private fun NumberField(
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier,
     )
+}
+
+/**
+ * What Health Connect is actually holding, and which app put it there.
+ *
+ * A diagnostic rather than a feature, and it exists because the alternative was guessing.
+ * Whether a second wearable on this phone publishes heart-rate variability — the one input
+ * every readiness score leans on and the one this watch cannot give — is not something
+ * documentation settles. Looking does.
+ *
+ * The writing app is named, not just a count, because "there is heart rate here" and "there
+ * is heart rate here that reCMF did not write" are different facts, and only the second one
+ * says anything about a second source.
+ */
+@Composable
+private fun HealthConnectSurveyCard(held: List<HealthConnectSync.Held>?, onLook: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            CardTitle(R.drawable.ic_ui_list, R.string.hc_survey)
+
+            Text(
+                stringResource(R.string.hc_survey_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            OutlinedButton(onClick = onLook) {
+                Text(stringResource(R.string.action_hc_survey))
+            }
+
+            held?.let { rows ->
+                if (rows.isEmpty()) {
+                    Text(
+                        stringResource(R.string.hc_survey_none),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    return@let
+                }
+
+                HorizontalDivider()
+
+                rows.forEach { row ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(
+                            row.label,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            when (row.state) {
+                                HealthConnectSync.Held.State.PRESENT -> stringResource(
+                                    R.string.hc_survey_present,
+                                    row.count,
+                                    row.writtenBy.ifBlank { "?" },
+                                )
+                                HealthConnectSync.Held.State.EMPTY ->
+                                    stringResource(R.string.hc_survey_empty)
+                                HealthConnectSync.Held.State.NOT_PERMITTED ->
+                                    stringResource(R.string.hc_survey_not_permitted)
+                                HealthConnectSync.Held.State.REFUSED ->
+                                    stringResource(R.string.hc_survey_refused)
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            // Only a refusal is coloured. An empty row is an answer, and a
+                            // screen of red for "nothing there yet" would say otherwise.
+                            color = if (row.state == HealthConnectSync.Held.State.REFUSED) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            modifier = Modifier.weight(1.4f),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 /**

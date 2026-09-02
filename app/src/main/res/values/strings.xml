@@ -25,6 +25,14 @@
     <string name="health_connect_available">Steps and heart rate are written to Health Connect, so other apps can read them.</string>
     <string name="health_connect_update_required">Health Connect needs an update before reCMF can write to it.</string>
     <string name="health_connect_not_installed">Health Connect is not available on this device.</string>
+    <string name="hc_survey">What is in Health Connect</string>
+    <string name="hc_survey_explainer">Read straight from Health Connect on this phone, so a second wearable that publishes there can be seen rather than assumed. Nothing here is sent anywhere; it is a look at what is already on the phone.</string>
+    <string name="action_hc_survey">Look</string>
+    <string name="hc_survey_present">records: %1$d, newest from %2$s</string>
+    <string name="hc_survey_empty">nothing in the last two weeks</string>
+    <string name="hc_survey_not_permitted">not permitted</string>
+    <string name="hc_survey_refused">Health Connect refused the read</string>
+    <string name="hc_survey_none">Health Connect returned nothing at all. It may not be set up on this phone.</string>
     <string name="last_sync">Last written %1$s</string>
 
     <string name="pair_title">Pair your watch</string>

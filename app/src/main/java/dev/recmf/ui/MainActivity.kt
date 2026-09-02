@@ -192,6 +192,7 @@ class MainActivity : ComponentActivity() {
                 val aiModels by model.aiModels.collectAsStateWithLifecycle()
                 val aiInsights by model.aiInsights.collectAsStateWithLifecycle()
                 val aiAsking by model.aiAsking.collectAsStateWithLifecycle()
+                val held by model.held.collectAsStateWithLifecycle()
                 // Collected here rather than read off the flow's value inside the
                 // card: a WhileSubscribed flow nobody subscribes to never starts,
                 // which is why the payload preview showed no days at all.
@@ -238,6 +239,8 @@ class MainActivity : ComponentActivity() {
                     onAiModels = model::fetchAiModels,
                     onAiWebSearch = model::setAiWebSearch,
                     onAiProfile = model::setAiProfile,
+                    held = held,
+                    onSurveyHealthConnect = model::surveyHealthConnect,
                     onExportBackup = { saveBackup.launch(backupFileName) },
                     // Anything, not just JSON: a file manager that has forgotten what a
                     // .json is would otherwise grey out the only file worth picking.

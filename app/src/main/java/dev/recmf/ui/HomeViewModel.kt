@@ -960,6 +960,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private fun readerLanguage(): String =
         Locale.getDefault().getDisplayLanguage(Locale.ENGLISH)
 
+    private val _held = MutableStateFlow<List<HealthConnectSync.Held>?>(null)
+
+    /** What a look inside Health Connect found, or null until one is asked for. */
+    val held: StateFlow<List<HealthConnectSync.Held>?> = _held.asStateFlow()
+
+    /**
+     * Reads what Health Connect is holding and from whom.
+     *
+     * On demand rather than on every launch: it is a diagnostic somebody presses when they
+     * want to know whether a second device is feeding the phone, not a thing worth doing
+     * behind their back on a schedule.
+     */
+    fun surveyHealthConnect() {
+        viewModelScope.launch { _held.value = healthConnect.survey() }
+    }
+
     /** Drops every answer the assistant has given, for somebody who wants them gone. */
     fun forgetAiInsights() {
         viewModelScope.launch { dao.clearInsights() }

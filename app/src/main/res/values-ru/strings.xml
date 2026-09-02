@@ -22,6 +22,14 @@
     <string name="health_connect_available">Шаги и пульс пишутся в Health Connect — их видят другие приложения.</string>
     <string name="health_connect_update_required">Health Connect нужно обновить, прежде чем reCMF сможет писать данные.</string>
     <string name="health_connect_not_installed">Health Connect недоступен на этом устройстве.</string>
+    <string name="hc_survey">Что лежит в Health Connect</string>
+    <string name="hc_survey_explainer">Читается прямо из Health Connect на этом телефоне, чтобы второй гаджет, который туда пишет, было видно, а не предполагалось. Отсюда никуда ничего не отправляется — это взгляд на то, что уже есть на телефоне.</string>
+    <string name="action_hc_survey">Посмотреть</string>
+    <string name="hc_survey_present">записей: %1$d, последняя от %2$s</string>
+    <string name="hc_survey_empty">за две недели ничего</string>
+    <string name="hc_survey_not_permitted">нет разрешения</string>
+    <string name="hc_survey_refused">Health Connect отказал в чтении</string>
+    <string name="hc_survey_none">Health Connect не вернул ничего. Возможно, он не настроен на этом телефоне.</string>
     <string name="last_sync">Последняя запись %1$s</string>
 
     <string name="pair_title">Подключите часы</string>

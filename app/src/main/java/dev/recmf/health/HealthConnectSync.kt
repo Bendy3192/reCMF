@@ -11,6 +11,7 @@ import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SleepSessionRecord
@@ -31,6 +32,7 @@ import dev.recmf.data.Spo2SampleEntity
 import dev.recmf.protocol.CmfSleepStage
 import dev.recmf.protocol.SleepSession
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
@@ -91,6 +93,74 @@ class HealthConnectSync(private val context: Context) {
 
     private suspend fun grantedPermissions(): Set<String> =
         client?.permissionController?.getGrantedPermissions() ?: emptySet()
+
+/**
+     * What is actually in Health Connect, and which app put it there.
+     *
+     * Written because the alternative was guessing. Whether the Google Health app publishes
+     * heart-rate variability to Health Connect — and what else a second wearable quietly
+     * contributes — is not something the documentation settles, and reCMF is in the
+     * fortunate position of being able to simply look. One reading on the wearer's own
+     * phone, with their own devices, beats any amount of reading about it.
+     *
+     * Reports the origin package of each record rather than only a count, because "there is
+     * heart rate here" is a different fact from "there is heart rate here that reCMF did
+     * not write". The second is the one that matters for a second source.
+     *
+     * @param sinceDays how far back to look. A fortnight is enough to tell a live feed from
+     *   a dormant one without reading a year of samples to find out.
+     */
+    suspend fun survey(sinceDays: Long = 14): List<Held> {
+        val client = this.client ?: return emptyList()
+        val granted = grantedPermissions()
+        val from = Instant.now().minus(sinceDays, ChronoUnit.DAYS)
+        val window = TimeRangeFilter.after(from)
+
+        return SURVEYED.map { (label, type) ->
+            if (!granted.contains(HealthPermission.getReadPermission(type))) {
+                return@map Held(label, Held.State.NOT_PERMITTED)
+            }
+
+            runCatching {
+                val records = client.readRecords(ReadRecordsRequest(type, window)).records
+                if (records.isEmpty()) {
+                    Held(label, Held.State.EMPTY)
+                } else {
+                    Held(
+                        label = label,
+                        state = Held.State.PRESENT,
+                        count = records.size,
+                        // Whoever wrote the newest one. Several apps can write the same
+                        // type, and the newest is the one worth naming.
+                        writtenBy = records.maxByOrNull { it.metadata.lastModifiedTime }
+                            ?.metadata?.dataOrigin?.packageName.orEmpty(),
+                    )
+                }
+            }.getOrElse { Held(label, Held.State.REFUSED) }
+        }
+    }
+
+    /** One record type, as the survey found it. */
+    data class Held(
+        val label: String,
+        val state: State,
+        val count: Int = 0,
+        val writtenBy: String = "",
+    ) {
+        enum class State {
+            /** Records exist in the window. */
+            PRESENT,
+
+            /** Permitted and readable, and there is nothing there. */
+            EMPTY,
+
+            /** The permission was never granted, so this says nothing either way. */
+            NOT_PERMITTED,
+
+            /** Health Connect refused the read, which is different from finding nothing. */
+            REFUSED,
+        }
+    }
 
     /** Whether this granted set allows writing one particular kind of record. */
     private fun Set<String>.mayWrite(type: KClass<out Record>): Boolean =
@@ -554,7 +624,35 @@ class HealthConnectSync(private val context: Context) {
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),
         )
 
+        /**
+         * Heart-rate variability, read and never written.
+         *
+         * reCMF has none of its own: the watch it talks to reports one pulse a minute with
+         * no intervals behind it, so nothing here can produce an RMSSD. It is asked for
+         * because another device on the same phone might, and HRV is the input every
+         * readiness score leans on hardest and the one this app has never had.
+         *
+         * Its own set, and out of the required one, for the same reason distance was: a
+         * phone that granted the older permissions must keep working without granting this.
+         */
+        val HRV_PERMISSIONS: Set<String> = setOf(
+            HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+        )
+
+        /** What the survey looks for, in the order it is worth reading. */
+        private val SURVEYED: List<Pair<String, KClass<out Record>>> = listOf(
+            "Heart rate variability" to HeartRateVariabilityRmssdRecord::class,
+            "Heart rate" to HeartRateRecord::class,
+            "Resting heart rate" to RestingHeartRateRecord::class,
+            "Sleep" to SleepSessionRecord::class,
+            "Blood oxygen" to OxygenSaturationRecord::class,
+            "Steps" to StepsRecord::class,
+            "Distance" to DistanceRecord::class,
+            "Active calories" to ActiveCaloriesBurnedRecord::class,
+            "Exercise" to ExerciseSessionRecord::class,
+        )
+
         /** Everything worth asking for at once, which is what the dialog offers. */
-        val ALL_PERMISSIONS: Set<String> = REQUIRED_PERMISSIONS + EXTRA_PERMISSIONS
+        val ALL_PERMISSIONS: Set<String> = REQUIRED_PERMISSIONS + EXTRA_PERMISSIONS + HRV_PERMISSIONS
     }
 }
