@@ -49,6 +49,16 @@ your settings, your paired watch and its data.
 | Health Connect | To write steps, heart rate, resting rate and blood oxygen | yes |
 | Unrestricted background use | So the background refresh runs on a schedule instead of when Android gets round to it | strongly recommended |
 | Install unknown apps | Only for the in-app updater | yes |
+| Root | Only to mirror the phone's alarms to the watch. Nothing else in reCMF uses it, and the app is fully usable without it | yes |
+
+Everything above except the last row is an ordinary Android permission. **Root is the one
+requirement reCMF cannot ask for and most phones will not have**, and it buys exactly one
+feature: mirroring the alarms set in the phone's clock onto the watch. Android publishes no
+way for an app to list another app's alarms — `AlarmManager` gives the next one and nothing
+behind it — so the clock's own database has to be read, and that needs either a ROM whose
+clock is open or a shell that is. The switch is still shown on a phone without root, and
+says on the card that it could not read the clock, rather than turning on and going quiet.
+Alarms set on the watch itself are edited in reCMF and need none of this.
 
 ### What leaves your phone
 
@@ -107,10 +117,11 @@ exists because of it.
 | Health Connect | Steps, heart rate, resting rate, blood oxygen and sleep with its stages, deduplicated by client record id |
 | Watch settings | 24/7 heart rate, all-day SpO₂, stress, raise-to-wake, clock format, units, alert thresholds, stand and drink reminders with quiet hours, the visible sport list. Read back from the watch, so the app shows what it actually holds |
 | Daily goals | Shown as the watch reports them. Changing them has to be done on the watch — it accepts a write and keeps what it had |
-| Alarms | Read from the watch and edited here, with repeat days |
+| Alarms | Read from the watch and edited here, with repeat days. Mirroring the phone's clock instead is offered too, and needs root — see above |
 | Notifications | Forwarded with icons, optionally only while the phone's screen is off; SMS included; incoming calls show the caller's name. every installed app is listed, with a switch each |
 | Weather | Fetched from Open-Meteo for a typed city and pushed to the watch face |
 | Music | Now playing on the watch face, and play, pause, track and volume from the wrist |
+| Workouts | Reconstructed from the pulse the watch takes during one — it keeps no summary and returns an empty payload when asked for one — then written to Health Connect as exercise sessions. Shown on a tab of their own |
 | Find watch | Makes it ring |
 | Find phone | The watch's own button rings the phone, on the alarm stream so a silent phone still answers |
 | Updates | Checks this repository's releases once a day, says what changed, and installs them |
@@ -118,9 +129,9 @@ exists because of it.
 | Watch face | Lists the six the watch holds, says which is on, switches between them, and installs a `.bin` over one |
 | UI | Compose, Material 3, dynamic colour, three tabs |
 
-**Not done:** workouts and their GPS tracks, contacts, a call screen with answer and
-reject, firmware. Daily goals are read from the watch but cannot be written to it — see the
-roadmap.
+**Not done:** GPS tracks, contacts, a call screen with answer and reject, firmware. Daily
+goals are read from the watch but cannot be written to it, and the watch's GPS does not fix
+even under the official app — both are written up in the roadmap.
 
 `tools/watchface.py` takes a watchface file apart and writes every picture in it as a PNG —
 the format is LZ4 over RGB565 or RGB888, and ROADMAP.md says how that was worked out.
@@ -138,6 +149,15 @@ yet (the `versions` CI job checks all four channels on every run and says so).
 
 Until it is, the theme is plain Material 3 with dynamic colour. Switching over is a change
 to `ui/theme/Theme.kt` and two call sites in `ui/HomeScreen.kt`.
+
+The motion, though, did not have to wait. `MotionScheme.expressive()` is not machinery —
+it is twelve numbers, six springs each with a damping ratio and a stiffness, which the
+library hands to the same `spring()` any app can call. Those are transcribed from the
+published androidx source into `ui/theme/Motion.kt` with their provenance noted, and used
+at the few places reCMF animates anything. That is a smaller thing than using Expressive:
+library components read the scheme off the theme and move correctly unaided, and nothing
+here does. It does mean the app's own animations are on the specified curves rather than
+on whichever generic constant looked about right.
 
 ## Architecture
 

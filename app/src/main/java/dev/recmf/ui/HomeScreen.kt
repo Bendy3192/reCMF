@@ -122,6 +122,7 @@ import androidx.annotation.StringRes
 import java.util.Locale
 import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
+import dev.recmf.service.AlarmMirrorProblem
 import dev.recmf.service.WeatherProblem
 import dev.recmf.data.SleepSummary
 import dev.recmf.protocol.SleepSession
@@ -153,6 +154,7 @@ fun HomeScreen(
     workouts: List<WorkoutRow>,
     watchfaces: WatchfaceList?,
     watchfaceInstall: WatchfaceInstall?,
+    alarmMirrorProblem: AlarmMirrorProblem?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -216,6 +218,7 @@ fun HomeScreen(
                         workouts = workouts,
                         watchfaces = watchfaces,
                         watchfaceInstall = watchfaceInstall,
+                        alarmMirrorProblem = alarmMirrorProblem,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -279,6 +282,7 @@ private fun TabContent(
     workouts: List<WorkoutRow>,
     watchfaces: WatchfaceList?,
     watchfaceInstall: WatchfaceInstall?,
+    alarmMirrorProblem: AlarmMirrorProblem?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -403,6 +407,7 @@ private fun TabContent(
                     AlarmsCard(
                         alarms = watchPreferences.alarms,
                         mirroring = state.settings.phoneAlarmsEnabled,
+                        problem = alarmMirrorProblem,
                         onMirroring = onPhoneAlarmsEnabled,
                         onChange = onWatchPreferences,
                     )
@@ -2385,6 +2390,7 @@ private fun ProtocolLogCard() {
 private fun AlarmsCard(
     alarms: List<CmfAlarm>,
     mirroring: Boolean,
+    problem: AlarmMirrorProblem?,
     onMirroring: (Boolean) -> Unit,
     onChange: (WatchSetting, (WatchPreferences) -> WatchPreferences) -> Unit,
 ) {
@@ -2418,6 +2424,23 @@ private fun AlarmsCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            // Said on the card, in the error colour, and only once the switch is on and a
+            // read has actually been tried. A requirement written into the paragraph above
+            // is read by nobody; a switch that turns on and does nothing is noticed by
+            // everybody, and this is the only place the difference can be explained.
+            problem?.let {
+                Text(
+                    stringResource(
+                        when (it) {
+                            AlarmMirrorProblem.NEEDS_ROOT -> R.string.alarms_mirror_needs_root
+                            AlarmMirrorProblem.NO_CLOCK -> R.string.alarms_mirror_no_clock
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
 
             if (alarms.isEmpty()) {
                 Text(

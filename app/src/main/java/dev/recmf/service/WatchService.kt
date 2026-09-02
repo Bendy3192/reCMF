@@ -688,7 +688,13 @@ class WatchService : LifecycleService() {
             settings.settings
                 .map { it.phoneAlarmsEnabled }
                 .distinctUntilChanged()
-                .collect { enabled -> if (enabled) refreshPhoneAlarms() }
+                .collect { enabled ->
+                    if (enabled) {
+                        refreshPhoneAlarms()
+                    } else {
+                        WatchStatus.alarmMirrorProblem.value = null
+                    }
+                }
         }
 
         lifecycleScope.launch {
@@ -1246,12 +1252,25 @@ class WatchService : LifecycleService() {
     private suspend fun refreshPhoneAlarms() {
         if (!settings.current().phoneAlarmsEnabled) return
 
-        val fromPhone = withContext(Dispatchers.IO) {
+        val reading = withContext(Dispatchers.IO) {
             PhoneAlarms.read(applicationContext)
-        } ?: run {
-            ProtocolLog.note("Alarms: the phone's clock could not be read")
-            return
         }
+
+        val fromPhone = when (reading) {
+            is PhoneAlarms.Reading.Alarms -> reading.alarms
+            PhoneAlarms.Reading.NeedsRoot -> {
+                ProtocolLog.note("Alarms: the phone's clock is closed to us and there is no root")
+                WatchStatus.alarmMirrorProblem.value = AlarmMirrorProblem.NEEDS_ROOT
+                return
+            }
+            PhoneAlarms.Reading.NoClock -> {
+                ProtocolLog.note("Alarms: no clock reCMF can read at that address")
+                WatchStatus.alarmMirrorProblem.value = AlarmMirrorProblem.NO_CLOCK
+                return
+            }
+        }
+
+        WatchStatus.alarmMirrorProblem.value = null
 
         if (settings.watchPreferences.first().alarms == fromPhone) {
             // Said out loud rather than passed over in silence: when the mirror is on, the

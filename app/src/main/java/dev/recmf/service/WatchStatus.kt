@@ -47,6 +47,15 @@ object WatchStatus {
     val weatherProblem = MutableStateFlow<WeatherProblem?>(null)
 
     /**
+     * Why the phone's alarms are not reaching the watch, when the mirror is on.
+     *
+     * Null while the mirror is off, and null again the moment a read succeeds. This is the
+     * one setting in reCMF that can be switched on and still do nothing on a perfectly
+     * healthy phone, so the reason has to be able to reach the screen.
+     */
+    val alarmMirrorProblem = MutableStateFlow<AlarmMirrorProblem?>(null)
+
+    /**
      * When the watch last finished answering a fetch, whether or not it had anything new.
      *
      * Distinct from [lastRecordEpochSeconds], which is the date on the data, and from
@@ -86,6 +95,20 @@ enum class WeatherProblem {
 
     /** The provider could not be reached, or answered something unreadable. */
     UNREACHABLE,
+}
+
+/**
+ * Why mirroring the phone's alarms is not working.
+ *
+ * Two failures that want opposite things from the wearer, which is the whole reason they
+ * are separate values rather than one "did not work".
+ */
+enum class AlarmMirrorProblem {
+    /** The clock is there and closed. Root opens it; nothing else will. */
+    NEEDS_ROOT,
+
+    /** Nothing readable at that address — a clock that is not AOSP's. Root will not help. */
+    NO_CLOCK,
 }
 
 /** Where an install has got to, in the words the screen uses. */

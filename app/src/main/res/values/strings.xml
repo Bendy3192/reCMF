@@ -209,7 +209,9 @@
     <string name="tab_faces">Faces</string>
     <string name="watchfaces_waiting">Connect the watch to see the faces it holds and switch between them.</string>
     <string name="alarms_mirror_phone">Mirror the phone\'s alarms</string>
-    <string name="alarms_mirror_explainer">The watch will hold whatever the phone\'s clock holds, and the alarms set on the watch itself are replaced. Reading the phone\'s clock needs root; without it this stays off.</string>
+    <string name="alarms_mirror_explainer">The watch will hold whatever the phone\'s clock holds, and the alarms set on the watch itself are replaced. Android gives no app a way to list another app\'s alarms, so on most phones this needs root. Turn it on and reCMF will say here whether it worked.</string>
+    <string name="alarms_mirror_needs_root">Not working: the phone's clock will not let reCMF read its alarms, and there is no root on this phone to insist with. Everything else in reCMF works without root — this one setting cannot.</string>
+    <string name="alarms_mirror_no_clock">Not working: this phone's clock app keeps its alarms somewhere reCMF cannot read. Root would not help. The alarms set on the watch itself still work.</string>
     <string name="tab_workouts">Workouts</string>
     <string name="workout_when">%1$s, %2$s</string>
     <string name="workout_average">Average</string>

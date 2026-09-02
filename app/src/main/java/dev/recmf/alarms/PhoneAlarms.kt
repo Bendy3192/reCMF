@@ -23,7 +23,13 @@ import java.util.concurrent.TimeUnit
  * and that provider answers; it is simply not open to ordinary apps.
  *
  * So this asks politely first and falls back to `su`. On a phone without root the polite
- * ask is all there is, and this returns nothing rather than pretending.
+ * ask is all there is.
+ *
+ * When neither works it says which, because the two failures want opposite things from the
+ * wearer. A clock that is there and closed is opened by root; a phone whose clock is not
+ * the AOSP one has nothing at that address at all, and no amount of root will help. Told
+ * apart here, they can be told apart on screen — the alternative is a switch that turns on
+ * and quietly does nothing, which is the worst thing a public app can ship.
  */
 object PhoneAlarms {
 
@@ -41,8 +47,40 @@ object PhoneAlarms {
     /** One row of that provider, before it is anything to do with a watch. */
     data class Row(val hour: Int, val minute: Int, val days: Int, val enabled: Boolean)
 
-    fun read(context: Context, now: LocalDateTime = LocalDateTime.now()): List<CmfAlarm>? =
-        (throughResolver(context) ?: throughRoot())?.let { toWatchAlarms(it, now) }
+    /**
+     * What came of trying to read the phone's clock.
+     *
+     * [Alarms] with an empty list is a success — a clock with no alarms set — and is not
+     * the same as either failure.
+     */
+    sealed interface Reading {
+        data class Alarms(val alarms: List<CmfAlarm>) : Reading
+
+        /** The clock is there and will not talk to us, and there was no root to insist. */
+        data object NeedsRoot : Reading
+
+        /** Nothing answers at that address: a phone whose clock is not the AOSP one. */
+        data object NoClock : Reading
+    }
+
+    /** How the unprivileged query went, which is a narrower question than [Reading]. */
+    private sealed interface Direct {
+        data class Rows(val rows: List<Row>) : Direct
+        data object Closed : Direct
+        data object Absent : Direct
+    }
+
+    fun read(context: Context, now: LocalDateTime = LocalDateTime.now()): Reading {
+        val direct = throughResolver(context)
+        if (direct is Direct.Rows) return Reading.Alarms(toWatchAlarms(direct.rows, now))
+
+        // Root is tried whichever way the polite ask failed. A ROM can hide the provider
+        // from an unprivileged query and still answer the shell, so "nothing there" seen
+        // from out here is not proof that there is nothing there.
+        throughRoot()?.let { return Reading.Alarms(toWatchAlarms(it, now)) }
+
+        return if (direct == Direct.Absent) Reading.NoClock else Reading.NeedsRoot
+    }
 
     /**
      * The way that needs no root, and works only if the provider will talk to us.
@@ -50,35 +88,40 @@ object PhoneAlarms {
      * Kept first and kept trying: a clock that opens up in some future Android, or a ROM
      * that ships a friendlier one, should not need reCMF to be rooted for this.
      */
-    private fun throughResolver(context: Context): List<Row>? = try {
+    private fun throughResolver(context: Context): Direct = try {
         context.contentResolver.query(PROVIDER.toUri(), null, null, null, null)?.use { cursor ->
             val hour = cursor.getColumnIndex("hour")
             val minute = cursor.getColumnIndex("minutes")
             val days = cursor.getColumnIndex("daysofweek")
             val enabled = cursor.getColumnIndex("enabled")
             if (hour < 0 || minute < 0 || days < 0 || enabled < 0) {
-                null
+                // Something answered, but not with the columns AOSP's clock keeps. Root
+                // would run the same query against the same table, so it is no use here.
+                Log.i(TAG, "The clock at that address is not one reCMF can read")
+                Direct.Absent
             } else {
-                buildList {
-                    while (cursor.moveToNext()) {
-                        add(
-                            Row(
-                                hour = cursor.getInt(hour),
-                                minute = cursor.getInt(minute),
-                                days = cursor.getInt(days),
-                                enabled = cursor.getInt(enabled) != 0,
-                            ),
-                        )
-                    }
-                }
+                Direct.Rows(
+                    buildList {
+                        while (cursor.moveToNext()) {
+                            add(
+                                Row(
+                                    hour = cursor.getInt(hour),
+                                    minute = cursor.getInt(minute),
+                                    days = cursor.getInt(days),
+                                    enabled = cursor.getInt(enabled) != 0,
+                                ),
+                            )
+                        }
+                    },
+                )
             }
-        }
+        } ?: Direct.Absent
     } catch (e: SecurityException) {
         Log.i(TAG, "The clock's provider is not open to us; trying root", e)
-        null
+        Direct.Closed
     } catch (e: IllegalArgumentException) {
         Log.i(TAG, "No clock provider at that address", e)
-        null
+        Direct.Absent
     }
 
     /**

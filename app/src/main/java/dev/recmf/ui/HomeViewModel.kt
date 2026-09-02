@@ -36,6 +36,7 @@ import dev.recmf.service.WatchService
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
+import dev.recmf.service.AlarmMirrorProblem
 import dev.recmf.service.WeatherProblem
 import dev.recmf.service.WatchStatus
 import dev.recmf.service.WatchfaceInstall
@@ -628,6 +629,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     /** How the current install is going, straight from the service. */
     val watchfaceInstall: StateFlow<WatchfaceInstall?> = WatchStatus.watchfaceInstall
+
+    /** Why the phone's alarms are not reaching the watch, or null while they are. */
+    val alarmMirrorProblem: StateFlow<AlarmMirrorProblem?> = WatchStatus.alarmMirrorProblem
 
     /** Sends a face file, displacing the one at [replacedIndex] in the watch's list. */
     fun setGpsAlmanacAuto(enabled: Boolean) {
