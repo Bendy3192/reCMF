@@ -342,4 +342,12 @@
     <string name="weather_auto_place">Follow me</string>
     <string name="weather_auto_foreground">The place is taken when you open reCMF. To have it follow you with the app closed, allow location access all the time in system settings.</string>
     <string name="weather_auto_background">The place follows you, app open or not.</string>
+    <string name="section_watch">The watch</string>
+    <string name="section_on_the_wrist">On the wrist</string>
+    <string name="section_data">Data</string>
+    <string name="section_app">reCMF</string>
+    <string name="paired_watch">Paired watch</string>
+    <string name="forget_title">Forget this watch?</string>
+    <string name="forget_explainer">reCMF will stop talking to it and forget the pairing. Getting it back means pairing again, granting the permissions again, and sending the watch a fresh almanac. Nothing already written to Health Connect is lost.</string>
+    <string name="action_cancel">Cancel</string>
 </resources>

@@ -52,6 +52,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ListItem
@@ -67,6 +68,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -106,6 +108,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
+import dev.recmf.protocol.BatteryStatus
 import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfAlarms
 import dev.recmf.protocol.CmfActivityType
@@ -182,7 +185,12 @@ fun HomeScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        topBar = { TopAppBar(title = { Text(stringResource(R.string.app_name)) }) },
+        topBar = {
+            WatchBar(
+                state = state,
+                onSyncNow = onSyncNow,
+            )
+        },
     ) { insets ->
         Box(Modifier.fillMaxSize().padding(insets)) {
             if (state.settings.isPaired) {
@@ -220,7 +228,6 @@ fun HomeScreen(
                         onGrantNotificationAccess = onGrantNotificationAccess,
                         onAllowBackgroundWork = onAllowBackgroundWork,
                         onForget = onForget,
-                        onSyncNow = onSyncNow,
                         onFindWatch = onFindWatch,
                         onInstallAgps = onInstallAgps,
                         onGpsAlmanacAuto = onGpsAlmanacAuto,
@@ -284,7 +291,6 @@ private fun TabContent(
     onGrantNotificationAccess: () -> Unit,
     onAllowBackgroundWork: () -> Unit,
     onForget: () -> Unit,
-    onSyncNow: () -> Unit,
     onFindWatch: () -> Unit,
     onInstallAgps: () -> Unit,
     onGpsAlmanacAuto: (Boolean) -> Unit,
@@ -311,9 +317,6 @@ private fun TabContent(
         // so this is back to clearing that rather than the two-line pills it grew for.
         contentPadding = PaddingValues(bottom = 96.dp),
     ) {
-        // On both tabs: it is the answer to "is any of this current?", and neither tab
-        // means anything without it.
-        item { ConnectionCard(state, onSyncNow, onForget) }
 
         when (tab) {
             HomeTab.HEALTH -> {
@@ -329,8 +332,8 @@ private fun TabContent(
                     item { ChartsCard(charts) }
                 }
 
-                item { AutoSyncCard(state.settings.autoSyncSeconds, onAutoSyncSeconds) }
-                item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
+                // Not a setting but a prompt, and it stays where it will be seen: a
+                // wearer whose watch stops syncing overnight finds out here.
                 if (!isBatteryExempt) {
                     item { BackgroundWorkCard(onAllowBackgroundWork) }
                 }
@@ -361,9 +364,16 @@ private fun TabContent(
             }
 
             HomeTab.DEVICE -> {
+                // Grouped, because eight unrelated cards in a row is a list you read from
+                // the top rather than a screen you navigate. The headings are what let the
+                // eye skip to the third of it that anyone came for.
+                item { SectionHeading(R.string.section_watch) }
                 item {
                     WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences)
                 }
+                item { FindWatchCard(state.connection.isUsable, onFindWatch) }
+
+                item { SectionHeading(R.string.section_on_the_wrist) }
                 item {
                     WeatherCard(
                         state = state,
@@ -395,7 +405,10 @@ private fun TabContent(
                         onChange = onWatchPreferences,
                     )
                 }
-                item { FindWatchCard(state.connection.isUsable, onFindWatch) }
+
+                item { SectionHeading(R.string.section_data) }
+                item { HealthConnectCard(state, healthConnectAvailability, onHealthConnectEnabled) }
+                item { AutoSyncCard(state.settings.autoSyncSeconds, onAutoSyncSeconds) }
                 item {
                     GpsDataCard(
                         connected = state.connection.isUsable,
@@ -405,8 +418,10 @@ private fun TabContent(
                         onInstallAgps = onInstallAgps,
                     )
                 }
+                item { SectionHeading(R.string.section_app) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
                 item { ProtocolLogCard() }
+                item { PairedWatchCard(state, onForget) }
             }
         }
     }
@@ -581,6 +596,203 @@ private fun FloatingTabDock(
 }
 
 /**
+ * A heading over a run of cards.
+ *
+ * Deliberately not a card itself: it is the label on a drawer, not another thing in it.
+ */
+@Composable
+private fun SectionHeading(@StringRes title: Int) {
+    Text(
+        text = stringResource(title),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp),
+    )
+}
+
+/**
+ * What is paired, and how to stop being paired with it.
+ *
+ * Unpairing used to be a button beside "sync now" at the top of all five tabs, and it
+ * acted the moment it was touched: the service stopped, the watchdog was cancelled and
+ * the pairing was gone. Recovering meant pairing again, granting again, and sending the
+ * watch a fresh almanac. That is not a thing to have within a thumb's slip of the button
+ * people press most.
+ *
+ * So it lives at the bottom of the last section of the last tab, and it asks first.
+ */
+@Composable
+private fun PairedWatchCard(state: HomeUiState, onForget: () -> Unit) {
+    var confirming by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CardTitle(R.drawable.ic_watch, R.string.paired_watch)
+
+            state.settings.name?.let {
+                Text(it, style = MaterialTheme.typography.bodyMedium)
+            }
+            state.watch.firmware?.let {
+                Text(
+                    stringResource(R.string.firmware_version, it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            HorizontalDivider()
+
+            TextButton(onClick = { confirming = true }) {
+                Text(
+                    stringResource(R.string.action_forget),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+
+    if (confirming) {
+        AlertDialog(
+            onDismissRequest = { confirming = false },
+            title = { Text(stringResource(R.string.forget_title)) },
+            text = { Text(stringResource(R.string.forget_explainer)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirming = false
+                        onForget()
+                    },
+                ) {
+                    Text(
+                        stringResource(R.string.action_forget),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirming = false }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+        )
+    }
+}
+
+/**
+ * The watch, along the top of every screen.
+ *
+ * This used to be a card at the top of each of the five tabs — the same name, the same
+ * state, the same battery, the same two buttons, five times over, taking a third of the
+ * first screenful everywhere. It was repeated rather than hoisted because a card above a
+ * horizontally sliding pager comes apart mid-swipe; the bar does not, because it is not
+ * in the pager at all.
+ *
+ * It is also the app's one piece of live presence. A wearer glancing at any screen should
+ * be able to tell whether the thing on their wrist is talking to the phone, and how much
+ * of its day is left, without going and looking for a card that says so.
+ */
+@Composable
+private fun WatchBar(state: HomeUiState, onSyncNow: () -> Unit) {
+    Column {
+        TopAppBar(
+            title = {
+                Column {
+                    Text(
+                        text = state.settings.name ?: stringResource(R.string.app_name),
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                    )
+                    Text(
+                        text = stringResource(state.connection.labelRes()),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                    )
+                }
+            },
+            actions = {
+                state.watch.battery?.let { BatteryRing(it) }
+
+                if (state.settings.isPaired) {
+                    IconButton(onClick = onSyncNow, enabled = state.connection.isUsable) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_ui_sync),
+                            contentDescription = stringResource(R.string.action_sync_now),
+                        )
+                    }
+                }
+            },
+        )
+
+        // Only while something is genuinely in flight; a bar that is always animating is
+        // a bar people stop seeing. Under the title rather than inside a card, so it
+        // reads as the connection working rather than as one screen loading.
+        if (state.connection.isSettling()) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+    }
+}
+
+/**
+ * The watch's battery as a ring rather than a number.
+ *
+ * A percentage is read; a ring is seen. This sits in the bar on every screen, where being
+ * *glanceable* is the whole of its job — the figure is still there in the middle for
+ * anyone who wants it.
+ */
+@Composable
+private fun BatteryRing(battery: BatteryStatus) {
+    // Animated, so a battery that has moved since the last sync arrives as a movement
+    // rather than as a different number that was always there.
+    val level by animateFloatAsState(
+        targetValue = battery.levelPercent / 100f,
+        animationSpec = tween(durationMillis = 700),
+        label = "battery",
+    )
+
+    val low = battery.levelPercent <= LOW_BATTERY_PERCENT && !battery.isCharging
+    val ring = if (low) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(end = 4.dp)) {
+        Canvas(Modifier.size(34.dp)) {
+            val stroke = 3.dp.toPx()
+            val inset = stroke / 2
+            drawArc(
+                color = track,
+                startAngle = 0f,
+                sweepAngle = 360f,
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = Size(size.width - stroke, size.height - stroke),
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+            drawArc(
+                color = ring,
+                // From the top, like every other dial anyone has ever read.
+                startAngle = -90f,
+                sweepAngle = 360f * level.coerceIn(0f, 1f),
+                useCenter = false,
+                topLeft = Offset(inset, inset),
+                size = Size(size.width - stroke, size.height - stroke),
+                style = Stroke(width = stroke, cap = StrokeCap.Round),
+            )
+        }
+
+        Text(
+            text = "${battery.levelPercent}",
+            style = MaterialTheme.typography.labelSmall,
+            color = if (low) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
+
+/** Below this the ring turns red, which is the only thing it says on its own. */
+private const val LOW_BATTERY_PERCENT = 20
+
+/**
  * Three corner radii, by what a card is for.
  *
  * A screen of identically-rounded cards is a screen you read from the top down, because
@@ -608,72 +820,6 @@ private fun featureCardColors(active: Boolean): CardColors = if (active) {
     )
 } else {
     CardDefaults.cardColors()
-}
-
-@Composable
-private fun ConnectionCard(
-    state: HomeUiState,
-    onSyncNow: () -> Unit,
-    onForget: () -> Unit,
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-    ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = state.settings.name ?: stringResource(R.string.no_watch_paired),
-                style = MaterialTheme.typography.headlineSmall,
-            )
-            Text(
-                text = stringResource(state.connection.labelRes()),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-
-            state.watch.battery?.let { battery ->
-                Text(
-                    text = if (battery.isCharging) {
-                        stringResource(R.string.battery_charging, battery.levelPercent)
-                    } else {
-                        stringResource(R.string.battery_level, battery.levelPercent)
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            }
-
-            state.watch.firmware?.let { firmware ->
-                Text(
-                    text = stringResource(R.string.firmware_version, firmware),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-
-            Text(
-                text = stringResource(R.string.app_version, BuildConfig.VERSION_NAME),
-                style = MaterialTheme.typography.bodySmall,
-            )
-
-            // Only shown while something is genuinely in flight; a permanently
-            // animating bar teaches people to ignore it.
-            if (state.connection.isSettling()) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            if (state.settings.isPaired) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Button(onClick = onSyncNow, enabled = state.connection.isUsable) {
-                        Text(stringResource(R.string.action_sync_now))
-                    }
-                    OutlinedButton(onClick = onForget) {
-                        Text(stringResource(R.string.action_forget))
-                    }
-                }
-            }
-        }
-    }
 }
 
 /**

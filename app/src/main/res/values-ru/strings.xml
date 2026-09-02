@@ -343,4 +343,12 @@
     <string name="weather_auto_place">Следовать за мной</string>
     <string name="weather_auto_foreground">Место берётся при открытии reCMF. Чтобы оно менялось и с закрытым приложением, разрешите доступ к местоположению «Всегда» в настройках системы.</string>
     <string name="weather_auto_background">Место следует за вами, открыто приложение или нет.</string>
+    <string name="section_watch">Часы</string>
+    <string name="section_on_the_wrist">На руке</string>
+    <string name="section_data">Данные</string>
+    <string name="section_app">reCMF</string>
+    <string name="paired_watch">Спаренные часы</string>
+    <string name="forget_title">Забыть эти часы?</string>
+    <string name="forget_explainer">reCMF перестанет с ними общаться и забудет спаривание. Вернуть — значит спарить заново, заново выдать разрешения и отправить часам свежий альманах. Всё, что уже записано в Health Connect, останется.</string>
+    <string name="action_cancel">Отмена</string>
 </resources>
