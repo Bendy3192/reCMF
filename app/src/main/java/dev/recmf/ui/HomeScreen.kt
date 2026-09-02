@@ -693,6 +693,7 @@ private fun PairedWatchCard(state: HomeUiState, onForget: () -> Unit) {
  * be able to tell whether the thing on their wrist is talking to the phone, and how much
  * of its day is left, without going and looking for a card that says so.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun WatchBar(state: HomeUiState, onSyncNow: () -> Unit) {
     Column {
