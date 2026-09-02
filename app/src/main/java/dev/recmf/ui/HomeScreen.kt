@@ -48,13 +48,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -697,7 +698,7 @@ private fun PairedWatchCard(state: HomeUiState, onForget: () -> Unit) {
  * be able to tell whether the thing on their wrist is talking to the phone, and how much
  * of its day is left, without going and looking for a card that says so.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun WatchBar(state: HomeUiState, onSyncNow: () -> Unit) {
     Column {
@@ -735,7 +736,7 @@ private fun WatchBar(state: HomeUiState, onSyncNow: () -> Unit) {
         // a bar people stop seeing. Under the title rather than inside a card, so it
         // reads as the connection working rather than as one screen loading.
         if (state.connection.isSettling()) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            LinearWavyProgressIndicator(Modifier.fillMaxWidth())
         }
     }
 }
@@ -2571,6 +2572,7 @@ private fun CmfWeekday.labelRes(): Int = when (this) {
  * file manager and — since every build now shares a signing key — the uninstall that used
  * to take the settings with it.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun UpdateCard(
     state: UpdateState,
@@ -2628,9 +2630,9 @@ private fun UpdateCard(
                         style = MaterialTheme.typography.bodySmall,
                     )
                     if (state.percent == null) {
-                        LinearProgressIndicator(Modifier.fillMaxWidth())
+                        LinearWavyProgressIndicator(Modifier.fillMaxWidth())
                     } else {
-                        LinearProgressIndicator(
+                        LinearWavyProgressIndicator(
                             progress = { state.percent / 100f },
                             modifier = Modifier.fillMaxWidth(),
                         )
@@ -2775,7 +2777,7 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
  * the official app does. An earlier version of this card sent single ids and single indices
  * to a different opcode and the watch acknowledged every one of them without moving.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun WatchfaceCard(
     watchfaces: WatchfaceList?,
@@ -2872,7 +2874,7 @@ private fun WatchfaceCard(
                         stringResource(R.string.watchface_sending, install.name, install.percent),
                         style = MaterialTheme.typography.bodyMedium,
                     )
-                    LinearProgressIndicator(
+                    LinearWavyProgressIndicator(
                         progress = { install.percent / 100f },
                         modifier = Modifier.fillMaxWidth(),
                     )
