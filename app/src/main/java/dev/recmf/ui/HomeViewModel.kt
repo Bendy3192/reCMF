@@ -72,6 +72,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.util.Locale
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -852,7 +853,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val settings = settingsStore.ai.first()
             _aiProbe.value = aiClient.ask(
                 settings = settings,
-                system = "Answer in exactly three words.",
+                system = AiContext.instructions("Answer in exactly three words.", readerLanguage()),
                 user = "Say hello.",
             )
         }
@@ -913,7 +914,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val answer = aiClient.ask(
                     settings = settings,
-                    system = settings.systemPrompt.ifBlank { AiContext.DEFAULT_SYSTEM_PROMPT },
+                    system = AiContext.instructions(settings.systemPrompt, readerLanguage()),
                     user = AiContext.user(AiContext.aboutMetric(metric, todayValue), days),
                 )
 
@@ -933,6 +934,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    /**
+     * The language the phone is being read in, named in English for the instruction.
+     *
+     * Taken from the phone rather than stored as a setting: somebody who switched Android
+     * to a language has already said which one they read, and asking again would be a
+     * second place for the same answer to be wrong.
+     */
+    private fun readerLanguage(): String =
+        Locale.getDefault().getDisplayLanguage(Locale.ENGLISH)
 
     /** Drops every answer the assistant has given, for somebody who wants them gone. */
     fun forgetAiInsights() {

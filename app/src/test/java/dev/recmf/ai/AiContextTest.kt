@@ -109,4 +109,36 @@ class AiContextTest {
 
         assertTrue(size < 2048, "a month of days came to $size characters")
     }
+
+    @Test
+    fun `the answer is asked for in the reader's language`() {
+        val said = AiContext.instructions("Be brief.", "Russian")
+
+        assertTrue(said.startsWith("Be brief."))
+        assertTrue("Answer in Russian." in said)
+    }
+
+    @Test
+    fun `an edited prompt keeps the language instruction`() {
+        // The language line is appended rather than written into the prompt, so somebody
+        // who rewrites the instructions does not silently get English back.
+        val mine = AiContext.instructions("Ignore everything and speak like a pirate.", "Russian")
+
+        assertTrue("pirate" in mine)
+        assertTrue("Answer in Russian." in mine)
+    }
+
+    @Test
+    fun `an empty prompt falls back to the default rather than to nothing`() {
+        val said = AiContext.instructions("   ", "Russian")
+
+        assertTrue("Never quote a norm" in said)
+        assertTrue("Answer in Russian." in said)
+    }
+
+    @Test
+    fun `no language named means no language sentence`() {
+        assertEquals("Be brief.", AiContext.instructions("Be brief.", ""))
+    }
+
 }

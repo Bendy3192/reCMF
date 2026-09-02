@@ -116,6 +116,32 @@ object AiContext {
         }
     }.trimEnd()
 
+    /**
+     * The instructions, plus the language to answer in.
+     *
+     * Kept apart from the prompt rather than written into it, for two reasons. The prompt
+     * is editable, and somebody who rewrites it should not have to remember to say what
+     * language they speak — nor should their edit silently switch the answers back to
+     * English. And the instructions themselves stay in English on purpose: they are
+     * technical, models follow them best that way, and translating them into every
+     * language reCMF is offered in would be a large surface to keep true.
+     *
+     * The language is named in English — "Russian", not "русский" — because that is what
+     * the instruction around it is written in, and a model reading an English sentence
+     * with one word of Cyrillic in it is being asked to guess.
+     *
+     * @param prompt the standing instructions, however they have been edited.
+     * @param language the reader's language, named in English.
+     */
+    fun instructions(prompt: String, language: String): String = buildString {
+        append(prompt.trim().ifEmpty { DEFAULT_SYSTEM_PROMPT })
+        if (language.isNotBlank()) {
+            append("\n\nAnswer in ")
+            append(language)
+            append(". Use the units and date format that language ordinarily uses.")
+        }
+    }
+
     /** The question asked when somebody opens a metric. */
     fun aboutMetric(metric: String, todayValue: String): String =
         "Today's $metric is $todayValue. Is that ordinary for this person, and what would " +
