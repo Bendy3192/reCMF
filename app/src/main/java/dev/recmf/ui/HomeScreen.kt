@@ -445,15 +445,20 @@ private fun TabContent(
                     val night = stringResource(R.string.metric_sleep)
                     val slept = sleepSession?.stages?.sumOf { it.duration } ?: 0
 
-                    LaunchedEffect(night, slept) {
-                        if (slept > 0) onAskAboutMetric(night, readableDuration(slept.toLong()), false)
+                    // Formatted here and not inside the lambdas below. `readableDuration`
+                    // reads a string resource, which makes it composable, and neither a
+                    // LaunchedEffect body nor a click handler is a composition.
+                    val howLong = readableDuration(slept.toLong())
+
+                    LaunchedEffect(night, howLong) {
+                        if (slept > 0) onAskAboutMetric(night, howLong, false)
                     }
 
                     SleepCard(
                         session = sleepSession,
                         insight = aiInsights[night],
                         thinking = night in aiAsking,
-                        onAskAgain = { onAskAboutMetric(night, readableDuration(slept.toLong()), true) },
+                        onAskAgain = { onAskAboutMetric(night, howLong, true) },
                     )
                 }
             }
