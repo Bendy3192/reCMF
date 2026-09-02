@@ -33,6 +33,26 @@ interface SampleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSleep(session: SleepSessionEntity)
 
+    /**
+     * The conversation, oldest first, which is the order it is read and the order it is
+     * sent in.
+     */
+    @Query("SELECT * FROM coach_messages ORDER BY id")
+    fun coachMessages(): Flow<List<CoachMessageEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoachMessage(message: CoachMessageEntity): Long
+
+    /** Everything said, for an export. */
+    @Query("SELECT * FROM coach_messages ORDER BY id")
+    suspend fun allCoachMessages(): List<CoachMessageEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCoachMessages(messages: List<CoachMessageEntity>)
+
+    @Query("DELETE FROM coach_messages")
+    suspend fun clearCoachMessages()
+
     @Query("SELECT * FROM sleep_sessions WHERE startTimestamp >= :since ORDER BY startTimestamp")
     fun sleepSince(since: Long): Flow<List<SleepSessionEntity>>
 

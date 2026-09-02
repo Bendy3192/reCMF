@@ -193,6 +193,14 @@
     <string name="charts_today">Today in detail</string>
 
     <string name="tab_sleep">Sleep</string>
+    <string name="tab_coach">Coach</string>
+    <string name="coach_empty">Ask about anything the watch has been recording. Every question carries the same table of days the metric cards send, and what you have written about yourself.</string>
+    <string name="coach_off">The coach is switched off. Turn it on under the assistant, on the watch tab.</string>
+    <string name="coach_hint">Ask something</string>
+    <string name="coach_send">Send</string>
+    <string name="coach_clear">Clear</string>
+    <string name="coach_thinking">Thinking</string>
+    <string name="coach_failed">Did not go through: %1$s</string>
     <string name="sleep_waiting">The watch hands a night over about twenty minutes after you get up, and only once. Nothing has arrived yet.</string>
     <string name="sleep_stage_deep">Deep</string>
     <string name="sleep_stage_light">Light</string>

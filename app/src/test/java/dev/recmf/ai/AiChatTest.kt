@@ -9,9 +9,12 @@ import org.json.JSONObject
 
 class AiChatTest {
 
+    /** The one-turn conversation a metric card sends. */
+    private fun asked(text: String) = listOf(AiChat.Turn(fromUser = true, text = text))
+
     @Test
     fun `a request carries the model and both messages in order`() {
-        val body = JSONObject(AiChat.body("sonar", "be careful", "how am I?"))
+        val body = JSONObject(AiChat.body("sonar", "be careful", asked("how am I?")))
         val messages = body.getJSONArray("messages")
 
         assertEquals("sonar", body.getString("model"))
@@ -26,7 +29,7 @@ class AiChatTest {
     fun `a request carries nothing else`() {
         // No temperature, no penalties. They differ in meaning between providers and none
         // of them changes whether what is said about a resting pulse is true.
-        val body = JSONObject(AiChat.body("sonar", "s", "u"))
+        val body = JSONObject(AiChat.body("sonar", "s", asked("u")))
 
         assertEquals(setOf("model", "messages"), body.keys().asSequence().toSet())
     }
@@ -36,23 +39,26 @@ class AiChatTest {
         // instructions and input rather than messages, and a token ceiling — Anthropic
         // models on Perplexity's Agent API refuse the request outright without one.
         val body = JSONObject(
-            AiChat.body("anthropic/claude-sonnet-5", "be careful", "how am I?", Wire.RESPONSES),
+            AiChat.body("anthropic/claude-sonnet-5", "be careful", asked("how am I?"), Wire.RESPONSES),
         )
 
         assertEquals("anthropic/claude-sonnet-5", body.getString("model"))
         assertEquals("be careful", body.getString("instructions"))
-        assertEquals("how am I?", body.getString("input"))
+        assertEquals("how am I?", body.getJSONArray("input").getJSONObject(0).getString("content"))
         assertTrue(body.has("max_output_tokens"))
         assertTrue(body.getInt("max_output_tokens") > 0)
     }
 
     @Test
     fun `search is asked for by name or not at all`() {
-        val without = JSONObject(AiChat.body("m", "s", "u", Wire.RESPONSES, webSearch = false))
-        val asked = JSONObject(AiChat.body("m", "s", "u", Wire.RESPONSES, webSearch = true))
+        val without = JSONObject(AiChat.body("m", "s", asked("u"), Wire.RESPONSES, webSearch = false))
+        val withSearch = JSONObject(AiChat.body("m", "s", asked("u"), Wire.RESPONSES, webSearch = true))
 
         assertTrue(!without.has("tools"))
-        assertEquals("web_search", asked.getJSONArray("tools").getJSONObject(0).getString("type"))
+        assertEquals(
+            "web_search",
+            withSearch.getJSONArray("tools").getJSONObject(0).getString("type"),
+        )
     }
 
     @Test
@@ -123,6 +129,38 @@ class AiChatTest {
     }
 
     @Test
+    fun `a conversation is sent whole, in the order it was said`() {
+        // The provider keeps nothing between calls, so the history is not a convenience —
+        // it is the only reason a second question knows about the first.
+        val talk = listOf(
+            AiChat.Turn(fromUser = true, text = "I slept badly."),
+            AiChat.Turn(fromUser = false, text = "How long?"),
+            AiChat.Turn(fromUser = true, text = "Five hours."),
+        )
+
+        val messages = JSONObject(AiChat.body("m", "s", talk)).getJSONArray("messages")
+
+        assertEquals(4, messages.length(), "the standing instructions plus three turns")
+        assertEquals("system", messages.getJSONObject(0).getString("role"))
+        assertEquals("user", messages.getJSONObject(1).getString("role"))
+        assertEquals("assistant", messages.getJSONObject(2).getString("role"))
+        assertEquals("Five hours.", messages.getJSONObject(3).getString("content"))
+    }
+
+    @Test
+    fun `the responses shape carries the same conversation`() {
+        val talk = listOf(
+            AiChat.Turn(fromUser = true, text = "I slept badly."),
+            AiChat.Turn(fromUser = false, text = "How long?"),
+        )
+
+        val input = JSONObject(AiChat.body("m", "s", talk, Wire.RESPONSES)).getJSONArray("input")
+
+        assertEquals(2, input.length(), "the instructions are a field here, not a message")
+        assertEquals("assistant", input.getJSONObject(1).getString("role"))
+    }
+
+    @Test
     fun `a refusal with nothing to say yields nothing rather than noise`() {
         assertNull(AiChat.error("{}"))
         assertNull(AiChat.error("<html>502 Bad Gateway</html>"))
@@ -134,7 +172,7 @@ class AiChatTest {
         // that mangled them would send something other than what was shown.
         val user = AiContext.user("How am I?", listOf(AiContext.Day("2026-08-28", 61, 431, 38, 44, 9012)))
 
-        val back = JSONObject(AiChat.body("m", "s", user))
+        val back = JSONObject(AiChat.body("m", "s", asked(user)))
             .getJSONArray("messages").getJSONObject(1).getString("content")
 
         assertEquals(user, back)

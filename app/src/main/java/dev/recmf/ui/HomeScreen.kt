@@ -138,6 +138,7 @@ import android.widget.Toast
 import dev.recmf.health.HealthConnectAvailability
 import dev.recmf.service.AlarmMirrorProblem
 import dev.recmf.service.WeatherProblem
+import dev.recmf.data.CoachMessageEntity
 import dev.recmf.data.SleepSummary
 import dev.recmf.protocol.SleepSession
 import dev.recmf.protocol.WatchfaceList
@@ -171,6 +172,11 @@ fun HomeScreen(
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
     sleepScore: SleepScore?,
+    coachMessages: List<CoachMessageEntity>,
+    coachThinking: Boolean,
+    coachProblem: String?,
+    onCoachSend: (String) -> Unit,
+    onCoachClear: () -> Unit,
     backupState: BackupState?,
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
@@ -221,7 +227,14 @@ fun HomeScreen(
     onHealthConnectEnabled: (Boolean) -> Unit,
     onPhoneAlarmsEnabled: (Boolean) -> Unit,
 ) {
-    val pager = rememberPagerState { HomeTab.entries.size }
+    // A tab for a switch nobody turned on would open onto an explanation of why it is
+    // empty, and five other tabs would rather have the room. Turning the coach on is what
+    // puts it there, which is also the clearest thing that switch could do.
+    val tabs = remember(ai.coachEnabled) {
+        HomeTab.entries.filter { it != HomeTab.COACH || ai.coachEnabled }
+    }
+
+    val pager = rememberPagerState { tabs.size }
     val scope = rememberCoroutineScope()
 
     Scaffold(
@@ -241,7 +254,7 @@ fun HomeScreen(
                 // a horizontally sliding surface and the two would come apart mid-swipe.
                 HorizontalPager(state = pager) { page ->
                     TabContent(
-                        tab = HomeTab.entries[page],
+                        tab = tabs[page],
                         state = state,
                         healthConnectAvailability = healthConnectAvailability,
                         watchPreferences = watchPreferences,
@@ -258,6 +271,11 @@ fun HomeScreen(
                         alarmMirrorProblem = alarmMirrorProblem,
                         readiness = readiness,
                         sleepScore = sleepScore,
+                        coachMessages = coachMessages,
+                        coachThinking = coachThinking,
+                        coachProblem = coachProblem,
+                        onCoachSend = onCoachSend,
+                        onCoachClear = onCoachClear,
                         backupState = backupState,
                         ai = ai,
                         aiProbe = aiProbe,
@@ -308,6 +326,7 @@ fun HomeScreen(
                 }
 
                 FloatingTabDock(
+                    tabs = tabs,
                     selected = pager.currentPage,
                     onSelect = { scope.launch { pager.animateScrollToPage(it) } },
                     modifier = Modifier
@@ -345,6 +364,11 @@ private fun TabContent(
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
     sleepScore: SleepScore?,
+    coachMessages: List<CoachMessageEntity>,
+    coachThinking: Boolean,
+    coachProblem: String?,
+    onCoachSend: (String) -> Unit,
+    onCoachClear: () -> Unit,
     backupState: BackupState?,
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
@@ -392,6 +416,21 @@ private fun TabContent(
     onHealthConnectEnabled: (Boolean) -> Unit,
     onPhoneAlarmsEnabled: (Boolean) -> Unit,
 ) {
+    // The one tab that is not a list of cards: a conversation needs the box to type in
+    // pinned to the bottom, and a box that scrolls away with the messages is a box nobody
+    // can find after the third answer.
+    if (tab == HomeTab.COACH) {
+        CoachScreen(
+            messages = coachMessages,
+            thinking = coachThinking,
+            problem = coachProblem,
+            ready = ai.coachEnabled && ai.usable,
+            onSend = onCoachSend,
+            onClear = onCoachClear,
+        )
+        return
+    }
+
     // Which measurement is open, if any. Held here rather than in the tile so that the
     // sheet outlives the row scrolling off the screen.
     var opened by remember { mutableStateOf<TileSpec?>(null) }
@@ -471,6 +510,11 @@ private fun TabContent(
                 // is the order the two belong in.
                 item { SleepScoreCard(sleepScore) }
             }
+
+            // Drawn above, where it can have a layout of its own. Named here because a
+            // when over an enum that misses a case is a warning, and warnings fail this
+            // build.
+            HomeTab.COACH -> Unit
 
             HomeTab.FACES -> {
                 item {
@@ -644,6 +688,7 @@ private fun PairingList(
  */
 @Composable
 private fun FloatingTabDock(
+    tabs: List<HomeTab>,
     selected: Int,
     onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -662,7 +707,7 @@ private fun FloatingTabDock(
             modifier = Modifier.padding(8.dp),
             horizontalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            HomeTab.entries.forEachIndexed { index, entry ->
+            tabs.forEachIndexed { index, entry ->
                 val isSelected = index == selected
                 val background by animateColorAsState(
                     targetValue = if (isSelected) {
@@ -3924,6 +3969,11 @@ private enum class HomeTab(
     // is where the settings live. The dock reads health, workouts, sleep, faces, watch.
     WORKOUTS(R.string.tab_workouts, R.drawable.ic_sport_run),
     SLEEP(R.string.tab_sleep, R.drawable.ic_metric_sleep),
+
+    // Present only when the coach is switched on; see [shownTabs]. It sits after the
+    // measurements because it is about them — there is nothing to ask before there is
+    // something to ask about.
+    COACH(R.string.tab_coach, R.drawable.ic_ui_coach),
 
     // Its own tab rather than a card buried in the watch settings: switching and
     // installing a face is a thing people come to do, not a setting they adjust once.

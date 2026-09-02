@@ -106,6 +106,15 @@ class BackupStore(private val context: Context, private val dao: SampleDao) {
                 )
             },
         ),
+        // The conversation with the coach. It is the one thing in this file the wearer
+        // wrote rather than wore, which makes it the least replaceable: a month of steps
+        // comes back from the watch and a conversation does not come back from anywhere.
+        // The identity goes with it, because the order things were said in is the only
+        // order they mean anything in.
+        COACH to Table(
+            listOf("id", "fromUser", "text", "atSeconds"),
+            dao.allCoachMessages().map { listOf(it.id, it.fromUser, it.text, it.atSeconds) },
+        ),
     )
 
     /**
@@ -203,6 +212,19 @@ class BackupStore(private val context: Context, private val dao: SampleDao) {
             rows += entities.size
         }
 
+        contents.tables[COACH]?.let { table ->
+            val entities = table.each { row ->
+                CoachMessageEntity(
+                    id = row.long("id") ?: return@each null,
+                    fromUser = row.bool("fromUser") ?: true,
+                    text = row.text("text") ?: return@each null,
+                    atSeconds = row.long("atSeconds") ?: 0,
+                )
+            }
+            dao.insertCoachMessages(entities)
+            rows += entities.size
+        }
+
         return Restored(settings = contents.settings.count { it.key !in Backup.NEVER_LEAVES }, rows = rows)
     }
 
@@ -235,6 +257,7 @@ class BackupStore(private val context: Context, private val dao: SampleDao) {
         fun long(name: String): Long? = (at(name) as? Number)?.toLong()
         fun int(name: String): Int? = (at(name) as? Number)?.toInt()
         fun bool(name: String): Boolean? = at(name) as? Boolean
+        fun text(name: String): String? = at(name) as? String
     }
 
     private companion object {
@@ -244,5 +267,6 @@ class BackupStore(private val context: Context, private val dao: SampleDao) {
         const val RESTING = "resting_heart_rate_samples"
         const val STRESS = "stress_samples"
         const val SLEEP = "sleep_sessions"
+        const val COACH = "coach_messages"
     }
 }

@@ -261,6 +261,19 @@ object AiContext {
     fun user(question: String, days: List<Day>, about: String = ""): String = buildString {
         appendLine(question)
         appendLine()
+        append(briefing(days, about))
+    }.trimEnd()
+
+    /**
+     * The figures and the profile, with no question attached.
+     *
+     * Split out for the coach, where the same context belongs in the standing instructions
+     * rather than in a message: a conversation is a list of things the two sides said, and
+     * a table of somebody's steps is not something they said. Putting it in a turn would
+     * also mean either resending it as a fake user message every time or letting it go
+     * stale after the first — and the figures move every day.
+     */
+    fun briefing(days: List<Day>, about: String = ""): String = buildString {
         appendLine("Daily figures, oldest first:")
         appendLine(table(days))
         if (days.any { it.heartRateVariability != null }) {
@@ -272,6 +285,27 @@ object AiContext {
             appendLine(about.trim())
         }
     }.trimEnd()
+
+    /**
+     * What the coach is told before a word is exchanged.
+     *
+     * The same standing instructions the cards use, the same figures, plus the one thing
+     * that differs: this is a conversation with somebody who can answer back, so it may
+     * ask before it advises. The cards cannot ask — a tile has no reply box — which is
+     * why that sentence lives here and not in the shared prompt.
+     */
+    fun coaching(prompt: String, language: String, days: List<Day>, about: String): String =
+        buildString {
+            appendLine(instructions(prompt, language))
+            appendLine()
+            appendLine(
+                "This is a conversation, not a one-off answer. You may ask a short " +
+                    "clarifying question instead of guessing, and you should when the " +
+                    "figures alone cannot settle what was asked.",
+            )
+            appendLine()
+            append(briefing(days, about))
+        }.trimEnd()
 
     /**
      * The instructions, plus the language to answer in.

@@ -194,6 +194,14 @@
     <string name="charts_today">Подробнее за сегодня</string>
 
     <string name="tab_sleep">Сон</string>
+    <string name="tab_coach">Тренер</string>
+    <string name="coach_empty">Спросите о чём угодно из того, что записывают часы. С каждым вопросом уходит та же таблица дней, что и с карточек метрик, и то, что вы написали о себе.</string>
+    <string name="coach_off">Тренер выключен. Включите его в разделе ассистента, на вкладке часов.</string>
+    <string name="coach_hint">Спросить</string>
+    <string name="coach_send">Отправить</string>
+    <string name="coach_clear">Очистить</string>
+    <string name="coach_thinking">Думает</string>
+    <string name="coach_failed">Не отправилось: %1$s</string>
     <string name="sleep_waiting">Часы передают ночь примерно через двадцать минут после подъёма и только один раз. Пока ничего не пришло.</string>
     <string name="sleep_stage_deep">Глубокий</string>
     <string name="sleep_stage_light">Поверхностный</string>

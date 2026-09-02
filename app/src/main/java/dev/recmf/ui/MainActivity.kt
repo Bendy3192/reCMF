@@ -124,6 +124,9 @@ class MainActivity : ComponentActivity() {
                 val alarmMirrorProblem by model.alarmMirrorProblem.collectAsStateWithLifecycle()
                 val readiness by model.readiness.collectAsStateWithLifecycle()
                 val sleepScore by model.sleepScore.collectAsStateWithLifecycle()
+                val coachMessages by model.coach.collectAsStateWithLifecycle()
+                val coachThinking by model.coachThinking.collectAsStateWithLifecycle()
+                val coachProblem by model.coachProblem.collectAsStateWithLifecycle()
 
                 // Distance and calories were added after people had already granted the
                 // permissions that existed then, and the dialog above only opens when
@@ -224,6 +227,11 @@ class MainActivity : ComponentActivity() {
                     alarmMirrorProblem = alarmMirrorProblem,
                     readiness = readiness,
                     sleepScore = sleepScore,
+                    coachMessages = coachMessages,
+                    coachThinking = coachThinking,
+                    coachProblem = coachProblem,
+                    onCoachSend = model::sendToCoach,
+                    onCoachClear = model::clearCoach,
                     backupState = backupState,
                     ai = ai,
                     aiProbe = aiProbe,

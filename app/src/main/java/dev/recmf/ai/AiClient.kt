@@ -78,10 +78,23 @@ class AiClient {
         }
     }
 
-    suspend fun ask(settings: AiSettings, system: String, user: String): Answer {
+    /** One question with no history behind it, which is what a metric card asks. */
+    suspend fun ask(settings: AiSettings, system: String, user: String): Answer =
+        converse(settings, system, listOf(AiChat.Turn(fromUser = true, text = user)))
+
+    /**
+     * A conversation, sent whole.
+     *
+     * The provider keeps nothing between calls, so every question carries everything said
+     * before it. That is not a limitation being worked around — it is why the wearer can
+     * be shown exactly what leaves the phone, and why deleting the conversation here
+     * actually deletes it.
+     */
+    suspend fun converse(settings: AiSettings, system: String, turns: List<AiChat.Turn>): Answer {
         val url = AiEndpoint.of(settings.baseUrl, settings.wire) ?: return Answer.NotConfigured
         val key = settings.key?.takeIf { it.isNotBlank() } ?: return Answer.NotConfigured
         if (settings.model.isBlank()) return Answer.NotConfigured
+        if (turns.isEmpty()) return Answer.NotConfigured
 
         return post(
             url = url,
@@ -89,7 +102,7 @@ class AiClient {
             body = AiChat.body(
                 model = settings.model,
                 system = system,
-                user = user,
+                turns = turns,
                 wire = settings.wire,
                 webSearch = settings.webSearch,
             ),

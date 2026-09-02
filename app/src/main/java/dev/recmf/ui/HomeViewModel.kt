@@ -40,9 +40,11 @@ import dev.recmf.update.Updater
 import androidx.core.net.toUri
 import kotlin.math.roundToInt
 import dev.recmf.ai.AiClient
+import dev.recmf.ai.AiChat
 import dev.recmf.ai.AiContext
 import dev.recmf.ai.AiEndpoint
 import dev.recmf.data.AiInsightEntity
+import dev.recmf.data.CoachMessageEntity
 import dev.recmf.data.AiSettings
 import dev.recmf.data.Backup
 import dev.recmf.data.BackupStore
@@ -1116,6 +1118,112 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _aiAsking.value = _aiAsking.value - metric
             }
         }
+    }
+
+    /**
+     * The conversation with the coach, oldest first.
+     *
+     * Straight off the table rather than held in memory: it is the conversation, not a
+     * cache of one, and the only copy there is.
+     */
+    val coach: StateFlow<List<CoachMessageEntity>> = dao.coachMessages()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    private val _coachThinking = MutableStateFlow(false)
+    val coachThinking: StateFlow<Boolean> = _coachThinking.asStateFlow()
+
+    /** What went wrong with the last thing sent, until something else is sent. */
+    private val _coachProblem = MutableStateFlow<String?>(null)
+    val coachProblem: StateFlow<String?> = _coachProblem.asStateFlow()
+
+    /**
+     * Says something to the coach and keeps both halves.
+     *
+     * The wearer's message is written down before the request goes out, so it is on the
+     * screen while the answer is being waited for and survives the app being closed
+     * mid-wait. A failure leaves it there too: what somebody typed is theirs, and deleting
+     * it because a server was unreachable would be the app throwing away their words to
+     * tidy up after itself.
+     *
+     * The figures ride in the standing instructions rather than in a turn — they are
+     * context, not something either side said — which also means every question is
+     * answered against today's numbers rather than against whatever they were when the
+     * conversation started.
+     */
+    fun sendToCoach(text: String) {
+        val said = text.trim()
+        if (said.isEmpty()) return
+
+        viewModelScope.launch {
+            if (_coachThinking.value) return@launch
+
+            val settings = settingsStore.ai.first()
+            if (!settings.coachEnabled || !settings.usable) return@launch
+
+            _coachProblem.value = null
+            dao.insertCoachMessage(
+                CoachMessageEntity(
+                    fromUser = true,
+                    text = said,
+                    atSeconds = Instant.now().epochSecond,
+                ),
+            )
+
+            _coachThinking.value = true
+            try {
+                val answer = aiClient.converse(
+                    settings = settings,
+                    system = AiContext.coaching(
+                        prompt = settings.systemPrompt,
+                        language = readerLanguage(),
+                        days = aiDays.first(),
+                        about = settings.aboutMe(),
+                    ),
+                    // Read back rather than appended to a list held here: the message just
+                    // written is in it, and so is anything restored from a backup.
+                    turns = dao.allCoachMessages().map { AiChat.Turn(it.fromUser, it.text) },
+                )
+
+                when (answer) {
+                    is AiClient.Answer.Said -> dao.insertCoachMessage(
+                        CoachMessageEntity(
+                            fromUser = false,
+                            text = answer.text,
+                            atSeconds = Instant.now().epochSecond,
+                        ),
+                    )
+
+                    else -> _coachProblem.value = answer.wording()
+                }
+            } finally {
+                _coachThinking.value = false
+            }
+        }
+    }
+
+    /** Forgets the conversation. Nothing is kept anywhere else, so this is the whole of it. */
+    fun clearCoach() {
+        viewModelScope.launch {
+            dao.clearCoachMessages()
+            _coachProblem.value = null
+        }
+    }
+
+    /**
+     * A failure in words, for the line under the conversation.
+     *
+     * Deliberately short and deliberately not the provider's own message verbatim in every
+     * case: a refusal can quote back what was sent, and what was sent is somebody's health
+     * data.
+     */
+    private fun AiClient.Answer.wording(): String = when (this) {
+        is AiClient.Answer.Refused -> reason?.takeIf { it.isNotBlank() }?.let { "$code: $it" }
+            ?: code.toString()
+
+        is AiClient.Answer.Unreachable -> why
+        AiClient.Answer.Unreadable -> "empty answer"
+        AiClient.Answer.NotConfigured -> "not configured"
+        is AiClient.Answer.Said -> ""
     }
 
     /**

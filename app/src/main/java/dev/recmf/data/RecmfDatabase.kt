@@ -20,8 +20,9 @@ import androidx.sqlite.execSQL
         StressSampleEntity::class,
         SleepSessionEntity::class,
         AiInsightEntity::class,
+        CoachMessageEntity::class,
     ],
-    version = 6,
+    version = 7,
     exportSchema = true,
 )
 abstract class RecmfDatabase : RoomDatabase() {
@@ -138,6 +139,27 @@ abstract class RecmfDatabase : RoomDatabase() {
          * asked for again. It is a cache, and it exists so that opening a tile shows an
          * answer at once instead of billing somebody for one they already had.
          */
+        /**
+         * Adds the coach's conversation.
+         *
+         * The coach existed before this as a switch that added a paragraph about the
+         * wearer to one-off questions. There was nowhere to talk to it, and nowhere to
+         * keep what was said. This is that place.
+         *
+         * Nothing to back-fill: there was no conversation to lose.
+         */
+        private val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `coach_messages` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`fromUser` INTEGER NOT NULL, " +
+                        "`text` TEXT NOT NULL, " +
+                        "`atSeconds` INTEGER NOT NULL)",
+                )
+            }
+        }
+
         private val MIGRATION_5_6 = object : Migration(5, 6) {
             override fun migrate(connection: SQLiteConnection) {
                 connection.execSQL(
@@ -157,7 +179,17 @@ abstract class RecmfDatabase : RoomDatabase() {
                 context.applicationContext,
                 RecmfDatabase::class.java,
                 "recmf.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
+            )
+                .addMigrations(
+                    MIGRATION_1_2,
+                    MIGRATION_2_3,
+                    MIGRATION_3_4,
+                    MIGRATION_4_5,
+                    MIGRATION_5_6,
+                    MIGRATION_6_7,
+                )
+                .build()
+                .also { instance = it }
         }
     }
 }

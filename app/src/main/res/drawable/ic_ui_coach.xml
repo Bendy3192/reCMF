@@ -1,0 +1,16 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!--
+        A speech bubble: the one tab where something is said rather than measured.
+
+        Filled and closed in a single path, like the rest of this set. The tail leaves the
+        bottom edge and returns to it, so the outline never crosses itself — an outline
+        that does gets filled with the even-odd rule and comes back with a hole in it.
+    -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M4,3h16a2,2 0 0,1 2,2v10a2,2 0 0,1 -2,2h-9l-5,4v-4h-2a2,2 0 0,1 -2,-2V5a2,2 0 0,1 2,-2z" />
+</vector>

@@ -168,3 +168,26 @@ data class DailyTotals(
     val calories: Int = 0,
     val climbs: Int = 0,
 )
+
+/**
+ * One line of the conversation with the coach.
+ *
+ * Kept because a chat that forgets everything on the way back from the settings screen is
+ * not a conversation, it is a series of first messages. The whole of it is sent with each
+ * new question — the model keeps nothing between calls — so this table is not a cache of
+ * something held elsewhere. It is the conversation.
+ *
+ * Generated identity rather than a timestamp key: two messages a second apart is normal
+ * and two in the same second is possible, and the order they were said in is the only
+ * order that makes any sense to read them in.
+ */
+@Entity(tableName = "coach_messages")
+data class CoachMessageEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+
+    /** True for what the wearer typed, false for what came back. */
+    val fromUser: Boolean,
+
+    val text: String,
+    val atSeconds: Long,
+)

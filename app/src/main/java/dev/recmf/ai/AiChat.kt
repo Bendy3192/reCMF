@@ -36,10 +36,21 @@ object AiChat {
      * a settings screen, they differ in meaning between providers, and none of them changes
      * whether the thing said about somebody's resting pulse is true.
      */
+    /**
+     * One thing said, by one side.
+     *
+     * A chat endpoint keeps nothing between calls, so a conversation is not something the
+     * provider remembers — it is something reCMF resends in full every time. A turn is
+     * therefore the unit of both the screen and the request, and the same list serves both.
+     */
+    data class Turn(val fromUser: Boolean, val text: String) {
+        val role: String get() = if (fromUser) "user" else "assistant"
+    }
+
     fun body(
         model: String,
         system: String,
-        user: String,
+        turns: List<Turn>,
         wire: AiEndpoint.Wire = AiEndpoint.Wire.CHAT,
         webSearch: Boolean = false,
     ): String = when (wire) {
@@ -49,16 +60,30 @@ object AiChat {
                 "messages",
                 JSONArray()
                     .put(JSONObject().put("role", "system").put("content", system))
-                    .put(JSONObject().put("role", "user").put("content", user)),
+                    .apply {
+                        turns.forEach {
+                            put(JSONObject().put("role", it.role).put("content", it.text))
+                        }
+                    },
             )
             .toString()
 
         // The Responses shape: the standing instruction is a field of its own rather than
-        // a message with a role, and what is being asked is `input`.
+        // a message with a role, and what is being asked is `input` — which takes either a
+        // bare string or the same list of roles the other shape uses. The list is sent
+        // either way, because a conversation of one is still a conversation and two code
+        // paths for that would be one to forget.
         AiEndpoint.Wire.RESPONSES -> JSONObject()
             .put("model", model)
             .put("instructions", system)
-            .put("input", user)
+            .put(
+                "input",
+                JSONArray().apply {
+                    turns.forEach {
+                        put(JSONObject().put("role", it.role).put("content", it.text))
+                    }
+                },
+            )
             // Required, not optional, for some of what the Agent API hosts: Anthropic
             // models there refuse the request outright without it. Sent always rather than
             // guessed at per model, since a cap the answer never reaches costs nothing and
