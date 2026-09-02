@@ -987,7 +987,14 @@ class WatchService : LifecycleService() {
         }
 
         val age = System.currentTimeMillis() - current.almanacSentAtMillis
-        if (current.almanacSentAtMillis != 0L && age < ALMANAC_REFRESH_MILLIS) {
+
+        // A watch holding a shape reCMF no longer builds is given the new one now rather
+        // than when the old goes stale. The first almanac this app sent had its satellites
+        // in the wrong places, and waiting a day and a half to correct that would be a day
+        // and a half of a receiver trusting orbits that are not where it thinks.
+        val sameShape = current.almanacFormatSent == CmfAgps.FORMAT
+
+        if (current.almanacSentAtMillis != 0L && age < ALMANAC_REFRESH_MILLIS && sameShape) {
             if (becauseAsked) {
                 ProtocolLog.note("GPS data: the watch's orbits are ${age / 3_600_000} hours old")
             }
@@ -1005,7 +1012,7 @@ class WatchService : LifecycleService() {
         // Recorded before the transfer rather than after it. The watch takes several
         // seconds and says nothing useful if it goes wrong, and a failure that leaves the
         // timestamp untouched would have this retry on every single connection.
-        settings.setAlmanacSentAt(System.currentTimeMillis())
+        settings.setAlmanacSentAt(System.currentTimeMillis(), CmfAgps.FORMAT)
         sendAlmanac(almanac, "fresh orbits")
     }
 

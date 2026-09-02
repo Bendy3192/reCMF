@@ -68,6 +68,9 @@ data class WatchSettings(
     /** When the watch was last given orbits, so they are refreshed before they run out. */
     val almanacSentAtMillis: Long = 0L,
 
+    /** Which shape of almanac the watch was last given; see `CmfAgps.FORMAT`. */
+    val almanacFormatSent: Int = 0,
+
     val weatherEnabled: Boolean = false,
     /** The place the user typed, as the provider resolved it. */
     val weatherCity: String? = null,
@@ -159,6 +162,7 @@ class SettingsStore(private val context: Context) {
             phoneAlarmsEnabled = prefs[KEY_PHONE_ALARMS] ?: false,
             gpsAlmanacAuto = prefs[KEY_ALMANAC_AUTO] ?: true,
             almanacSentAtMillis = prefs[KEY_ALMANAC_SENT_AT] ?: 0L,
+            almanacFormatSent = prefs[KEY_ALMANAC_FORMAT] ?: 0,
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
             weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
             weatherCity = prefs[KEY_WEATHER_CITY],
@@ -388,8 +392,11 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_ALMANAC_AUTO] = enabled }
     }
 
-    suspend fun setAlmanacSentAt(millis: Long) {
-        context.dataStore.edit { it[KEY_ALMANAC_SENT_AT] = millis }
+    suspend fun setAlmanacSentAt(millis: Long, format: Int) {
+        context.dataStore.edit {
+            it[KEY_ALMANAC_SENT_AT] = millis
+            it[KEY_ALMANAC_FORMAT] = format
+        }
     }
 
     suspend fun setWeatherEnabled(enabled: Boolean) {
@@ -513,6 +520,7 @@ class SettingsStore(private val context: Context) {
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
         val KEY_ALMANAC_AUTO = booleanPreferencesKey("gps_almanac_auto")
         val KEY_ALMANAC_SENT_AT = longPreferencesKey("almanac_sent_at")
+        val KEY_ALMANAC_FORMAT = intPreferencesKey("almanac_format")
         val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
         val KEY_WEATHER_CITY = stringPreferencesKey("weather_city")
         val KEY_WEATHER_LAT = doublePreferencesKey("weather_latitude")

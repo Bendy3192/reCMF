@@ -240,6 +240,19 @@ object CmfAgps {
 
     const val REQUEST_SIZE: Int = 40
 
+    /**
+     * Which shape [buildFromEpo] produces, so a watch holding an older one is given the
+     * newer without waiting for the old to go stale.
+     *
+     * Bumped when the bytes change in a way that matters to the receiver rather than on
+     * every release: an almanac is a megabyte-ish transfer over Bluetooth and re-sending
+     * an identical one costs the wearer a minute and some battery for nothing.
+     *
+     * 1 was thirty-two records to a slot, which the watch read as the wrong satellites.
+     * 2 is the fifty-six the watch expects.
+     */
+    const val FORMAT: Int = 2
+
     private const val START: Byte = 0x01
     private const val PADDING: Byte = 0xff.toByte()
 
