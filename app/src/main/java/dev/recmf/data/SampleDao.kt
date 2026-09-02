@@ -24,6 +24,19 @@ interface SampleDao {
     suspend fun insertRestingHeartRate(samples: List<RestingHeartRateSampleEntity>)
 
     /**
+     * Keyed on when the night began, and replaced rather than added to.
+     *
+     * The watch hands the same night over again on every connection until something else
+     * displaces it, and a night re-read is the same night — with, occasionally, a stage or
+     * two more than the first time it was sent.
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSleep(session: SleepSessionEntity)
+
+    @Query("SELECT * FROM sleep_sessions WHERE startTimestamp >= :since ORDER BY startTimestamp")
+    suspend fun sleepSince(since: Long): List<SleepSessionEntity>
+
+    /**
      * Unsynced samples, oldest first and capped, so a long backlog is uploaded in
      * batches instead of being materialized into memory all at once.
      */
@@ -210,4 +223,14 @@ interface SampleDao {
             "WHERE syncedAt IS NOT NULL AND timestamp < :before",
     )
     suspend fun pruneRestingHeartRate(before: Long): Int
+
+    /**
+     * Nights outlive samples on purpose.
+     *
+     * The sample tables are a staging buffer for Health Connect and a week of them is a
+     * great many rows. A night is one row, so a month of them costs almost nothing and
+     * gives readiness a baseline worth the name.
+     */
+    @Query("DELETE FROM sleep_sessions WHERE startTimestamp < :before")
+    suspend fun pruneSleep(before: Long): Int
 }

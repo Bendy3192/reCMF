@@ -91,6 +91,46 @@ data class StressSampleEntity(
 )
 
 /**
+ * A night, kept because readiness needs more than the last one.
+ *
+ * Sleep used to survive only as "last night" in settings, overwritten every morning. That
+ * is enough for a card that shows when you went to bed and enough for Health Connect,
+ * which takes each night as it arrives — but sleep is the single strongest input any
+ * readiness model has, and a baseline cannot be built from one night. So nights accumulate
+ * here now.
+ *
+ * The stages are summed into seconds per stage rather than kept one by one: what the score
+ * asks is how long the night was and how much of it was deep or REM, and a table of every
+ * stretch would be a great deal of rows to answer two questions. The stages themselves
+ * still reach Health Connect in full, from the frame, before this is written.
+ *
+ * Nothing marks it synced. Health Connect gets the night from the frame, not from here.
+ */
+@Entity(tableName = "sleep_sessions")
+data class SleepSessionEntity(
+    @PrimaryKey val startTimestamp: Long,
+    val wakeTimestamp: Long,
+    val deepSeconds: Int,
+    val lightSeconds: Int,
+    val remSeconds: Int,
+    /** Stretches the watch labelled with a code we do not recognise. Counted, not guessed. */
+    val unknownSeconds: Int,
+) {
+    /** Deep, light and REM together: time actually asleep, as the watch saw it. */
+    val asleepSeconds: Int get() = deepSeconds + lightSeconds + remSeconds
+
+    /**
+     * The share of the night that was deep or REM, or null when there was no night to speak of.
+     *
+     * The two restorative stages taken together rather than separately: the watch's split
+     * between them is not something reCMF has any way to check, and their sum is the part
+     * every sleep model agrees matters.
+     */
+    val restfulShare: Float? get() =
+        asleepSeconds.takeIf { it > 0 }?.let { (deepSeconds + remSeconds).toFloat() / it }
+}
+
+/**
  * What the watch has counted since a given moment — in practice, since midnight.
  *
  * Not a table: a projection of [ActivitySampleEntity], four running totals read in one

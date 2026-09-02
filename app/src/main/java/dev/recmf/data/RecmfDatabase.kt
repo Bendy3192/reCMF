@@ -18,8 +18,9 @@ import androidx.sqlite.execSQL
         Spo2SampleEntity::class,
         RestingHeartRateSampleEntity::class,
         StressSampleEntity::class,
+        SleepSessionEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class RecmfDatabase : RoomDatabase() {
@@ -104,12 +105,37 @@ abstract class RecmfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the nights table.
+         *
+         * Sleep had been kept as a single "last night" in settings, overwritten every
+         * morning, because Health Connect takes each night as it arrives and the card only
+         * ever showed the most recent one. Readiness needs a baseline, and sleep is the
+         * strongest thing it has to work from, so nights accumulate now.
+         *
+         * Nothing to back-fill: the nights before this ran were written over as they came.
+         */
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sleep_sessions` (" +
+                        "`startTimestamp` INTEGER NOT NULL, " +
+                        "`wakeTimestamp` INTEGER NOT NULL, " +
+                        "`deepSeconds` INTEGER NOT NULL, " +
+                        "`lightSeconds` INTEGER NOT NULL, " +
+                        "`remSeconds` INTEGER NOT NULL, " +
+                        "`unknownSeconds` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`startTimestamp`))",
+                )
+            }
+        }
+
         fun get(context: Context): RecmfDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 RecmfDatabase::class.java,
                 "recmf.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
         }
     }
 }

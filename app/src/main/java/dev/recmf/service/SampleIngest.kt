@@ -22,7 +22,9 @@ import dev.recmf.protocol.HeartRateSample
 import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.hexToBytes
 import kotlinx.coroutines.flow.first
+import dev.recmf.protocol.CmfSleepStage
 import dev.recmf.protocol.SleepSession
+import dev.recmf.data.SleepSessionEntity
 import dev.recmf.protocol.Spo2Sample
 import dev.recmf.protocol.StressSample
 import java.time.Instant
@@ -69,6 +71,11 @@ class SampleIngest(
      * app keeps its own copy of the last night regardless, which is what the card shows.
      */
     suspend fun storeSleep(session: SleepSession) {
+        // Kept before the Health Connect gate, and regardless of it. Readiness needs a run
+        // of nights to have a baseline at all, and somebody who never turned Health Connect
+        // on is exactly as entitled to one as somebody who did.
+        dao.insertSleep(session.toRow())
+
         if (!settings.current().healthConnectEnabled) return
 
         val hours = (session.wakeTimestamp - session.startTimestamp) / 3600.0
@@ -298,6 +305,28 @@ class SampleIngest(
     )
 
     /** Drops samples that have reached Health Connect and are older than the retention window. */
+    /**
+     * A night reduced to the four numbers readiness asks of it.
+     *
+     * Summed here rather than stored stretch by stretch: the score wants how long the
+     * night was and how much of it restored anything, and every stage of every night would
+     * be a great many rows to answer two questions. Health Connect still receives the
+     * stages in full, from the frame itself.
+     */
+    private fun SleepSession.toRow(): SleepSessionEntity {
+        fun seconds(stage: CmfSleepStage) =
+            stages.filter { it.stage == stage }.sumOf { it.duration }
+
+        return SleepSessionEntity(
+            startTimestamp = startTimestamp,
+            wakeTimestamp = wakeTimestamp,
+            deepSeconds = seconds(CmfSleepStage.DEEP),
+            lightSeconds = seconds(CmfSleepStage.LIGHT),
+            remSeconds = seconds(CmfSleepStage.REM),
+            unknownSeconds = seconds(CmfSleepStage.UNKNOWN),
+        )
+    }
+
     /** Wall-clock time of a sample, for a log line a human has to check. */
     private fun clock(epochSeconds: Long): String =
         DateTimeFormatter.ofPattern("HH:mm")
@@ -308,6 +337,13 @@ class SampleIngest(
         val removed = dao.pruneActivity(cutoff) + dao.pruneHeartRate(cutoff) +
             dao.pruneSpo2(cutoff) + dao.pruneRestingHeartRate(cutoff) + dao.pruneStress(cutoff)
         if (removed > 0) Log.i(TAG, "Pruned $removed synced samples")
+
+        // Nights are kept far longer than samples, being one row each against a week's
+        // worth of minute-by-minute readings.
+        val nights = dao.pruneSleep(
+            Instant.now().minusSeconds(NIGHT_RETENTION_SECONDS).epochSecond,
+        )
+        if (nights > 0) Log.i(TAG, "Pruned $nights old nights")
     }
 
     private companion object {
@@ -318,6 +354,9 @@ class SampleIngest(
 
         /** A week of history stays queryable in-app after it has been handed off. */
         const val RETENTION_SECONDS = 7L * 24 * 60 * 60
+
+        /** A month of nights, because each is one row and a longer baseline is a better one. */
+        const val NIGHT_RETENTION_SECONDS = 30L * 24 * 60 * 60
 
         /**
          * How far back to look for the rest of a session the newest samples belong to.

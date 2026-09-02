@@ -21,7 +21,7 @@ import kotlin.math.sqrt
  *
  * What the watch does give is enough for the honest version of the same idea: resting
  * heart rate, how long you slept and how much of it was deep or REM, and the stress index.
- * Each of those, on its own, says very little. Against your own fortnight they say quite
+ * Each of those, on its own, says very little. Against your own recent days they say quite
  * a lot — which is the one comparison available anyway, since there is no published norm
  * for this watch's stress index and the healthy range for resting heart rate is so wide
  * that a population figure would tell almost nobody anything.
@@ -36,7 +36,7 @@ import kotlin.math.sqrt
  * ## Reading the number
  *
  * 50 is *exactly your usual*, not a middling grade. The scale is your own recent spread,
- * so 75 means a clearly better morning than your fortnight's average and 25 a clearly
+ * so 75 means a clearly better morning than your own recent average and 25 a clearly
  * worse one — for you, not against anybody else.
  */
 
@@ -84,7 +84,7 @@ private const val FURTHEST = 2f
 /**
  * The least a baseline may be assumed to vary, as a share of its own average.
  *
- * Without this, a fortnight of identical readings makes the spread zero and the next day
+ * Without this, a run of identical readings makes the spread zero and the next day
  * scores infinitely good or infinitely bad. Two per cent is about a beat on a resting
  * pulse and eight minutes on a night's sleep, which is roughly the point below which a
  * change is not worth telling somebody about.
