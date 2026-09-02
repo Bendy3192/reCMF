@@ -36,6 +36,9 @@ import dev.recmf.service.WatchService
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
+import dev.recmf.health.Readiness
+import dev.recmf.health.ReadinessSignal
+import dev.recmf.health.readiness as scoreReadiness
 import dev.recmf.service.AlarmMirrorProblem
 import dev.recmf.service.WeatherProblem
 import dev.recmf.service.WatchStatus
@@ -542,6 +545,57 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), WeeklySeries())
 
     /**
+     * How today sits against the days behind it.
+     *
+     * Assembled here rather than in [readiness] itself so the scoring stays a function of
+     * numbers and can be tested without a database: this end knows about days, timezones
+     * and which night belongs to which morning, and that end knows about none of it.
+     *
+     * A night is filed under the day it **ended**. Sleep that began at 23:40 is Tuesday's
+     * sleep to the calendar and Wednesday's rest to the person waking up, and it is the
+     * person the score is about.
+     *
+     * Null until today has something to say. Nothing is carried forward from yesterday to
+     * fill the gap — a score labelled today that was computed from yesterday is worse than
+     * no score, and the morning before the first sync of the day is exactly when somebody
+     * would be looking.
+     */
+    val readiness: StateFlow<Readiness?> = combine(
+        dao.restingHeartRateSince(startOfBaseline()),
+        dao.stressSince(startOfBaseline()),
+        dao.sleepSince(startOfBaseline()),
+    ) { resting, stress, nights ->
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now()
+
+        fun <T> daily(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
+            rows.groupBy { Instant.ofEpochSecond(at(it)).atZone(zone).toLocalDate() }
+                .mapValues { (_, day) -> day.mapNotNull(value) }
+                .filterValues { it.isNotEmpty() }
+                .mapValues { (_, values) -> values.average().toFloat() }
+
+        val byDay = mapOf(
+            ReadinessSignal.RESTING_HEART_RATE to
+                daily(resting, { it.timestamp }, { it.bpm.toFloat() }),
+            ReadinessSignal.STRESS to
+                daily(stress, { it.timestamp }, { it.level.toFloat() }),
+            ReadinessSignal.SLEEP_DURATION to
+                daily(nights, { it.wakeTimestamp }, { it.asleepSeconds.toFloat() / 60f }),
+            ReadinessSignal.SLEEP_QUALITY to
+                daily(nights, { it.wakeTimestamp }, { it.restfulShare }),
+        )
+
+        // Aliased on import: the property being initialised here is also called readiness,
+        // and a reader should not have to work out which one a bare call resolves to.
+        scoreReadiness(
+            today = byDay.mapNotNull { (signal, days) -> days[today]?.let { signal to it } }.toMap(),
+            history = byDay.mapValues { (_, days) ->
+                days.filterKeys { it < today }.toSortedMap().values.toList()
+            },
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
+
+    /**
      * The workouts, newest first.
      *
      * Built rather than read: this watch keeps no summary of a session and will not answer
@@ -746,6 +800,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         /** A week, which is also everything the staging table keeps. */
         const val DAYS_IN_STRIP = 7
 
+        /** How many days back readiness reads. The nights table keeps thirty. */
+        const val BASELINE_DAYS = 30L
+
         /**
          * How far back the workouts screen looks.
          *
@@ -760,6 +817,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         /** Midnight at the start of the oldest day the seven-day strips show. */
         fun startOfWeek(): Long = LocalDate.now()
             .minusDays(DAYS_IN_STRIP - 1L)
+            .atStartOfDay(ZoneId.systemDefault())
+            .toEpochSecond()
+
+        /**
+         * As far back as readiness looks.
+         *
+         * Longer than the strips, because a baseline of six days plus today is thin and
+         * the nights table is kept for a month anyway. The sample tables hold a week, so
+         * in practice the pulse and stress baselines are a week and sleep's is a month —
+         * which is fine: each signal is judged against its own history, not a shared one.
+         */
+        fun startOfBaseline(): Long = LocalDate.now()
+            .minusDays(BASELINE_DAYS)
             .atStartOfDay(ZoneId.systemDefault())
             .toEpochSecond()
     }

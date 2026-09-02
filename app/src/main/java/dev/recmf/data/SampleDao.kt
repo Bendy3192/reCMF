@@ -34,7 +34,7 @@ interface SampleDao {
     suspend fun insertSleep(session: SleepSessionEntity)
 
     @Query("SELECT * FROM sleep_sessions WHERE startTimestamp >= :since ORDER BY startTimestamp")
-    suspend fun sleepSince(since: Long): List<SleepSessionEntity>
+    fun sleepSince(since: Long): Flow<List<SleepSessionEntity>>
 
     /**
      * Unsynced samples, oldest first and capped, so a long backlog is uploaded in

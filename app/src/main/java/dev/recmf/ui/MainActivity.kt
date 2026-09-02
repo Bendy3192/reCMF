@@ -120,6 +120,7 @@ class MainActivity : ComponentActivity() {
                 val watchfaces by model.watchfaces.collectAsStateWithLifecycle()
                 val watchfaceInstall by model.watchfaceInstall.collectAsStateWithLifecycle()
                 val alarmMirrorProblem by model.alarmMirrorProblem.collectAsStateWithLifecycle()
+                val readiness by model.readiness.collectAsStateWithLifecycle()
 
                 // Distance and calories were added after people had already granted the
                 // permissions that existed then, and the dialog above only opens when
@@ -193,6 +194,7 @@ class MainActivity : ComponentActivity() {
                     watchfaces = watchfaces,
                     watchfaceInstall = watchfaceInstall,
                     alarmMirrorProblem = alarmMirrorProblem,
+                    readiness = readiness,
                     onNotificationAppBlocked = model::setNotificationBlocked,
                     onNotificationAppsBlocked = model::setNotificationBlocked,
                     isBatteryExempt = isBatteryExempt,

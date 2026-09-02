@@ -107,6 +107,8 @@ import dev.recmf.ble.DiscoveredWatch
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
+import dev.recmf.health.Readiness
+import dev.recmf.health.ReadinessSignal
 import dev.recmf.ui.theme.Motion
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
@@ -155,6 +157,7 @@ fun HomeScreen(
     watchfaces: WatchfaceList?,
     watchfaceInstall: WatchfaceInstall?,
     alarmMirrorProblem: AlarmMirrorProblem?,
+    readiness: Readiness?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -219,6 +222,7 @@ fun HomeScreen(
                         watchfaces = watchfaces,
                         watchfaceInstall = watchfaceInstall,
                         alarmMirrorProblem = alarmMirrorProblem,
+                        readiness = readiness,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -283,6 +287,7 @@ private fun TabContent(
     watchfaces: WatchfaceList?,
     watchfaceInstall: WatchfaceInstall?,
     alarmMirrorProblem: AlarmMirrorProblem?,
+    readiness: Readiness?,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -327,6 +332,12 @@ private fun TabContent(
         when (tab) {
             HomeTab.HEALTH -> {
                 item { TodayCard(state, lastSleep, watchPreferences.stepsGoal) }
+
+                // Under Today and above the tiles, because it summarises them: a single
+                // reading of the morning, before the figures it was built from. Shown even
+                // with nothing to say yet — "not enough days" tells a new wearer the thing
+                // exists and is coming, where an absent card tells them nothing at all.
+                item { ReadinessCard(readiness) }
 
                 // Tiles come before the charts: a figure is what gets looked for, and the
                 // shape of the day is what gets looked at once the figure has been read.
@@ -1061,6 +1072,132 @@ private fun LazyListScope.metricTiles(
             }
         }
     }
+}
+
+/**
+ * How the morning compares with the mornings behind it.
+ *
+ * A summary rather than a measurement, which is why it sits under Today and above the
+ * tiles: it is built out of the figures below it and is the one thing on the screen that
+ * answers "so how am I" rather than "what does this read".
+ *
+ * The number is given a sentence beside it because 68 on its own is no better than
+ * "Stress 50" was. And the parts are listed, each with today against its own usual, so the
+ * score can be disagreed with — a wearer who slept badly on purpose knows why it dropped
+ * and does not need the app to be mysterious about it.
+ */
+@Composable
+private fun ReadinessCard(readiness: Readiness?) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = HeroCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CardTitle(R.drawable.ic_ui_readiness, R.string.readiness)
+
+            if (readiness == null) {
+                Text(
+                    stringResource(R.string.readiness_thin),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
+
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    readiness.score.toString(),
+                    style = MaterialTheme.typography.displaySmall,
+                )
+                Text(
+                    stringResource(readiness.score.standing()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
+
+            HorizontalDivider()
+
+            readiness.parts.forEach { part ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        stringResource(part.signal.labelRes()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        stringResource(
+                            R.string.readiness_against,
+                            part.signal.write(part.today),
+                            part.signal.write(part.usual),
+                        ),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (part.standing < -PART_WORTH_FLAGGING) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
+                stringResource(R.string.readiness_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Said on the card rather than buried in a help screen, because the comparison
+            // with Whoop is the first thing anyone who knows those apps will make.
+            Text(
+                stringResource(R.string.readiness_no_hrv),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** Far enough below usual to be worth colouring. Below this, a signal is just today. */
+private const val PART_WORTH_FLAGGING = 0.25f
+
+/** The score in words, because a bare number is the thing this screen exists to fix. */
+@StringRes
+private fun Int.standing(): Int = when {
+    this >= 75 -> R.string.readiness_well_above
+    this >= 58 -> R.string.readiness_above
+    this <= 25 -> R.string.readiness_well_below
+    this <= 42 -> R.string.readiness_below
+    else -> R.string.readiness_usual
+}
+
+@StringRes
+private fun ReadinessSignal.labelRes(): Int = when (this) {
+    ReadinessSignal.SLEEP_DURATION -> R.string.readiness_part_sleep_duration
+    ReadinessSignal.SLEEP_QUALITY -> R.string.readiness_part_sleep_quality
+    ReadinessSignal.RESTING_HEART_RATE -> R.string.readiness_part_resting_heart_rate
+    ReadinessSignal.STRESS -> R.string.readiness_part_stress
+}
+
+/** Each signal in the unit it was measured in, since they share a row but not a scale. */
+@Composable
+private fun ReadinessSignal.write(value: Float): String = when (this) {
+    ReadinessSignal.SLEEP_DURATION ->
+        stringResource(R.string.readiness_minutes, value.roundToInt())
+    ReadinessSignal.SLEEP_QUALITY ->
+        stringResource(R.string.readiness_share, (value * 100).roundToInt())
+    ReadinessSignal.RESTING_HEART_RATE ->
+        stringResource(R.string.value_bpm, value.roundToInt())
+    ReadinessSignal.STRESS -> value.roundToInt().toString()
 }
 
 /**

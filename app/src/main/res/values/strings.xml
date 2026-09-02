@@ -207,6 +207,24 @@
     <string name="metric_stat_avg">Average</string>
     <string name="metric_stat_min">Lowest</string>
 
+    <!-- Readiness: today against the wearer's own recent days. -->
+    <string name="readiness">Readiness</string>
+    <string name="readiness_usual">about your usual</string>
+    <string name="readiness_above">above your usual</string>
+    <string name="readiness_below">below your usual</string>
+    <string name="readiness_well_above">well above your usual</string>
+    <string name="readiness_well_below">well below your usual</string>
+    <string name="readiness_explainer">Scored against your own recent days, not against anybody else — 50 means exactly your usual. It weighs how long you slept, how much of the night was deep or REM, your resting heart rate and the watch\'s stress index, each against its own history.</string>
+    <string name="readiness_no_hrv">Not the same number Whoop or Fitbit show. Those lean hardest on heart-rate variability, which this watch does not report at all — its pulse arrives as one figure a minute with no intervals behind it. This is built from what the watch does measure.</string>
+    <string name="readiness_thin">Not enough days yet. Wear the watch for a few nights and this fills in.</string>
+    <string name="readiness_part_sleep_duration">Time asleep</string>
+    <string name="readiness_part_sleep_quality">Deep and REM</string>
+    <string name="readiness_part_resting_heart_rate">Resting heart rate</string>
+    <string name="readiness_part_stress">Stress</string>
+    <string name="readiness_against">%1$s, usually %2$s</string>
+    <string name="readiness_minutes">%1$d min</string>
+    <string name="readiness_share">%1$d%%</string>
+
     <!--
         What each figure is, said plainly. Written because a number with no scale beside it
         is not information: "Stress 50" tells nobody anything, and the honest answer for
