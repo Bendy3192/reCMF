@@ -1774,7 +1774,13 @@ private fun AiPromptField(
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilledTonalButton(
             onClick = {
-                onPrompt(draft)
+                // A draft nobody changed is stored as nothing at all. The box has to be
+                // filled with the default to be editable, and saving that text verbatim
+                // would freeze this version of it: every later correction to the standing
+                // instructions would then reach new installs and nobody who had ever
+                // opened this screen. One of those corrections was the sentence about
+                // variability, and the model went on insisting there was none.
+                onPrompt(draft.takeIf { it.trim() != AiContext.DEFAULT_SYSTEM_PROMPT.trim() } ?: "")
                 onEditing(false)
             },
         ) { Text(stringResource(R.string.action_save)) }

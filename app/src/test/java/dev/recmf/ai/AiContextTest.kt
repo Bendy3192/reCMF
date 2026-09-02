@@ -135,6 +135,37 @@ class AiContextTest {
     }
 
     @Test
+    fun `the variability column is explained where it appears`() {
+        // A model shown this column with no legend correctly recalled that the watch
+        // cannot measure variability, concluded the app had mislabelled something, and
+        // advised ignoring the one genuinely measured figure on the page.
+        val sent = AiContext.user("How am I?", week + Day("2026-08-29", heartRateVariability = 42))
+
+        assertTrue("hrv_ms is RMSSD" in sent, sent)
+        assertTrue("Health Connect" in sent, sent)
+        assertTrue(sent.indexOf("hrv_ms is RMSSD") > sent.indexOf("2026-08-29"), "legend above the table")
+    }
+
+    @Test
+    fun `nothing is explained that is not there`() {
+        assertFalse("RMSSD" in AiContext.user("How am I?", week))
+    }
+
+    @Test
+    fun `a month with a second device is still a paragraph`() {
+        // The same claim as above, on the phone that sends the most: an extra column on
+        // every row and a line saying what it is. Still nearer a paragraph than a corpus,
+        // which is the whole argument for sending it all every time.
+        val month = (1..30).map {
+            Day("2026-08-%02d".format(it), 60, 420, 40, 45, 9000, 42)
+        }
+
+        val size = AiContext.user("How am I?", month).length
+
+        assertTrue(size < 2560, "a month with variability came to $size characters")
+    }
+
+    @Test
     fun `the answer is asked for in the reader's language`() {
         val said = AiContext.instructions("Be brief.", "Russian")
 

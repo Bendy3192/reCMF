@@ -173,6 +173,27 @@ object AiContext {
     }
 
     /**
+     * What the variability column is, said next to the column rather than only in the
+     * prompt.
+     *
+     * The prompt is the wrong place for this on its own, and a model demonstrated why: it
+     * read an hrv_ms column, correctly recalled that a CMF Watch Pro 2 cannot measure
+     * beat-to-beat intervals, and concluded the app had mislabelled something — advising
+     * the wearer to ignore the one genuinely measured figure on the page. That is good
+     * reasoning from what it was given, and what it was given was a column nobody
+     * explained.
+     *
+     * The prompt is also editable, and an edited one is theirs: reCMF must still be able
+     * to say what its own columns mean without reaching into somebody's instructions. A
+     * legend under the table does that, and sits where the question is actually being
+     * read.
+     */
+    private val VARIABILITY_LEGEND: String =
+        "hrv_ms is RMSSD in milliseconds, measured by another wearable on this phone and " +
+            "read through Health Connect. It is genuine variability data. The CMF watch " +
+            "cannot measure it; every other column in the table is the watch's own."
+
+    /**
      * The whole of what is sent for one question, assembled in the order it is read.
      *
      * @param about the profile as [about] rendered it, or blank. Kept below the table and
@@ -184,6 +205,10 @@ object AiContext {
         appendLine()
         appendLine("Daily figures, oldest first:")
         appendLine(table(days))
+        if (days.any { it.heartRateVariability != null }) {
+            appendLine()
+            appendLine(VARIABILITY_LEGEND)
+        }
         if (about.isNotBlank()) {
             appendLine()
             appendLine(about.trim())
