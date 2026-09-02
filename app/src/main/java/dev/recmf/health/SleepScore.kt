@@ -136,7 +136,46 @@ data class Night(
 
     /** That morning's resting pulse, when the watch worked one out. */
     val restingHeartRate: Float? = null,
+
+    /**
+     * Whether whatever recorded this broke the night into stages at all.
+     *
+     * A Health Connect session may be nothing but a start and an end — some apps write
+     * sleep that way — and a night with no stages has a length and nothing else. Without
+     * this flag such a night is indistinguishable from one that was entirely light sleep,
+     * and [preferMeasured] would hand it to the score in place of a properly staged one.
+     */
+    val staged: Boolean = true,
 )
+
+/**
+ * Which account of one night to score, when two devices both have one.
+ *
+ * Usually only one does: you wear one thing to bed. But two wearables on the same phone
+ * both write to Health Connect, and reCMF writes its own nights there too, so a night with
+ * two records is a real case and picking wrongly is worse than picking either — it means
+ * scoring a wrist that was in a drawer.
+ *
+ * The rule is that the device which produced stages is the device that was on the wrist.
+ * A watch not being worn does not report deep and REM; it reports nothing, or a length. So
+ * a staged night from elsewhere wins outright, and one without stages contributes only the
+ * thing this watch could never measure anyway: how much of the night was spent awake.
+ *
+ * The resting pulse is always kept from [own], whichever night wins. It is not part of the
+ * night at all — it is the morning's figure out of reCMF's own table — and swapping it for
+ * something another app computed differently would silently change what the restoration
+ * mark means.
+ */
+fun preferMeasured(own: Night?, elsewhere: Night?): Night? {
+    if (elsewhere == null) return own
+    if (own == null) return elsewhere
+
+    return if (elsewhere.staged) {
+        elsewhere.copy(restingHeartRate = own.restingHeartRate)
+    } else {
+        own.copy(awakeSeconds = elsewhere.awakeSeconds)
+    }
+}
 
 /** One part's account of the night, in the unit it was measured in. */
 data class SleepScorePart(

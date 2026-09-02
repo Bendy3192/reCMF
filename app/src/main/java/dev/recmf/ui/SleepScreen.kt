@@ -3,6 +3,7 @@
  */
 package dev.recmf.ui
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -28,20 +29,22 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.recmf.R
+import dev.recmf.health.SleepPart
+import dev.recmf.health.SleepScore
+import dev.recmf.health.SleepScorePart
 import dev.recmf.protocol.CmfSleepStage
 import dev.recmf.protocol.SleepSession
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import kotlin.math.roundToInt
 
 /**
  * The night, in the three things worth asking about it.
  *
  * How long, when, and how it was spent — in that order, because that is the order they get
- * asked in. What is deliberately not here is a score. Every app that draws one is running
- * an algorithm over the same stages this screen shows, and reCMF has no such algorithm; a
- * number invented to fill the space would be the one piece of made-up data in an app whose
- * whole point is that its figures come off the watch.
+ * asked in. The score is a separate card below, and stayed off this one deliberately: this
+ * card is what the watch reported, and a score is a judgement about it.
  *
  * The watch reports one night per morning and never repeats it, so this card shows one
  * night. Nights are stored as nights now — readiness needed them — so the run of them is
@@ -206,3 +209,155 @@ private val TIMELINE_HEIGHT = 40.dp
 
 private val CLOCK: DateTimeFormatter =
     DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+
+/**
+ * Last night out of a hundred.
+ *
+ * Kept apart from the card above, which shows what the watch reported. This one is a
+ * judgement, and the parts it was made of are listed under it for the same reason
+ * readiness lists its own: a single number nobody can take apart is a number nobody has
+ * any reason to believe.
+ *
+ * Each row says what was measured and what it was measured against, and both come out of
+ * the scoring rather than being worked out again here. Computing "your usual 40%" a second
+ * time in a composable is how a screen and the number above it quietly drift apart.
+ */
+@Composable
+fun SleepScoreCard(score: SleepScore?) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                stringResource(R.string.sleep_score),
+                style = MaterialTheme.typography.titleMedium,
+            )
+
+            if (score == null) {
+                Text(
+                    stringResource(R.string.sleep_score_thin),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                return@Column
+            }
+
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(score.score.toString(), style = MaterialTheme.typography.displaySmall)
+                Text(
+                    stringResource(score.score.verdict()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+            }
+
+            HorizontalDivider()
+
+            score.parts.forEach { part ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        stringResource(part.part.label()),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        part.reading(),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (part.standing < POORLY) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
+                stringResource(R.string.sleep_score_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            // Said only where it applies. On a phone with one wearable there is no waking
+            // stage to explain, and a sentence about a device that is not there would be
+            // an invitation to go looking for a setting that does not exist.
+            if (score.parts.any { it.part == SleepPart.CONTINUITY }) {
+                Text(
+                    stringResource(R.string.sleep_score_elsewhere),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * How each part reads on its own row, in the unit it was measured in.
+ *
+ * The "x, usually y" phrasing and the percentage are readiness's strings rather than
+ * copies of them. Three of these four parts are the same quantities readiness weighs, and
+ * two identical sentences in two files are two sentences to keep in step in every language
+ * the app is offered in.
+ */
+@Composable
+private fun SleepScorePart.reading(): String = when (part) {
+    SleepPart.DURATION -> stringResource(
+        R.string.sleep_score_of_target,
+        readableDuration(measured.toLong()),
+        readableDuration(against.toLong()),
+    )
+
+    SleepPart.COMPOSITION -> stringResource(
+        R.string.readiness_against,
+        stringResource(R.string.readiness_share, (measured * 100).roundToInt()),
+        stringResource(R.string.readiness_share, (against * 100).roundToInt()),
+    )
+
+    SleepPart.RESTORATION -> stringResource(
+        R.string.readiness_against,
+        measured.roundToInt().toString(),
+        against.roundToInt().toString(),
+    )
+
+    // No "usually": what continuity is scored on is an endpoint of a scale, not this
+    // person's own habit, and printing it as one would say something untrue.
+    SleepPart.CONTINUITY -> stringResource(
+        R.string.readiness_share,
+        (measured * 100).roundToInt(),
+    )
+}
+
+@StringRes
+private fun SleepPart.label(): Int = when (this) {
+    SleepPart.DURATION -> R.string.readiness_part_sleep_duration
+    SleepPart.COMPOSITION -> R.string.readiness_part_sleep_quality
+    SleepPart.RESTORATION -> R.string.readiness_part_resting_heart_rate
+    SleepPart.CONTINUITY -> R.string.sleep_part_continuity
+}
+
+/**
+ * The word for a score.
+ *
+ * Bands rather than a smooth scale, because the number is not precise enough to justify
+ * one: a night at 71 and a night at 74 differ by less than the measurement error in any
+ * of the parts they are made of.
+ */
+@StringRes
+private fun Int.verdict(): Int = when {
+    this >= 85 -> R.string.sleep_score_excellent
+    this >= 70 -> R.string.sleep_score_good
+    this >= 50 -> R.string.sleep_score_fair
+    this >= 30 -> R.string.sleep_score_poor
+    else -> R.string.sleep_score_bad
+}
+
+/** Below this a part is worth colouring, because it is what pulled the night down. */
+private const val POORLY = 0.4f

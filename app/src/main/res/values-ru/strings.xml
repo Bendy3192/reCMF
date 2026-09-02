@@ -313,6 +313,17 @@
     <string name="readiness_part_stress">Стресс</string>
     <string name="readiness_part_heart_rate_variability">Вариабельность</string>
     <string name="readiness_against">%1$s, обычно %2$s</string>
+    <string name="sleep_score">Оценка сна</string>
+    <string name="sleep_score_thin">Пока нечего оценивать. Появится наутро после того, как часы сообщат ночь.</string>
+    <string name="sleep_part_continuity">Без пробуждений</string>
+    <string name="sleep_score_of_target">%1$s из %2$s</string>
+    <string name="sleep_score_explainer">Длительность сравнивается с вашей целью, остальное — с вашими же последними ночами. То, что измерить было нечем, не считается средним — оно просто не участвует.</string>
+    <string name="sleep_score_elsewhere">Сколько ночи прошло в бодрствовании, приходит с другого устройства на этом телефоне. У часов CMF нет стадии бодрствования — они сообщают только глубокий, поверхностный и быстрый сон.</string>
+    <string name="sleep_score_excellent">очень хорошая ночь</string>
+    <string name="sleep_score_good">хорошая ночь</string>
+    <string name="sleep_score_fair">обычная ночь</string>
+    <string name="sleep_score_poor">так себе ночь</string>
+    <string name="sleep_score_bad">плохая ночь</string>
     <string name="readiness_minutes">%1$d мин</string>
     <string name="readiness_millis">%1$d мс</string>
     <string name="readiness_share">%1$d %%</string>

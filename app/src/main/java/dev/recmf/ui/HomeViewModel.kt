@@ -45,9 +45,13 @@ import dev.recmf.data.AiInsightEntity
 import dev.recmf.data.AiSettings
 import dev.recmf.data.Backup
 import dev.recmf.data.BackupStore
+import dev.recmf.health.Night
 import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
+import dev.recmf.health.SleepScore
+import dev.recmf.health.preferMeasured
 import dev.recmf.health.readiness as scoreReadiness
+import dev.recmf.health.sleepScore as scoreSleep
 import dev.recmf.service.AlarmMirrorProblem
 import dev.recmf.service.WeatherProblem
 import dev.recmf.service.WatchStatus
@@ -590,15 +594,102 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * Variability by day, from whatever else on this phone measures it.
      *
      * A plain state rather than a flow off the database, because it is not ours: Health
-     * Connect is read when asked and does not push. Refreshed on start and after each sync,
-     * which is as often as a figure taken once a night can change.
+     * Connect is read when asked and does not push.
      */
     private val _hrv = MutableStateFlow<Map<LocalDate, Float>>(emptyMap())
 
-    fun refreshHeartRateVariability() {
+    /**
+     * Last night as another wearable recorded it, by the date it was woken up on.
+     *
+     * Read for one thing above all: the waking stage, which this watch has no word for.
+     */
+    private val _nightsElsewhere = MutableStateFlow<Map<LocalDate, Night>>(emptyMap())
+
+    /**
+     * Reads what the other devices on this phone have, and reads it again after each sync.
+     *
+     * Watching the exchange clock rather than calling this from several places: every path
+     * that brings new watch data ends there, and a StateFlow hands over its current value
+     * on subscription, so the first reading happens on start without being asked for
+     * separately.
+     *
+     * Both reads are as often as figures taken once a night can change, and both are
+     * harmless when there is nothing to read — an empty answer is what a phone with one
+     * wearable is meant to produce.
+     */
+    private fun watchOtherDevices() {
         viewModelScope.launch {
-            _hrv.value = healthConnect.heartRateVariability(BASELINE_DAYS, ZoneId.systemDefault())
+            WatchStatus.lastExchangeAtMillis.collect {
+                val zone = ZoneId.systemDefault()
+                _hrv.value = healthConnect.heartRateVariability(BASELINE_DAYS, zone)
+                _nightsElsewhere.value = healthConnect.nightsElsewhere(BASELINE_DAYS, zone)
+            }
         }
+    }
+
+    /**
+     * Last night, scored the way the published sleep scores are.
+     *
+     * Assembled here rather than in [SleepScore] because only this class knows where the
+     * pieces live: the nights are reCMF's, the resting pulse is reCMF's, and the waking
+     * stage is somebody else's. What to do when two devices both have a night is the one
+     * decision worth keeping out of a view model, and [preferMeasured] holds it.
+     *
+     * The history handed to the score deliberately stops short of the night being scored.
+     * A night included in its own baseline pulls the average towards itself and the score
+     * towards the middle, which is how a scale quietly stops saying anything.
+     */
+    val sleepScore: StateFlow<SleepScore?> = combine(
+        dao.sleepSince(startOfBaseline()),
+        dao.restingHeartRateSince(startOfBaseline()),
+        _nightsElsewhere,
+        settingsStore.settings,
+    ) { nights, resting, elsewhere, settings ->
+        val zone = ZoneId.systemDefault()
+        fun day(seconds: Long): LocalDate = Instant.ofEpochSecond(seconds).atZone(zone).toLocalDate()
+
+        val own = nights.associate { night ->
+            day(night.wakeTimestamp) to Night(
+                asleepSeconds = night.asleepSeconds,
+                restfulSeconds = night.deepSeconds + night.remSeconds,
+            )
+        }
+
+        val restingByDay = resting
+            .groupBy { day(it.timestamp) }
+            .mapValues { (_, day) -> day.map { it.bpm.toFloat() }.average().toFloat() }
+
+        val dates = (own.keys + elsewhere.keys).sorted()
+        val last = dates.lastOrNull()
+
+        if (last == null) {
+            null
+        } else {
+            val before = dates.filter { it < last }
+
+            val restfulHistory = before.mapNotNull { date ->
+                preferMeasured(own[date], elsewhere[date])
+                    ?.takeIf { it.staged && it.asleepSeconds > 0 }
+                    ?.let { it.restfulSeconds.toFloat() / it.asleepSeconds }
+            }
+
+            val restingHistory = restingByDay.filterKeys { it < last }.values.toList()
+
+            preferMeasured(own[last], elsewhere[last])
+                ?.copy(restingHeartRate = restingByDay[last])
+                ?.let {
+                    scoreSleep(
+                        night = it,
+                        restfulHistory = restfulHistory,
+                        restingHistory = restingHistory,
+                        targetSeconds = settings.sleepTargetMinutes * 60,
+                    )
+                }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
+
+    fun setSleepTargetMinutes(minutes: Int) {
+        viewModelScope.launch { settingsStore.setSleepTargetMinutes(minutes) }
     }
 
     val readiness: StateFlow<Readiness?> = combine(
@@ -762,9 +853,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         dao.restingHeartRateSince(startOfBaseline()),
         dao.stressSince(startOfBaseline()),
         dao.sleepSince(startOfBaseline()),
-        dao.activitySince(startOfBaseline()),
+        // Paired rather than passed separately: combine takes five flows and this needs
+        // six. The two that travel together are the two the watch sends in the same
+        // exchange.
+        combine(dao.activitySince(startOfBaseline()), dao.spo2Since(startOfBaseline()), ::Pair),
         _hrv,
-    ) { resting, stress, nights, activity, hrv ->
+    ) { resting, stress, nights, (activity, spo2), hrv ->
         val zone = ZoneId.systemDefault()
 
         fun <T> mean(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
@@ -778,17 +872,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val sleepByDay = mean(nights, { it.wakeTimestamp }, { it.asleepSeconds / 60f })
         val restfulByDay = mean(nights, { it.wakeTimestamp }, { it.restfulShare?.times(100f) })
 
-        // Steps are a counter the watch resets at midnight, so the day's figure is the
-        // highest reading of it and never the sum of the readings.
-        val stepsByDay = activity
-            .groupBy { Instant.ofEpochSecond(it.timestamp).atZone(zone).toLocalDate() }
-            .mapValues { (_, day) -> day.maxOf { it.steps } }
+        // Steps, distance, calories and climbs are all counters the watch resets at
+        // midnight, so each day's figure is the highest reading of it and never the sum of
+        // the readings.
+        val byDay = activity.groupBy { Instant.ofEpochSecond(it.timestamp).atZone(zone).toLocalDate() }
+        val stepsByDay = byDay.mapValues { (_, day) -> day.maxOf { it.steps } }
+        val distanceByDay = byDay.mapValues { (_, day) -> day.maxOf { it.distanceMeters } }
+        val caloriesByDay = byDay.mapValues { (_, day) -> day.maxOf { it.calories } }
+        val climbsByDay = byDay.mapValues { (_, day) -> day.maxOf { it.climbs } }
+
+        // Averaged, unlike the counters: blood oxygen is a reading rather than a running
+        // total, and the day's average is what the seven-day strip already shows.
+        val oxygenByDay = mean(spo2, { it.timestamp }, { it.percent.toFloat() })
 
         // Variability days count too, even though nothing else may have happened on them:
         // it is the one column here the watch did not produce, and a day it is the only
         // reading for is still a day worth showing.
         val dates = (
-            restingByDay.keys + stressByDay.keys + sleepByDay.keys + stepsByDay.keys + hrv.keys
+            restingByDay.keys + stressByDay.keys + sleepByDay.keys + stepsByDay.keys +
+                oxygenByDay.keys + hrv.keys
             ).sorted()
 
         dates.map { date ->
@@ -800,6 +902,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 stress = stressByDay[date]?.roundToInt(),
                 steps = stepsByDay[date],
                 heartRateVariability = hrv[date]?.roundToInt(),
+                bloodOxygen = oxygenByDay[date]?.roundToInt(),
+                calories = caloriesByDay[date],
+                distanceMeters = distanceByDay[date],
+                climbs = climbsByDay[date],
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
@@ -1142,7 +1248,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * init blocks run in declaration order, so an init block placed at the top — where it
      * reads best — runs while every property below it is still null. Nothing warns about
      * it: the calls here are ordinary methods, and the property they touch is only read
-     * inside them. `refreshHeartRateVariability` did exactly that and crashed the app on
+     * inside them. The variability read did exactly that and crashed the app on
      * opening, every time, because the flow it writes to is declared six hundred lines
      * further down. `checkForUpdateOnOpen` had the same fault and survived it only by
      * suspending on a disk read before it reached its own state.
@@ -1151,7 +1257,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * class.
      */
     init {
-        refreshHeartRateVariability()
+        watchOtherDevices()
 
         // A watch that has been used with the stock app is already paired at the OS
         // level, and may not advertise at all while it is connected to something else.

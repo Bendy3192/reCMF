@@ -176,6 +176,54 @@ class SleepScoreTest {
     }
 
     @Test
+    fun `the device that recorded stages is the device that was worn`() {
+        // A watch in a drawer does not report deep and REM. It reports nothing.
+        val drawer = Night(asleepSeconds = 2 * hour, restfulSeconds = 0, staged = false)
+        val worn = Night(
+            asleepSeconds = 8 * hour,
+            restfulSeconds = 3 * hour,
+            awakeSeconds = 20 * 60,
+            staged = true,
+        )
+
+        val scored = preferMeasured(own = drawer, elsewhere = worn)!!
+
+        assertEquals(8 * hour, scored.asleepSeconds)
+        assertEquals(20 * 60, scored.awakeSeconds)
+    }
+
+    @Test
+    fun `a night with no stages contributes only what this watch cannot measure`() {
+        val own = Night(asleepSeconds = 8 * hour, restfulSeconds = 3 * hour)
+        val bare = Night(asleepSeconds = 7 * hour, restfulSeconds = 0, awakeSeconds = 25 * 60, staged = false)
+
+        val scored = preferMeasured(own, bare)!!
+
+        assertEquals(8 * hour, scored.asleepSeconds, "the staged night should have been kept")
+        assertEquals(3 * hour, scored.restfulSeconds)
+        assertEquals(25 * 60, scored.awakeSeconds)
+    }
+
+    @Test
+    fun `the resting pulse stays the watch's own whichever night wins`() {
+        // It is the morning's figure from reCMF's table, not part of the night, and
+        // another app's idea of it would quietly change what restoration means.
+        val own = Night(8 * hour, 3 * hour, restingHeartRate = 58f)
+        val worn = Night(8 * hour, 3 * hour, awakeSeconds = 0, restingHeartRate = 99f)
+
+        assertEquals(58f, preferMeasured(own, worn)!!.restingHeartRate)
+    }
+
+    @Test
+    fun `one source alone is that source`() {
+        val only = Night(7 * hour, 3 * hour)
+
+        assertEquals(only, preferMeasured(only, null))
+        assertEquals(only, preferMeasured(null, only))
+        assertNull(preferMeasured(null, null))
+    }
+
+    @Test
     fun `a score is never outside nought to a hundred`() {
         val extreme = sleepScore(
             night(asleep = 14 * hour, restful = 13 * hour, awake = 0, resting = 30f),

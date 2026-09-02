@@ -200,6 +200,89 @@ class HealthConnectSync(private val context: Context) {
         }.getOrElse { emptyMap() }
     }
 
+    /**
+     * Nights recorded by something other than this app.
+     *
+     * The CMF watch labels every stretch deep, light, REM or unrecognised — there is no
+     * waking state in its vocabulary, so how broken a night was is a question it cannot
+     * answer at any effort. Health Connect has that stage and other wearables fill it,
+     * which is the one thing worth crossing a device boundary for here.
+     *
+     * reCMF writes its own nights to Health Connect, so the filter is not optional this
+     * time: without it the app reads its own night back as a second device's account of
+     * the same night, and then prefers that account over itself. This is the type the
+     * variability read was warned about.
+     *
+     * Where a date has several nights the longest is taken. Two records for one night are
+     * two devices, or one device and a nap; the longest is the night.
+     *
+     * @return one night per local date it was woken up on, which is how reCMF keys its own
+     *   nights. Empty when nothing is permitted, present or readable.
+     */
+    suspend fun nightsElsewhere(sinceDays: Long, zone: ZoneId): Map<LocalDate, Night> {
+        val client = this.client ?: return emptyMap()
+
+        val reading = HealthPermission.getReadPermission(SleepSessionRecord::class)
+        if (!grantedPermissions().contains(reading)) return emptyMap()
+
+        val from = Instant.now().minus(sinceDays, ChronoUnit.DAYS)
+
+        return runCatching {
+            client.readRecords(
+                ReadRecordsRequest(SleepSessionRecord::class, TimeRangeFilter.after(from)),
+            ).records
+                .filterNot { it.metadata.dataOrigin.packageName == ourPackage }
+                .mapNotNull { record ->
+                    record.asNight()?.let { record.endTime.atZone(zone).toLocalDate() to it }
+                }
+                .groupBy({ it.first }, { it.second })
+                .mapValues { (_, nights) -> nights.maxBy { it.asleepSeconds } }
+        }.getOrElse { emptyMap() }
+    }
+
+    /**
+     * One Health Connect session as the score wants it.
+     *
+     * A session with no stages is a length and nothing else — some apps write sleep that
+     * way — and it is marked as such rather than passed off as a night that happened to
+     * contain no deep sleep. Out of bed counts as awake: for a score about how unbroken
+     * the night was, the difference between lying awake and getting up is not one worth
+     * drawing.
+     */
+    private fun SleepSessionRecord.asNight(): Night? {
+        fun seconds(vararg kinds: Int): Int = stages
+            .filter { it.stage in kinds }
+            .sumOf { ChronoUnit.SECONDS.between(it.startTime, it.endTime) }
+            .toInt()
+
+        if (stages.isEmpty()) {
+            val whole = ChronoUnit.SECONDS.between(startTime, endTime).toInt()
+            return whole.takeIf { it > 0 }?.let { Night(it, restfulSeconds = 0, staged = false) }
+        }
+
+        val asleep = seconds(
+            SleepSessionRecord.STAGE_TYPE_LIGHT,
+            SleepSessionRecord.STAGE_TYPE_DEEP,
+            SleepSessionRecord.STAGE_TYPE_REM,
+            SleepSessionRecord.STAGE_TYPE_SLEEPING,
+        )
+        if (asleep <= 0) return null
+
+        return Night(
+            asleepSeconds = asleep,
+            restfulSeconds = seconds(
+                SleepSessionRecord.STAGE_TYPE_DEEP,
+                SleepSessionRecord.STAGE_TYPE_REM,
+            ),
+            awakeSeconds = seconds(
+                SleepSessionRecord.STAGE_TYPE_AWAKE,
+                SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED,
+                SleepSessionRecord.STAGE_TYPE_OUT_OF_BED,
+            ),
+            staged = true,
+        )
+    }
+
     /** This app, so its own records can be told from everybody else's. */
     private val ourPackage: String get() = context.packageName
 

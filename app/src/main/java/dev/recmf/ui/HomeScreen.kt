@@ -118,6 +118,7 @@ import dev.recmf.ai.AiEndpoint
 import dev.recmf.data.AiSettings
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.Readiness
+import dev.recmf.health.SleepScore
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.ui.theme.Motion
 import dev.recmf.data.WatchPreferences
@@ -169,6 +170,7 @@ fun HomeScreen(
     watchfaceInstall: WatchfaceInstall?,
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
+    sleepScore: SleepScore?,
     backupState: BackupState?,
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
@@ -255,6 +257,7 @@ fun HomeScreen(
                         watchfaceInstall = watchfaceInstall,
                         alarmMirrorProblem = alarmMirrorProblem,
                         readiness = readiness,
+                        sleepScore = sleepScore,
                         backupState = backupState,
                         ai = ai,
                         aiProbe = aiProbe,
@@ -341,6 +344,7 @@ private fun TabContent(
     watchfaceInstall: WatchfaceInstall?,
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
+    sleepScore: SleepScore?,
     backupState: BackupState?,
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
@@ -461,6 +465,11 @@ private fun TabContent(
                         onAskAgain = { onAskAboutMetric(night, howLong, true) },
                     )
                 }
+
+                // Under the night rather than above it: the card above is what the watch
+                // reported, and this is a judgement about it. Reading the evidence first
+                // is the order the two belong in.
+                item { SleepScoreCard(sleepScore) }
             }
 
             HomeTab.FACES -> {

@@ -136,6 +136,16 @@ data class WatchSettings(
     val weatherLatitude: Double = 0.0,
     val weatherLongitude: Double = 0.0,
     val lastSyncEpochSeconds: Long = 0,
+
+    /**
+     * How long this person means to sleep, and the only absolute target reCMF holds.
+     *
+     * Eight hours is the middle of the published seven-to-nine for an adult rather than
+     * either end of it. It is settable because that range is a population's and the person
+     * reading it is one person: somebody who genuinely does well on seven should not be
+     * told every morning that they failed.
+     */
+    val sleepTargetMinutes: Int = 480,
 ) {
     val isPaired: Boolean get() = address != null
 }
@@ -223,6 +233,7 @@ class SettingsStore(private val context: Context) {
             almanacSentAtMillis = prefs[KEY_ALMANAC_SENT_AT] ?: 0L,
             almanacFormatSent = prefs[KEY_ALMANAC_FORMAT] ?: 0,
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
+            sleepTargetMinutes = prefs[KEY_SLEEP_TARGET] ?: 480,
             weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
             weatherCity = prefs[KEY_WEATHER_CITY],
             weatherAutoPlace = prefs[KEY_WEATHER_AUTO_PLACE] ?: false,
@@ -444,6 +455,10 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_AUTO_SYNC] = seconds }
     }
 
+    suspend fun setSleepTargetMinutes(minutes: Int) {
+        context.dataStore.edit { it[KEY_SLEEP_TARGET] = minutes }
+    }
+
     suspend fun setPhoneAlarmsEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_PHONE_ALARMS] = enabled }
     }
@@ -659,6 +674,7 @@ class SettingsStore(private val context: Context) {
         val KEY_NOTIFICATIONS = booleanPreferencesKey("notifications_enabled")
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
+        val KEY_SLEEP_TARGET = intPreferencesKey("sleep_target_minutes")
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
 
         val KEY_AI_INSIGHTS = booleanPreferencesKey("ai_insights_enabled")
