@@ -763,7 +763,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         dao.stressSince(startOfBaseline()),
         dao.sleepSince(startOfBaseline()),
         dao.activitySince(startOfBaseline()),
-    ) { resting, stress, nights, activity ->
+        _hrv,
+    ) { resting, stress, nights, activity, hrv ->
         val zone = ZoneId.systemDefault()
 
         fun <T> mean(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
@@ -783,8 +784,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             .groupBy { Instant.ofEpochSecond(it.timestamp).atZone(zone).toLocalDate() }
             .mapValues { (_, day) -> day.maxOf { it.steps } }
 
-        val dates = (restingByDay.keys + stressByDay.keys + sleepByDay.keys + stepsByDay.keys)
-            .sorted()
+        // Variability days count too, even though nothing else may have happened on them:
+        // it is the one column here the watch did not produce, and a day it is the only
+        // reading for is still a day worth showing.
+        val dates = (
+            restingByDay.keys + stressByDay.keys + sleepByDay.keys + stepsByDay.keys + hrv.keys
+            ).sorted()
 
         dates.map { date ->
             AiContext.Day(
@@ -794,6 +799,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 restfulPercent = restfulByDay[date]?.roundToInt(),
                 stress = stressByDay[date]?.roundToInt(),
                 steps = stepsByDay[date],
+                heartRateVariability = hrv[date]?.roundToInt(),
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())

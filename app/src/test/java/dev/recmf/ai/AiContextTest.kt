@@ -71,13 +71,54 @@ class AiContextTest {
 
     @Test
     fun `the default prompt forbids the two things a model would invent`() {
-        // The stress index has no published bands and there is no HRV. Both are places a
-        // model left to itself answers confidently and wrongly.
+        // The stress index has no published bands, and HRV is absent unless another
+        // device supplied it. Both are places a model left to itself answers confidently
+        // and wrongly.
         val prompt = AiContext.DEFAULT_SYSTEM_PROMPT
 
         assertTrue("Never quote a norm" in prompt)
-        assertTrue("no heart-rate variability" in prompt)
+        assertTrue("cannot measure heart-rate variability" in prompt)
+        assertTrue("hrv_ms" in prompt, "the prompt must name the column that changes that")
         assertTrue("do not suggest anybody has a condition" in prompt)
+    }
+
+    @Test
+    fun `variability is not a column on a phone that has none`() {
+        // Every one of these days is a day the watch measured on its own. An empty column
+        // of dashes would be something for the model to wonder about, and there is
+        // nothing to wonder about.
+        val table = AiContext.table(week)
+
+        assertFalse("hrv_ms" in table, table)
+    }
+
+    @Test
+    fun `variability gets its own column as soon as one day has it`() {
+        val withSecondDevice = week + Day("2026-08-29", heartRateVariability = 42)
+
+        val lines = AiContext.table(withSecondDevice).lines()
+        val at = lines.first().indexOf("hrv_ms")
+
+        assertTrue(at > 0, "no variability column in: ${lines.first()}")
+        lines.drop(1).forEach { row ->
+            assertTrue(
+                row.length > at && row[at] != ' ',
+                "column \"hrv_ms\" starts at $at but that is blank in: $row",
+            )
+        }
+        assertTrue("42" in lines.last(), lines.last())
+    }
+
+    @Test
+    fun `a day only the second device saw is still a day`() {
+        // Written as a dash everywhere else, which is the honest reading: the watch was
+        // off the wrist and something else was not.
+        val row = AiContext.table(listOf(Day("2026-08-29", heartRateVariability = 42)))
+            .lines()
+            .last()
+
+        assertTrue("42" in row, row)
+        assertTrue("-" in row, row)
     }
 
     @Test

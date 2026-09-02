@@ -117,6 +117,35 @@ class SampleIngest(
     }
 
     /**
+     * Puts the night this app is already holding into the nights table.
+     *
+     * The app kept one night in settings long before there was a table to keep nights in,
+     * and the watch hands a night over once — it does not offer last night again on the
+     * next connection. So the morning after an update, the card is drawn from the kept
+     * frame and shows seven and a half hours, while the table that everything else reads
+     * from has never seen that night at all. The assistant said as much, underneath the
+     * card: no sleep data for any of these days.
+     *
+     * One row, and only ever the night already on screen — this recovers nothing older,
+     * because nothing older was kept. Idempotent: the row is keyed on the second the night
+     * began, so running it on every sync writes the same row over itself until a genuinely
+     * new night displaces it.
+     *
+     * Deliberately not inside [flushStoredSleep], which is gated on Health Connect being
+     * switched on. This is reCMF's own table and its own score, and somebody who never
+     * turned Health Connect on is exactly as entitled to both.
+     */
+    suspend fun keepStoredNight() {
+        val stored = settings.lastSleep.first() ?: return
+        if (stored.raw.isBlank()) return
+
+        val session = runCatching { CmfParsers.parseSleep(stored.raw.hexToBytes()) }.getOrNull()
+            ?: return
+
+        dao.insertSleep(session.toRow())
+    }
+
+    /**
      * @param duringWorkout whether the watch sent these as workout pulse. It is the only
      *   evidence this watch gives that a workout happened — it keeps a session's pulse and
      *   answers a request for the summary with nothing — so it has to survive the trip

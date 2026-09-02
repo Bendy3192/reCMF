@@ -1405,6 +1405,11 @@ class WatchService : LifecycleService() {
                     // which is still a completed exchange and the thing the user is
                     // actually asking about when they press Sync.
                     WatchStatus.lastExchangeAtMillis.value = System.currentTimeMillis()
+
+                    // Before the flush, and not part of it: the flush is gated on Health
+                    // Connect, and this is about reCMF's own nights table.
+                    ingest.keepStoredNight()
+
                     ingest.flushToHealthConnect()
                     ingest.prune()
                 }

@@ -33,6 +33,14 @@ object AiContext {
         val restfulPercent: Int? = null,
         val stress: Int? = null,
         val steps: Int? = null,
+        /**
+         * RMSSD in milliseconds, and the one figure here the watch did not produce.
+         *
+         * It arrives from another wearable by way of Health Connect, so it is present on
+         * the phones that have one and absent on the rest. Last in the row because that is
+         * what it is: an extra, not part of what this watch reports.
+         */
+        val heartRateVariability: Int? = null,
     )
 
 
@@ -113,9 +121,12 @@ object AiContext {
           unpublished, so there is no standard to compare it against. Never quote a norm
           for it or call a value high or low in absolute terms. Only compare it to this
           person's own recent days.
-        - There is no heart-rate variability. The watch reports one pulse per minute with
-          no intervals, so do not reason about HRV, recovery scores built on it, or
-          anything derived from it.
+        - The watch cannot measure heart-rate variability: it reports one pulse a minute
+          with no intervals behind it. So unless an hrv_ms column appears in the table
+          below, do not reason about HRV, recovery scores built on it, or anything
+          derived from it. Where that column is present the figure is real RMSSD from
+          another wearable on the same phone, and may be read as such — bearing in mind
+          it comes from a different device than every other column.
         - Distance and calories are the watch's estimates, worked out from step count and
           an assumed stride. Treat them as good for comparing days and poor as absolutes.
         - Blood oxygen is measured at the wrist, which is far less reliable than a
@@ -140,7 +151,12 @@ object AiContext {
     fun table(days: List<Day>): String {
         if (days.isEmpty()) return "No days recorded yet."
 
-        val header = "date        resting  sleep_min  restful_pct  stress  steps"
+        // The variability column is written only when some day has one, so a phone with
+        // no second wearable is not handed an empty column to wonder about.
+        val anyVariability = days.any { it.heartRateVariability != null }
+
+        val header = "date        resting  sleep_min  restful_pct  stress  steps" +
+            if (anyVariability) "    hrv_ms" else ""
         val rows = days.map { day ->
             buildString {
                 append(day.date.padEnd(12))
@@ -148,7 +164,8 @@ object AiContext {
                 append(day.sleepMinutes.cell(11))
                 append(day.restfulPercent.cell(13))
                 append(day.stress.cell(8))
-                append(day.steps.cell(7))
+                append(day.steps.cell(if (anyVariability) 9 else 7))
+                if (anyVariability) append(day.heartRateVariability.cell(6))
             }.trimEnd()
         }
 
