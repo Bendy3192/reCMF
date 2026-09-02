@@ -17,6 +17,7 @@ import dev.recmf.data.DailyTotals
 import dev.recmf.data.HeartRateSampleEntity
 import dev.recmf.data.RecmfDatabase
 import dev.recmf.data.SettingsStore
+import dev.recmf.data.SleepSessionEntity
 import dev.recmf.data.SleepSummary
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
@@ -644,40 +645,33 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         dao.restingHeartRateSince(startOfBaseline()),
         _nightsElsewhere,
         settingsStore.settings,
-    ) { nights, resting, elsewhere, settings ->
+    ) { own, resting, elsewhere, settings ->
         val zone = ZoneId.systemDefault()
         fun day(seconds: Long): LocalDate = Instant.ofEpochSecond(seconds).atZone(zone).toLocalDate()
 
-        val own = nights.associate { night ->
-            day(night.wakeTimestamp) to Night(
-                asleepSeconds = night.asleepSeconds,
-                restfulSeconds = night.deepSeconds + night.remSeconds,
-            )
-        }
+        val nights = nightsByDay(own, elsewhere, zone)
 
         val restingByDay = resting
             .groupBy { day(it.timestamp) }
             .mapValues { (_, day) -> day.map { it.bpm.toFloat() }.average().toFloat() }
 
-        val dates = (own.keys + elsewhere.keys).sorted()
-        val last = dates.lastOrNull()
+        val last = nights.keys.maxOrNull()
 
         if (last == null) {
             null
         } else {
-            val before = dates.filter { it < last }
-
-            val restfulHistory = before.mapNotNull { date ->
-                preferMeasured(own[date], elsewhere[date])
-                    ?.takeIf { it.staged && it.asleepSeconds > 0 }
-                    ?.let { it.restfulSeconds.toFloat() / it.asleepSeconds }
-            }
+            val restfulHistory = nights
+                .filterKeys { it < last }
+                .toSortedMap()
+                .values
+                .filter { it.staged && it.asleepSeconds > 0 }
+                .map { it.restfulSeconds.toFloat() / it.asleepSeconds }
 
             val restingHistory = restingByDay.filterKeys { it < last }.values.toList()
 
-            preferMeasured(own[last], elsewhere[last])
-                ?.copy(restingHeartRate = restingByDay[last])
-                ?.let {
+            nights.getValue(last)
+                .copy(restingHeartRate = restingByDay[last])
+                .let {
                     scoreSleep(
                         night = it,
                         restfulHistory = restfulHistory,
@@ -692,14 +686,44 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsStore.setSleepTargetMinutes(minutes) }
     }
 
+    /**
+     * One night per morning, from whichever device measured it.
+     *
+     * Shared by readiness and the sleep score because they must not disagree about what
+     * last night was. They did: the score went through [preferMeasured] and readiness read
+     * only reCMF's own table, so a night spent wearing the other device existed on one
+     * screen and not on the other — and readiness quietly dropped two of its five signals
+     * for a night that had been measured perfectly well.
+     */
+    private fun nightsByDay(
+        own: List<SleepSessionEntity>,
+        elsewhere: Map<LocalDate, Night>,
+        zone: ZoneId,
+    ): Map<LocalDate, Night> {
+        val ours = own.associate { night ->
+            Instant.ofEpochSecond(night.wakeTimestamp).atZone(zone).toLocalDate() to Night(
+                asleepSeconds = night.asleepSeconds,
+                restfulSeconds = night.deepSeconds + night.remSeconds,
+            )
+        }
+
+        return (ours.keys + elsewhere.keys)
+            .associateWith { preferMeasured(ours[it], elsewhere[it]) }
+            .mapNotNull { (date, night) -> night?.let { date to it } }
+            .toMap()
+    }
+
     val readiness: StateFlow<Readiness?> = combine(
         dao.restingHeartRateSince(startOfBaseline()),
         dao.stressSince(startOfBaseline()),
         dao.sleepSince(startOfBaseline()),
+        _nightsElsewhere,
         _hrv,
-    ) { resting, stress, nights, hrv ->
+    ) { resting, stress, own, elsewhere, hrv ->
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now()
+
+        val nights = nightsByDay(own, elsewhere, zone)
 
         fun <T> daily(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
             rows.groupBy { Instant.ofEpochSecond(at(it)).atZone(zone).toLocalDate() }
@@ -716,9 +740,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             ReadinessSignal.STRESS to
                 daily(stress, { it.timestamp }, { it.level.toFloat() }),
             ReadinessSignal.SLEEP_DURATION to
-                daily(nights, { it.wakeTimestamp }, { it.asleepSeconds.toFloat() / 60f }),
-            ReadinessSignal.SLEEP_QUALITY to
-                daily(nights, { it.wakeTimestamp }, { it.restfulShare }),
+                nights.mapValues { (_, night) -> night.asleepSeconds.toFloat() / 60f },
+            // Only from a night something broke into stages. A session that is a start and
+            // an end has no restful share to report, and reading its zero as "none of it
+            // restored anything" would be the worst night this person ever had.
+            ReadinessSignal.SLEEP_QUALITY to nights
+                .filterValues { it.staged && it.asleepSeconds > 0 }
+                .mapValues { (_, night) -> night.restfulSeconds.toFloat() / night.asleepSeconds },
         )
 
         // Aliased on import: the property being initialised here is also called readiness,
@@ -857,8 +885,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // six. The two that travel together are the two the watch sends in the same
         // exchange.
         combine(dao.activitySince(startOfBaseline()), dao.spo2Since(startOfBaseline()), ::Pair),
-        _hrv,
-    ) { resting, stress, nights, (activity, spo2), hrv ->
+        // The two readings that come from other devices, likewise paired.
+        combine(_hrv, _nightsElsewhere, ::Pair),
+    ) { resting, stress, own, (activity, spo2), (hrv, elsewhere) ->
         val zone = ZoneId.systemDefault()
 
         fun <T> mean(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
@@ -869,8 +898,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         val restingByDay = mean(resting, { it.timestamp }, { it.bpm.toFloat() })
         val stressByDay = mean(stress, { it.timestamp }, { it.level.toFloat() })
-        val sleepByDay = mean(nights, { it.wakeTimestamp }, { it.asleepSeconds / 60f })
-        val restfulByDay = mean(nights, { it.wakeTimestamp }, { it.restfulShare?.times(100f) })
+        // Through the same assembly readiness and the score use, so a night spent wearing
+        // the other device is not missing from the one place that is asked about it.
+        val nights = nightsByDay(own, elsewhere, zone)
+        val sleepByDay = nights.mapValues { (_, night) -> night.asleepSeconds / 60f }
+        val restfulByDay = nights
+            .filterValues { it.staged && it.asleepSeconds > 0 }
+            .mapValues { (_, night) -> night.restfulSeconds * 100f / night.asleepSeconds }
 
         // Steps, distance, calories and climbs are all counters the watch resets at
         // midnight, so each day's figure is the highest reading of it and never the sum of
