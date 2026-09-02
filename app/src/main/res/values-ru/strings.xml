@@ -214,8 +214,20 @@
     <string name="action_backup_export">Сохранить копию</string>
     <string name="action_backup_import">Восстановить из файла</string>
     <string name="backup_working">Работаю…</string>
-    <string name="backup_exported">Сохранено: %1$d настроек и %2$d строк истории.</string>
-    <string name="backup_imported">Восстановлено: %1$d настроек и %2$d строк истории.</string>
+    <string name="backup_exported">Сохранено: %1$s и %2$s.</string>
+    <string name="backup_imported">Восстановлено: %1$s и %2$s.</string>
+    <plurals name="backup_settings_count">
+        <item quantity="one">%d настройка</item>
+        <item quantity="few">%d настройки</item>
+        <item quantity="many">%d настроек</item>
+        <item quantity="other">%d настройки</item>
+    </plurals>
+    <plurals name="backup_rows_count">
+        <item quantity="one">%d строка истории</item>
+        <item quantity="few">%d строки истории</item>
+        <item quantity="many">%d строк истории</item>
+        <item quantity="other">%d строки истории</item>
+    </plurals>
     <string name="backup_not_ours">Это не резервная копия reCMF или она от более новой версии.</string>
     <string name="backup_failed">Не получилось: %1$s</string>
     <string name="backup_file_name">recmf-backup.json</string>

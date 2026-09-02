@@ -1177,6 +1177,21 @@ private fun ReadinessCard(readiness: Readiness?) {
     }
 }
 
+/**
+ * The two counts a backup reports, each as its own plural.
+ *
+ * Separate resources because a plural carries one quantity, and the sentence needs two.
+ * English hardly notices; Russian has three forms for a counted noun and gets them wrong
+ * without this.
+ */
+@Composable
+private fun countOfSettings(count: Int): String =
+    pluralStringResource(R.plurals.backup_settings_count, count, count)
+
+@Composable
+private fun countOfRows(count: Int): String =
+    pluralStringResource(R.plurals.backup_rows_count, count, count)
+
 /** Far enough below usual to be worth colouring. Below this, a signal is just today. */
 private const val PART_WORTH_FLAGGING = 0.25f
 
@@ -1257,10 +1272,16 @@ private fun BackupCard(
                 Text(
                     when (it) {
                         BackupState.Working -> stringResource(R.string.backup_working)
-                        is BackupState.Exported ->
-                            stringResource(R.string.backup_exported, it.settings, it.rows)
-                        is BackupState.Imported ->
-                            stringResource(R.string.backup_imported, it.settings, it.rows)
+                        is BackupState.Exported -> stringResource(
+                            R.string.backup_exported,
+                            countOfSettings(it.settings),
+                            countOfRows(it.rows),
+                        )
+                        is BackupState.Imported -> stringResource(
+                            R.string.backup_imported,
+                            countOfSettings(it.settings),
+                            countOfRows(it.rows),
+                        )
                         BackupState.NotOurs -> stringResource(R.string.backup_not_ours)
                         is BackupState.Failed ->
                             stringResource(R.string.backup_failed, it.reason)
