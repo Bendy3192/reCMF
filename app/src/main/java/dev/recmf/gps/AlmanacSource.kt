@@ -86,9 +86,9 @@ object AlmanacSource {
             // A file that is not there ends the search rather than costing nine more
             // requests: the ten differ only in which three days they cover, so if the
             // first cannot be fetched at all, none of them can.
-            val downloaded = download(url) ?: break
+            val downloaded = download(url) as? Downloaded.Bytes ?: break
 
-            val built = CmfAgps.buildFromEpo(downloaded, nowHour)
+            val built = CmfAgps.buildFromEpo(downloaded.value, nowHour)
             if (built != null) {
                 // Which constellations the watch was given is worth saying: it is the
                 // difference between a fix where GPS is jammed and no fix at all, and
@@ -100,17 +100,50 @@ object AlmanacSource {
             // It exists but covers other days. The next one may be today's.
         }
 
-        val downloaded = download(URL) ?: return null
-        val built = CmfAgps.buildFromEpo(downloaded, nowHour)
-        if (built == null) {
-            Log.w(TAG, "Downloaded ${downloaded.size} bytes that do not cover the next three days")
-        } else {
-            ProtocolLog.note("GPS data: fetched orbits for GPS only")
+        // Said out loud, and said differently for each way of failing.
+        //
+        // One message for all of them sent a reader looking for a bug in the almanac when
+        // what had happened was that the server is not reachable from where they are —
+        // this host is blocked in some countries and wants a VPN, which is a thing the
+        // wearer can act on and a thing no amount of reading the code would reveal.
+        return when (val answer = download(URL)) {
+            is Downloaded.Unreachable -> {
+                ProtocolLog.note("GPS data: could not reach the orbit server (${answer.why})")
+                null
+            }
+
+            is Downloaded.Refused -> {
+                ProtocolLog.note("GPS data: the orbit server answered ${answer.code}")
+                null
+            }
+
+            is Downloaded.Bytes -> {
+                val built = CmfAgps.buildFromEpo(answer.value, nowHour)
+                if (built == null) {
+                    ProtocolLog.note(
+                        "GPS data: ${answer.value.size} bytes of orbits that do not cover " +
+                            "the next three days",
+                    )
+                } else {
+                    ProtocolLog.note("GPS data: fetched orbits for GPS only")
+                }
+                built
+            }
         }
-        return built
     }
 
-    private fun download(from: String): ByteArray? {
+    /** Why a download did not produce a file, so the log can say which. */
+    private sealed interface Downloaded {
+        class Bytes(val value: ByteArray) : Downloaded
+
+        /** The server answered, and not with orbits. */
+        class Refused(val code: Int) : Downloaded
+
+        /** Nothing answered at all: no network, no route, or a host blocked here. */
+        class Unreachable(val why: String) : Downloaded
+    }
+
+    private fun download(from: String): Downloaded {
         var connection: HttpURLConnection? = null
         return try {
             connection = (URL(from).openConnection() as HttpURLConnection).apply {
@@ -121,15 +154,19 @@ object AlmanacSource {
 
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 Log.i(TAG, "Orbit server answered ${connection.responseCode} for $from")
-                return null
+                return Downloaded.Refused(connection.responseCode)
             }
 
             val bytes = connection.inputStream.use { it.readBytes(MAX_BYTES) }
-            if (bytes == null) Log.w(TAG, "Orbit file is larger than $MAX_BYTES bytes")
-            bytes
+            if (bytes == null) {
+                Log.w(TAG, "Orbit file is larger than $MAX_BYTES bytes")
+                Downloaded.Unreachable("the answer was larger than an orbit file")
+            } else {
+                Downloaded.Bytes(bytes)
+            }
         } catch (e: IOException) {
             Log.i(TAG, "Could not reach the orbit server", e)
-            null
+            Downloaded.Unreachable(e.message ?: "no network")
         } finally {
             connection?.disconnect()
         }
