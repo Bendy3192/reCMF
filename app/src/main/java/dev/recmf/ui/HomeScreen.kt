@@ -158,6 +158,9 @@ fun HomeScreen(
     watchfaceInstall: WatchfaceInstall?,
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
+    backupState: BackupState?,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -223,6 +226,9 @@ fun HomeScreen(
                         watchfaceInstall = watchfaceInstall,
                         alarmMirrorProblem = alarmMirrorProblem,
                         readiness = readiness,
+                        backupState = backupState,
+                        onExportBackup = onExportBackup,
+                        onImportBackup = onImportBackup,
                         onNotificationAppBlocked = onNotificationAppBlocked,
                         onNotificationAppsBlocked = onNotificationAppsBlocked,
                         isBatteryExempt = isBatteryExempt,
@@ -288,6 +294,9 @@ private fun TabContent(
     watchfaceInstall: WatchfaceInstall?,
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
+    backupState: BackupState?,
+    onExportBackup: () -> Unit,
+    onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
     onNotificationAppsBlocked: (List<String>, Boolean) -> Unit,
     isBatteryExempt: Boolean,
@@ -438,6 +447,7 @@ private fun TabContent(
                 }
                 item { SectionHeading(R.string.section_app) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
+                item { BackupCard(backupState, onExportBackup, onImportBackup) }
                 item { ProtocolLogCard() }
                 item { PairedWatchCard(state, onForget) }
             }
@@ -1198,6 +1208,73 @@ private fun ReadinessSignal.write(value: Float): String = when (this) {
     ReadinessSignal.RESTING_HEART_RATE ->
         stringResource(R.string.value_bpm, value.roundToInt())
     ReadinessSignal.STRESS -> value.roundToInt().toString()
+}
+
+/**
+ * Everything reCMF holds, in a file the wearer keeps.
+ *
+ * The card says twice what does not travel, because it is the question somebody restoring
+ * onto a new phone will actually have: the pairing key stays in the Android keystore,
+ * which does not leave the device, so a new phone pairs again and finds everything else
+ * already set up. Hiding that would make the re-pair look like the restore having failed.
+ */
+@Composable
+private fun BackupCard(
+    state: BackupState?,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CardTitle(R.drawable.ic_ui_download, R.string.backup)
+
+            Text(
+                stringResource(R.string.backup_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                stringResource(R.string.backup_no_secrets),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(
+                    onClick = onExport,
+                    enabled = state != BackupState.Working,
+                ) { Text(stringResource(R.string.action_backup_export)) }
+
+                OutlinedButton(
+                    onClick = onImport,
+                    enabled = state != BackupState.Working,
+                ) { Text(stringResource(R.string.action_backup_import)) }
+            }
+
+            state?.let {
+                Text(
+                    when (it) {
+                        BackupState.Working -> stringResource(R.string.backup_working)
+                        is BackupState.Exported ->
+                            stringResource(R.string.backup_exported, it.settings, it.rows)
+                        is BackupState.Imported ->
+                            stringResource(R.string.backup_imported, it.settings, it.rows)
+                        BackupState.NotOurs -> stringResource(R.string.backup_not_ours)
+                        is BackupState.Failed ->
+                            stringResource(R.string.backup_failed, it.reason)
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (it is BackupState.Failed || it is BackupState.NotOurs) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
+    }
 }
 
 /**

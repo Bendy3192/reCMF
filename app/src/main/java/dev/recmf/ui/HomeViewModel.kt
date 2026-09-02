@@ -36,6 +36,10 @@ import dev.recmf.service.WatchService
 import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
+import androidx.core.net.toUri
+import dev.recmf.BuildConfig
+import dev.recmf.data.Backup
+import dev.recmf.data.BackupStore
 import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.health.readiness as scoreReadiness
@@ -120,6 +124,21 @@ data class WeeklySeries(
     val spo2: List<DayValue> = emptyList(),
     val stress: List<DayValue> = emptyList(),
 )
+
+/**
+ * Where an export or an import has got to, in the words the card uses.
+ *
+ * [NotOurs] is kept apart from [Failed] on purpose: a file that is simply not a reCMF
+ * backup is the commonest way this goes wrong and wants a different sentence from a disk
+ * that would not open.
+ */
+sealed interface BackupState {
+    data object Working : BackupState
+    data class Exported(val settings: Int, val rows: Int) : BackupState
+    data class Imported(val settings: Int, val rows: Int) : BackupState
+    data object NotOurs : BackupState
+    data class Failed(val reason: String) : BackupState
+}
 
 /** One app in the notification list, as the settings screen shows it. */
 data class NotificationApp(
@@ -704,6 +723,61 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Hands the watch its own list back with a different face marked active. */
     fun selectWatchface(index: Int) {
         WatchService.setWatchface(getApplication(), index)
+    }
+
+    private val backupStore = BackupStore(application, dao)
+
+    private val _backup = MutableStateFlow<BackupState?>(null)
+
+    /** How the last export or import went, or null when neither has been asked for. */
+    val backup: StateFlow<BackupState?> = _backup.asStateFlow()
+
+    /**
+     * Writes everything worth carrying to a file the wearer picked.
+     *
+     * Done here rather than in the service: an export reads the database and the settings
+     * and touches the watch not at all, so there is nothing for a connection to be in the
+     * middle of.
+     */
+    fun exportBackup(uri: String) {
+        viewModelScope.launch {
+            _backup.value = BackupState.Working
+            _backup.value = withContext(Dispatchers.IO) {
+                runCatching {
+                    val contents = backupStore.collect(
+                        versionCode = BuildConfig.VERSION_CODE,
+                        nowSeconds = Instant.now().epochSecond,
+                    )
+                    val text = Backup.write(contents)
+                    getApplication<Application>().contentResolver
+                        .openOutputStream(uri.toUri(), "wt")
+                        ?.use { it.write(text.toByteArray()) }
+                        ?: error("could not open the file for writing")
+                    BackupState.Exported(contents.settings.size, contents.tables.values.sumOf { it.rows.size })
+                }.getOrElse { BackupState.Failed(it.message ?: it.javaClass.simpleName) }
+            }
+        }
+    }
+
+    /** Reads a file back over what is here, merging rather than replacing. */
+    fun importBackup(uri: String) {
+        viewModelScope.launch {
+            _backup.value = BackupState.Working
+            _backup.value = withContext(Dispatchers.IO) {
+                runCatching {
+                    val text = getApplication<Application>().contentResolver
+                        .openInputStream(uri.toUri())
+                        ?.use { it.readBytes().decodeToString() }
+                        ?: error("could not open the file")
+
+                    val contents = Backup.read(text)
+                        ?: return@runCatching BackupState.NotOurs
+
+                    val put = backupStore.restore(contents)
+                    BackupState.Imported(put.settings, put.rows)
+                }.getOrElse { BackupState.Failed(it.message ?: it.javaClass.simpleName) }
+            }
+        }
     }
 
     /** The last night the watch reported, or null until it reports one. */

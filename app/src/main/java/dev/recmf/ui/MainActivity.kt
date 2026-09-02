@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import android.content.Context
+import androidx.compose.ui.res.stringResource
+import dev.recmf.R
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.weather.PhoneLocation
 import dev.recmf.service.WatchService
@@ -172,6 +174,21 @@ class MainActivity : ComponentActivity() {
                     ActivityResultContracts.OpenDocument(),
                 ) { uri -> if (uri != null) model.installAgps(uri.toString()) }
 
+                // CreateDocument, so the wearer chooses where a backup lands and reCMF
+                // never needs storage permission or a folder of its own. The mime type is
+                // the one the file actually is: a picker that offers to save JSON as
+                // something else helps nobody.
+                val saveBackup = rememberLauncherForActivityResult(
+                    ActivityResultContracts.CreateDocument("application/json"),
+                ) { uri -> if (uri != null) model.exportBackup(uri.toString()) }
+
+                val loadBackup = rememberLauncherForActivityResult(
+                    ActivityResultContracts.OpenDocument(),
+                ) { uri -> if (uri != null) model.importBackup(uri.toString()) }
+
+                val backupState by model.backup.collectAsStateWithLifecycle()
+                val backupFileName = stringResource(R.string.backup_file_name)
+
                 // Re-read on every composition rather than caching: the user grants this
                 // in system settings and comes straight back to this screen.
                 val hasNotificationAccess = model.hasNotificationAccess()
@@ -195,6 +212,11 @@ class MainActivity : ComponentActivity() {
                     watchfaceInstall = watchfaceInstall,
                     alarmMirrorProblem = alarmMirrorProblem,
                     readiness = readiness,
+                    backupState = backupState,
+                    onExportBackup = { saveBackup.launch(backupFileName) },
+                    // Anything, not just JSON: a file manager that has forgotten what a
+                    // .json is would otherwise grey out the only file worth picking.
+                    onImportBackup = { loadBackup.launch(arrayOf("*/*")) },
                     onNotificationAppBlocked = model::setNotificationBlocked,
                     onNotificationAppsBlocked = model::setNotificationBlocked,
                     isBatteryExempt = isBatteryExempt,

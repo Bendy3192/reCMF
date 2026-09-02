@@ -208,6 +208,18 @@
     <string name="metric_stat_avg">Среднее</string>
     <string name="metric_stat_min">Минимум</string>
 
+    <string name="backup">Резервная копия</string>
+    <string name="backup_explainer">Записывает настройки, будильники, цели и историю здоровья, которую хранит reCMF, в выбранный вами файл. Восстановление добавляется к тому, что уже есть, поэтому повторный импорт того же файла ничего не меняет.</string>
+    <string name="backup_no_secrets">Ключ пары с часами в файл не попадает никогда. Он лежит в хранилище ключей Android и телефон не покидает — поэтому на новом телефоне вы заново спариваетесь, а всё остальное уже настроено.</string>
+    <string name="action_backup_export">Сохранить копию</string>
+    <string name="action_backup_import">Восстановить из файла</string>
+    <string name="backup_working">Работаю…</string>
+    <string name="backup_exported">Сохранено: %1$d настроек и %2$d строк истории.</string>
+    <string name="backup_imported">Восстановлено: %1$d настроек и %2$d строк истории.</string>
+    <string name="backup_not_ours">Это не резервная копия reCMF или она от более новой версии.</string>
+    <string name="backup_failed">Не получилось: %1$s</string>
+    <string name="backup_file_name">recmf-backup.json</string>
+
     <string name="readiness">Готовность</string>
     <string name="readiness_usual">примерно как обычно</string>
     <string name="readiness_above">выше обычного</string>

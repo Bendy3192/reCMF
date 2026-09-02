@@ -36,6 +36,32 @@ interface SampleDao {
     @Query("SELECT * FROM sleep_sessions WHERE startTimestamp >= :since ORDER BY startTimestamp")
     fun sleepSince(since: Long): Flow<List<SleepSessionEntity>>
 
+    // Everything in each table, for an export. Deliberately separate from the `since`
+    // queries above: those exist to feed a screen and several of them filter — spo2Since
+    // drops zero readings, for one — and a backup that quietly leaves rows behind is not
+    // a backup. One-shot rather than a Flow, because an export happens once when asked.
+
+    @Query("SELECT * FROM activity_samples ORDER BY timestamp")
+    suspend fun allActivity(): List<ActivitySampleEntity>
+
+    @Query("SELECT * FROM heart_rate_samples ORDER BY timestamp")
+    suspend fun allHeartRate(): List<HeartRateSampleEntity>
+
+    @Query("SELECT * FROM spo2_samples ORDER BY timestamp")
+    suspend fun allSpo2(): List<Spo2SampleEntity>
+
+    @Query("SELECT * FROM resting_heart_rate_samples ORDER BY timestamp")
+    suspend fun allRestingHeartRate(): List<RestingHeartRateSampleEntity>
+
+    @Query("SELECT * FROM stress_samples ORDER BY timestamp")
+    suspend fun allStress(): List<StressSampleEntity>
+
+    @Query("SELECT * FROM sleep_sessions ORDER BY startTimestamp")
+    suspend fun allSleep(): List<SleepSessionEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSleep(sessions: List<SleepSessionEntity>)
+
     /**
      * Unsynced samples, oldest first and capped, so a long backlog is uploaded in
      * batches instead of being materialized into memory all at once.

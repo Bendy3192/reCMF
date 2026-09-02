@@ -207,6 +207,19 @@
     <string name="metric_stat_avg">Average</string>
     <string name="metric_stat_min">Lowest</string>
 
+    <!-- Backup: everything but the pairing key, in a file the wearer keeps. -->
+    <string name="backup">Backup</string>
+    <string name="backup_explainer">Writes your settings, alarms, goals and the health history reCMF holds to a file you choose. Restoring merges it into what is here, so importing the same file twice changes nothing the second time.</string>
+    <string name="backup_no_secrets">The watch pairing key is never written to the file. It is held in the Android keystore, which does not leave the phone — so on a new phone you pair again, and everything else is already set up.</string>
+    <string name="action_backup_export">Save a backup</string>
+    <string name="action_backup_import">Restore from a file</string>
+    <string name="backup_working">Working…</string>
+    <string name="backup_exported">Saved: %1$d settings and %2$d rows of history.</string>
+    <string name="backup_imported">Restored: %1$d settings and %2$d rows of history.</string>
+    <string name="backup_not_ours">That file is not a reCMF backup, or was written by a newer version.</string>
+    <string name="backup_failed">Did not work: %1$s</string>
+    <string name="backup_file_name">recmf-backup.json</string>
+
     <!-- Readiness: today against the wearer's own recent days. -->
     <string name="readiness">Readiness</string>
     <string name="readiness_usual">about your usual</string>

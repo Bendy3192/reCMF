@@ -21,7 +21,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
-private val Context.dataStore by preferencesDataStore(name = "recmf-settings")
+/** Shared with [BackupStore], which walks the whole store rather than named keys. */
+internal val Context.dataStore by preferencesDataStore(name = "recmf-settings")
 
 /**
  * A night the watch reported.
