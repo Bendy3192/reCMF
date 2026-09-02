@@ -33,6 +33,7 @@ import dev.recmf.protocol.CmfSleepStage
 import dev.recmf.protocol.SleepSession
 import java.time.Instant
 import java.time.temporal.ChronoUnit
+import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
@@ -130,6 +131,10 @@ class HealthConnectSync(private val context: Context) {
                         label = label,
                         state = Held.State.PRESENT,
                         count = records.size,
+                        // Health Connect returns a page, not the lot. A count equal to the
+                        // page size means "at least this", and saying so is the difference
+                        // between a diagnostic and a number that looks exact and is not.
+                        capped = records.size >= PAGE,
                         // Whoever wrote the newest one. Several apps can write the same
                         // type, and the newest is the one worth naming.
                         writtenBy = records.maxByOrNull { it.metadata.lastModifiedTime }
@@ -140,12 +145,53 @@ class HealthConnectSync(private val context: Context) {
         }
     }
 
+    /**
+     * Heart-rate variability from every app on this phone except reCMF.
+     *
+     * The exclusion is the whole of the correctness here. reCMF writes steps, pulse, sleep
+     * and more into Health Connect, so an unfiltered read would hand the app its own
+     * records back as though a second device had produced them — double counting, and a
+     * loop where the app confirms itself. HRV happens to be the one type reCMF never
+     * writes, which makes the filter free here; it is applied anyway, because the next
+     * type read will not be so lucky and this is where the habit belongs.
+     *
+     * @return one RMSSD per day, averaged where a day has several, keyed on the local date
+     *   the reading was taken. Empty when nothing is permitted, present or readable — all
+     *   of which mean the same thing to a score that simply leaves the signal out.
+     */
+    suspend fun heartRateVariability(sinceDays: Long, zone: ZoneId): Map<LocalDate, Float> {
+        val client = this.client ?: return emptyMap()
+
+        if (!grantedPermissions().containsAll(HRV_PERMISSIONS)) return emptyMap()
+
+        val from = Instant.now().minus(sinceDays, ChronoUnit.DAYS)
+
+        return runCatching {
+            client.readRecords(
+                ReadRecordsRequest(
+                    HeartRateVariabilityRmssdRecord::class,
+                    TimeRangeFilter.after(from),
+                ),
+            ).records
+                .filterNot { it.metadata.dataOrigin.packageName == ourPackage }
+                .groupBy { it.time.atZone(zone).toLocalDate() }
+                .mapValues { (_, day) ->
+                    day.map { it.heartRateVariabilityMillis }.average().toFloat()
+                }
+        }.getOrElse { emptyMap() }
+    }
+
+    /** This app, so its own records can be told from everybody else's. */
+    private val ourPackage: String get() = context.packageName
+
     /** One record type, as the survey found it. */
     data class Held(
         val label: String,
         val state: State,
         val count: Int = 0,
         val writtenBy: String = "",
+        /** True when the count hit the page size and the real number is larger. */
+        val capped: Boolean = false,
     ) {
         enum class State {
             /** Records exist in the window. */
@@ -589,6 +635,9 @@ class HealthConnectSync(private val context: Context) {
         private const val MAX_SERIES_GAP_SECONDS = 15 * 60L
 
         private const val INSERT_BATCH = 500
+
+        /** What one `readRecords` returns at most, which is what caps a survey's counts. */
+        private const val PAGE = 1000
 
         private val VALID_BPM = 25..250
 

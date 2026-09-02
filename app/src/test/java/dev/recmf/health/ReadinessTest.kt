@@ -122,4 +122,36 @@ class ReadinessTest {
     fun `nothing in, nothing out`() {
         assertNull(readiness(emptyMap(), emptyMap()))
     }
+
+    @Test
+    fun `variability counts the recovered way round`() {
+        // The classic way to get this backwards: RMSSD up is the good direction, unlike
+        // the pulse it is derived from.
+        val week = steadyWeek + (ReadinessSignal.HEART_RATE_VARIABILITY to List(7) { 45f })
+
+        val rested = readiness(day() + (ReadinessSignal.HEART_RATE_VARIABILITY to 58f), week)!!
+        val frayed = readiness(day() + (ReadinessSignal.HEART_RATE_VARIABILITY to 32f), week)!!
+
+        assertTrue(rested.score > 50, "high variability should read as recovered: ${rested.score}")
+        assertTrue(frayed.score < 50, "low variability should read as tired: ${frayed.score}")
+    }
+
+    @Test
+    fun `variability outweighs the rest when it disagrees with them`() {
+        // It carries the most weight on purpose, so a day where it is well down and
+        // everything else is ordinary still reads below usual.
+        val week = steadyWeek + (ReadinessSignal.HEART_RATE_VARIABILITY to List(7) { 45f })
+        val scored = readiness(day() + (ReadinessSignal.HEART_RATE_VARIABILITY to 30f), week)!!
+
+        assertTrue(scored.score < 45, "expected clearly below usual, got ${scored.score}")
+    }
+
+    @Test
+    fun `a phone with no second device scores exactly as it did before`() {
+        // The whole point of renormalised weights: adding a fifth signal must not change
+        // the answer for anybody who does not have it.
+        assertEquals(50, readiness(day(), steadyWeek)!!.score)
+        assertEquals(4, readiness(day(), steadyWeek)!!.parts.size)
+    }
+
 }

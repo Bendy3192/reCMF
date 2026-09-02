@@ -19,8 +19,14 @@ import kotlin.math.sqrt
  * those scores lean on hardest is simply absent, and a number here pretending to be theirs
  * would be a different quantity wearing their name.
  *
- * What the watch does give is enough for the honest version of the same idea: resting
- * heart rate, how long you slept and how much of it was deep or REM, and the stress index.
+ * It can, however, arrive from somewhere else. Another wearable on the same phone may
+ * publish RMSSD to Health Connect, and where it does this score reads it and weighs it
+ * highest — which is the one thing that turns this from an honest approximation into the
+ * same quantity those scores are built on.
+ *
+ * Without it, what the watch gives is enough for the honest version of the same idea:
+ * resting heart rate, how long you slept and how much of it was deep or REM, and the
+ * stress index.
  * Each of those, on its own, says very little. Against your own recent days they say quite
  * a lot — which is the one comparison available anyway, since there is no published norm
  * for this watch's stress index and the healthy range for resting heart rate is so wide
@@ -42,7 +48,17 @@ import kotlin.math.sqrt
 
 /** A thing the watch measures that says something about how recovered somebody is. */
 enum class ReadinessSignal {
-    /** Time asleep. The single strongest input any readiness model has. */
+    /**
+     * Beat-to-beat variation, as RMSSD, and the input every published readiness model
+     * leans on hardest.
+     *
+     * This watch cannot produce it — one pulse a minute, no intervals — so it arrives, if
+     * at all, from another device by way of Health Connect. Absent, the score is built from
+     * the rest and says so; present, it is the strongest thing in it.
+     */
+    HEART_RATE_VARIABILITY,
+
+    /** Time asleep. The strongest input the watch itself can offer. */
     SLEEP_DURATION,
 
     /** The share of the night spent in deep or REM sleep, rather than light or awake. */
@@ -58,19 +74,29 @@ enum class ReadinessSignal {
 /**
  * How much each signal counts.
  *
- * Sleep carries half between its two halves because it is the one input every published
- * readiness model agrees about. When a signal is missing its weight is shared out among
- * the others rather than counted as zero — a night the watch did not record should not
- * read as a bad night.
+ * Variability carries the most where it exists, and sleep the most where it does not.
+ * Those are the two inputs every published readiness model agrees about, in that order,
+ * and the stress index — which has no published meaning at all — carries the least.
+ *
+ * When a signal is missing its weight is shared out among the others rather than counted
+ * as zero. That is what lets the same scoring serve a phone with a second device on it and
+ * a phone without one: no variability simply means the remaining four decide it between
+ * them, exactly as they did before there was a fifth.
  */
 private val WEIGHTS = mapOf(
-    ReadinessSignal.SLEEP_DURATION to 0.30f,
-    ReadinessSignal.SLEEP_QUALITY to 0.20f,
-    ReadinessSignal.RESTING_HEART_RATE to 0.30f,
-    ReadinessSignal.STRESS to 0.20f,
+    ReadinessSignal.HEART_RATE_VARIABILITY to 0.30f,
+    ReadinessSignal.SLEEP_DURATION to 0.25f,
+    ReadinessSignal.SLEEP_QUALITY to 0.15f,
+    ReadinessSignal.RESTING_HEART_RATE to 0.20f,
+    ReadinessSignal.STRESS to 0.10f,
 )
 
-/** The signals where a bigger number is a worse morning. */
+/**
+ * The signals where a bigger number is a worse morning.
+ *
+ * Variability is not among them: higher RMSSD is the recovered direction, which is the
+ * opposite of the pulse it is derived from and the classic way to get this backwards.
+ */
 private val LOWER_IS_BETTER = setOf(ReadinessSignal.RESTING_HEART_RATE, ReadinessSignal.STRESS)
 
 /**

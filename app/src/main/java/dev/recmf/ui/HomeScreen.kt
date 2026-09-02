@@ -1322,6 +1322,7 @@ private fun Int.standing(): Int = when {
 
 @StringRes
 private fun ReadinessSignal.labelRes(): Int = when (this) {
+    ReadinessSignal.HEART_RATE_VARIABILITY -> R.string.readiness_part_heart_rate_variability
     ReadinessSignal.SLEEP_DURATION -> R.string.readiness_part_sleep_duration
     ReadinessSignal.SLEEP_QUALITY -> R.string.readiness_part_sleep_quality
     ReadinessSignal.RESTING_HEART_RATE -> R.string.readiness_part_resting_heart_rate
@@ -1331,6 +1332,9 @@ private fun ReadinessSignal.labelRes(): Int = when (this) {
 /** Each signal in the unit it was measured in, since they share a row but not a scale. */
 @Composable
 private fun ReadinessSignal.write(value: Float): String = when (this) {
+    // Milliseconds, which is the unit RMSSD is always quoted in.
+    ReadinessSignal.HEART_RATE_VARIABILITY ->
+        stringResource(R.string.readiness_millis, value.roundToInt())
     ReadinessSignal.SLEEP_DURATION ->
         stringResource(R.string.readiness_minutes, value.roundToInt())
     ReadinessSignal.SLEEP_QUALITY ->
@@ -1963,7 +1967,10 @@ private fun HealthConnectSurveyCard(held: List<HealthConnectSync.Held>?, onLook:
                             when (row.state) {
                                 HealthConnectSync.Held.State.PRESENT -> stringResource(
                                     R.string.hc_survey_present,
-                                    row.count,
+                                    // A page, not a total: "1000" out of Health Connect
+                                    // means "at least", and printing it bare would be a
+                                    // precise-looking number that is not one.
+                                    if (row.capped) "${row.count}+" else row.count.toString(),
                                     row.writtenBy.ifBlank { "?" },
                                 )
                                 HealthConnectSync.Held.State.EMPTY ->

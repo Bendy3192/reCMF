@@ -73,9 +73,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.Year
+import java.time.ZoneId
 import java.util.Locale
 import java.time.LocalDate
-import java.time.ZoneId
 
 /** What the health screen draws for the day so far. */
 data class HealthCharts(
@@ -240,6 +240,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private var scanJob: Job? = null
 
     init {
+        refreshHeartRateVariability()
+
         // A watch that has been used with the stock app is already paired at the OS
         // level, and may not advertise at all while it is connected to something else.
         // Offer it before the user asks for a scan.
@@ -595,11 +597,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * no score, and the morning before the first sync of the day is exactly when somebody
      * would be looking.
      */
+    /**
+     * Variability by day, from whatever else on this phone measures it.
+     *
+     * A plain state rather than a flow off the database, because it is not ours: Health
+     * Connect is read when asked and does not push. Refreshed on start and after each sync,
+     * which is as often as a figure taken once a night can change.
+     */
+    private val _hrv = MutableStateFlow<Map<LocalDate, Float>>(emptyMap())
+
+    fun refreshHeartRateVariability() {
+        viewModelScope.launch {
+            _hrv.value = healthConnect.heartRateVariability(BASELINE_DAYS, ZoneId.systemDefault())
+        }
+    }
+
     val readiness: StateFlow<Readiness?> = combine(
         dao.restingHeartRateSince(startOfBaseline()),
         dao.stressSince(startOfBaseline()),
         dao.sleepSince(startOfBaseline()),
-    ) { resting, stress, nights ->
+        _hrv,
+    ) { resting, stress, nights, hrv ->
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now()
 
@@ -610,6 +628,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 .mapValues { (_, values) -> values.average().toFloat() }
 
         val byDay = mapOf(
+            // Already a figure a day when it arrives, so it needs none of the averaging
+            // the watch's own trickle does.
+            ReadinessSignal.HEART_RATE_VARIABILITY to hrv,
             ReadinessSignal.RESTING_HEART_RATE to
                 daily(resting, { it.timestamp }, { it.bpm.toFloat() }),
             ReadinessSignal.STRESS to

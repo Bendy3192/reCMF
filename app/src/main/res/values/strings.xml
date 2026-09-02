@@ -28,7 +28,7 @@
     <string name="hc_survey">What is in Health Connect</string>
     <string name="hc_survey_explainer">Read straight from Health Connect on this phone, so a second wearable that publishes there can be seen rather than assumed. Nothing here is sent anywhere; it is a look at what is already on the phone.</string>
     <string name="action_hc_survey">Look</string>
-    <string name="hc_survey_present">records: %1$d, newest from %2$s</string>
+    <string name="hc_survey_present">records: %1$s, newest from %2$s</string>
     <string name="hc_survey_empty">nothing in the last two weeks</string>
     <string name="hc_survey_not_permitted">not permitted</string>
     <string name="hc_survey_refused">Health Connect refused the read</string>
@@ -315,8 +315,10 @@
     <string name="readiness_part_sleep_quality">Deep and REM</string>
     <string name="readiness_part_resting_heart_rate">Resting heart rate</string>
     <string name="readiness_part_stress">Stress</string>
+    <string name="readiness_part_heart_rate_variability">Variability</string>
     <string name="readiness_against">%1$s, usually %2$s</string>
     <string name="readiness_minutes">%1$d min</string>
+    <string name="readiness_millis">%1$d ms</string>
     <string name="readiness_share">%1$d%%</string>
 
     <!--
