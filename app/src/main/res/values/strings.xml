@@ -229,7 +229,6 @@
     <string name="ai_sources">Read: %1$s</string>
     <string name="ai_insight">What this looks like</string>
     <string name="ai_insight_thinking">Reading your last few weeks…</string>
-    <string name="ai_insight_off">Turn the assistant on in Watch settings to have this explained against your own history.</string>
     <string name="ai_insight_when">Asked %1$s</string>
     <string name="action_ai_again">Ask again</string>
     <string name="ago_now">just now</string>
