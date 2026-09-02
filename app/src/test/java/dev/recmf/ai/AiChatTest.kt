@@ -3,6 +3,7 @@ package dev.recmf.ai
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import dev.recmf.ai.AiEndpoint.Wire
 import org.junit.jupiter.api.Test
 import org.json.JSONObject
 
@@ -28,6 +29,60 @@ class AiChatTest {
         val body = JSONObject(AiChat.body("sonar", "s", "u"))
 
         assertEquals(setOf("model", "messages"), body.keys().asSequence().toSet())
+    }
+
+    @Test
+    fun `the responses shape carries what that shape needs`() {
+        // instructions and input rather than messages, and a token ceiling — Anthropic
+        // models on Perplexity's Agent API refuse the request outright without one.
+        val body = JSONObject(
+            AiChat.body("anthropic/claude-sonnet-5", "be careful", "how am I?", Wire.RESPONSES),
+        )
+
+        assertEquals("anthropic/claude-sonnet-5", body.getString("model"))
+        assertEquals("be careful", body.getString("instructions"))
+        assertEquals("how am I?", body.getString("input"))
+        assertTrue(body.has("max_output_tokens"))
+        assertTrue(body.getInt("max_output_tokens") > 0)
+    }
+
+    @Test
+    fun `search is asked for by name or not at all`() {
+        val without = JSONObject(AiChat.body("m", "s", "u", Wire.RESPONSES, webSearch = false))
+        val asked = JSONObject(AiChat.body("m", "s", "u", Wire.RESPONSES, webSearch = true))
+
+        assertTrue(!without.has("tools"))
+        assertEquals("web_search", asked.getJSONArray("tools").getJSONObject(0).getString("type"))
+    }
+
+    @Test
+    fun `a responses reply is read from either place it can live`() {
+        val shortcut = "{\"output_text\":\"  Sixty-six is normal for you.  \"}"
+        val nested = "{\"output\":[{\"type\":\"message\",\"content\":" +
+            "[{\"type\":\"output_text\",\"text\":\"Sixty-six is normal.\"}]}]}"
+
+        assertEquals("Sixty-six is normal for you.", AiChat.reply(shortcut))
+        assertEquals("Sixty-six is normal.", AiChat.reply(nested))
+    }
+
+    @Test
+    fun `sources are found wherever the provider put them`() {
+        assertEquals(
+            listOf("https://a.example", "https://b.example"),
+            AiChat.sources("{\"citations\":[\"https://a.example\",\"https://b.example\"]}"),
+        )
+        assertEquals(
+            listOf("https://c.example"),
+            AiChat.sources("{\"search_results\":[{\"url\":\"https://c.example\",\"title\":\"x\"}]}"),
+        )
+        assertEquals(emptyList<String>(), AiChat.sources("{}"))
+    }
+
+    @Test
+    fun `a model list is read and sorted`() {
+        val json = "{\"data\":[{\"id\":\"xai/grok-4.6\"},{\"id\":\"perplexity/sonar\"}]}"
+
+        assertEquals(listOf("perplexity/sonar", "xai/grok-4.6"), AiChat.models(json))
     }
 
     @Test

@@ -49,8 +49,8 @@ class AiClient {
     /**
      * The provider's own list of models.
      *
-     * Some serve it and some do not — Perplexity is one that does not — so "no list" is a
-     * plain answer rather than an error, and the text field beside it never goes away.
+     * Some serve it and some do not, so "no list" is a plain answer rather than an error and
+     * the text field beside it never goes away.
      */
     suspend fun models(baseUrl: String, key: String?): Models {
         val url = AiEndpoint.models(baseUrl) ?: return Models.Failed("no address")

@@ -21,6 +21,15 @@ import org.json.JSONObject
 object AiChat {
 
     /**
+     * A ceiling on the answer, generous enough never to be the thing that cuts one short.
+     *
+     * The prompt asks for a few sentences and the card shows a paragraph, so this is far
+     * above anything expected — it is here to satisfy providers that demand a number, not
+     * to shape the reply.
+     */
+    private const val MAX_OUTPUT_TOKENS = 2000
+
+    /**
      * One request.
      *
      * No temperature, no penalties, no sampling settings. They would be four more fields on
@@ -50,6 +59,11 @@ object AiChat {
             .put("model", model)
             .put("instructions", system)
             .put("input", user)
+            // Required, not optional, for some of what the Agent API hosts: Anthropic
+            // models there refuse the request outright without it. Sent always rather than
+            // guessed at per model, since a cap the answer never reaches costs nothing and
+            // a missing one costs the whole request.
+            .put("max_output_tokens", MAX_OUTPUT_TOKENS)
             .apply {
                 // Search is a tool here, not something the model does of its own accord.
                 // Asked for by name or it simply does not happen — which is the whole

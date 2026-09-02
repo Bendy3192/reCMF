@@ -1577,8 +1577,9 @@ private fun AiEndpointFields(
  * What the provider said it has, or why it said nothing.
  *
  * A list is a convenience and never a gate: providers that serve one save somebody a trip
- * to the documentation, and the ones that do not — Perplexity among them — get a sentence
- * saying so while the text field carries on working.
+ * to the documentation, and the ones that do not get a sentence saying so while the text
+ * field carries on working. Perplexity was written up here as one of the latter, on the
+ * strength of a forum thread, and turned out to serve a perfectly good list.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
