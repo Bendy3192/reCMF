@@ -37,7 +37,6 @@ import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
 import androidx.core.net.toUri
-import dev.recmf.BuildConfig
 import dev.recmf.data.Backup
 import dev.recmf.data.BackupStore
 import dev.recmf.health.Readiness
