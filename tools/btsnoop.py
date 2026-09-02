@@ -63,6 +63,10 @@ NONCE_REPLY = 0x004C
 
 # These four carry no session key: pairing runs before there is one, and the bulk upload
 # chunks carry their own framing.
+# The only four that go out in the clear: the pairing runs before a session key exists,
+# and the two bulk writes carry their own chunk framing. Everything else is encrypted,
+# generic commands included — reading those as plaintext printed the ciphertext of half
+# the protocol and made a battery reading look like a random number.
 PLAINTEXT = {0x8047, 0x0048, 0x9064, 0x905F}
 
 
@@ -229,7 +233,13 @@ def main() -> None:
     key = k1
     for ts, direction, cmd1, cmd2, body in frames(blob):
         if k1 is not None and cmd1 == VENDOR and cmd2 == NONCE_REPLY:
-            nonce = plaintext(decrypt(key, body)) if key else None
+            # Under K1, not under the session key in hand. Every reconnection derives a
+            # fresh session key from a nonce, and that nonce is itself carried under the
+            # long-term key — so decrypting it with the *previous* session key worked
+            # exactly once and then failed silently, leaving `key` stale and every frame
+            # after the second connection unreadable. A capture spanning a night is mostly
+            # second-and-later connections, so almost all of it was being thrown away.
+            nonce = plaintext(decrypt(k1, body))
             if nonce:
                 key = hashlib.sha256(nonce + k1).digest()[:16]
                 print(f"{clock(ts)} -- session re-keyed")
@@ -247,7 +257,7 @@ def main() -> None:
 
         if not body:
             shown = ""
-        elif cmd2 in PLAINTEXT or cmd1 != VENDOR:
+        elif cmd2 in PLAINTEXT:
             shown = body.hex()
         elif key is None:
             shown = f"[encrypted, {len(body)} B]"

@@ -975,6 +975,21 @@ carries a long thread of the same symptom on stock software. Before suspecting t
 again, check that: the receiver only runs inside an outdoor exercise mode, the firmware is
 current, and the watch has been reset.
 
+## The capture tool was reading most of the protocol wrong
+
+Both faults are fixed, and both mean that anything concluded from a capture before this
+is worth re-reading rather than trusted.
+
+- **Generic commands were printed as ciphertext.** Everything is encrypted except the
+  pairing and the two bulk writes; the tool treated every non-`ffff` command as plaintext,
+  so a battery reading came out as sixteen random-looking bytes and so did the goals, the
+  alarms and the sleep. It now decrypts them, and a battery reading is `5000`.
+- **Only the first connection in a capture could be read.** Each reconnection derives a
+  session key from a nonce, and that nonce travels under the long-term key — but the tool
+  decrypted it with the session key in hand, which worked once and then failed silently,
+  leaving the key stale for the rest of the file. A capture spanning a night is mostly
+  second-and-later connections, so nearly all of it was being discarded.
+
 ## Unidentified
 
 Bytes seen on a real watch that nothing here explains yet. Written down so the next capture
