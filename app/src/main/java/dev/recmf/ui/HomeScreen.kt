@@ -432,7 +432,23 @@ private fun TabContent(
             }
 
             HomeTab.SLEEP -> {
-                item { SleepCard(sleepSession) }
+                item {
+                    // The night's own key, so a reading of it caches beside the tiles'
+                    // rather than colliding with one.
+                    val night = stringResource(R.string.metric_sleep)
+                    val slept = sleepSession?.stages?.sumOf { it.duration } ?: 0
+
+                    LaunchedEffect(night, slept) {
+                        if (slept > 0) onAskAboutMetric(night, readableDuration(slept.toLong()), false)
+                    }
+
+                    SleepCard(
+                        session = sleepSession,
+                        insight = aiInsights[night],
+                        thinking = night in aiAsking,
+                        onAskAgain = { onAskAboutMetric(night, readableDuration(slept.toLong()), true) },
+                    )
+                }
             }
 
             HomeTab.FACES -> {
@@ -2720,16 +2736,26 @@ private fun NoWorkoutsCard() {
     }
 }
 
-/** Hours and minutes, or minutes alone for anything under an hour. */
+/**
+ * Hours and minutes, or minutes alone for anything under an hour.
+ *
+ * "0 h 47 min" makes the reader do arithmetic to find out it says forty-seven minutes.
+ *
+ * Shared with the sleep screen, which carried an identical copy taking an Int. Two
+ * functions formatting the same thing the same way are one function and a drift waiting to
+ * happen.
+ */
 @Composable
-private fun readableDuration(seconds: Long): String {
+internal fun readableDuration(seconds: Long): String {
     val minutes = seconds / 60
-    return if (minutes >= 60) {
-        stringResource(R.string.duration_hm, minutes / 60, minutes % 60)
+    return if (minutes >= MINUTES_IN_HOUR) {
+        stringResource(R.string.duration_hm, minutes / MINUTES_IN_HOUR, minutes % MINUTES_IN_HOUR)
     } else {
         stringResource(R.string.duration_m, minutes)
     }
 }
+
+private const val MINUTES_IN_HOUR = 60
 
 private val WORKOUT_DAY: DateTimeFormatter =
     DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)

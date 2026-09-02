@@ -152,6 +152,9 @@ fun MetricDetailSheet(
 /**
  * What the assistant made of this figure, when there is one to be had.
  *
+ * Not private to this file: sleep has a screen of its own rather than a tile, and it wants
+ * exactly this block under it.
+ *
  * Asked for on opening rather than behind a button, which is the whole point — somebody
  * who has turned this on wants the answer to be there, not to be a thing they request. The
  * cost of that is controlled by the cache underneath rather than by making them tap.
@@ -160,7 +163,7 @@ fun MetricDetailSheet(
  * length that ends in a piece of writing wants a shape that says composing, not loading.
  */
 @Composable
-private fun MetricInsight(
+internal fun MetricInsight(
     insight: AiInsight?,
     thinking: Boolean,
     onAgain: () -> Unit,

@@ -43,12 +43,18 @@ import java.time.format.DateTimeFormatter
  * number invented to fill the space would be the one piece of made-up data in an app whose
  * whole point is that its figures come off the watch.
  *
- * The watch reports one night per morning and never repeats it, so this screen shows one
- * night. A history would need the nights to be stored as nights, which is the next thing
- * worth doing here and is not this.
+ * The watch reports one night per morning and never repeats it, so this card shows one
+ * night. Nights are stored as nights now — readiness needed them — so the run of them is
+ * what the assistant reads below, even though the picture here is still of last night
+ * alone.
  */
 @Composable
-fun SleepCard(session: SleepSession?) {
+fun SleepCard(
+    session: SleepSession?,
+    insight: AiInsight?,
+    thinking: Boolean,
+    onAskAgain: () -> Unit,
+) {
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Text(stringResource(R.string.metric_sleep), style = MaterialTheme.typography.titleMedium)
@@ -64,7 +70,7 @@ fun SleepCard(session: SleepSession?) {
 
             val slept = session.stages.sumOf { it.duration }
 
-            Text(readableDuration(slept), style = MaterialTheme.typography.headlineMedium)
+            Text(readableDuration(slept.toLong()), style = MaterialTheme.typography.headlineMedium)
             Text(
                 stringResource(
                     R.string.metric_sleep_value,
@@ -88,6 +94,14 @@ fun SleepCard(session: SleepSession?) {
             ORDERED_STAGES.forEach { stage ->
                 val total = session.stages.filter { it.stage == stage }.sumOf { it.duration }
                 if (total > 0) StageRow(stage, total, slept)
+            }
+
+            // Sleep is the one measurement with a screen instead of a tile, so it was the
+            // one the assistant could not be asked about — the figures were reaching it all
+            // along in every request, with nothing on screen to ask the question.
+            if (insight != null || thinking) {
+                HorizontalDivider()
+                MetricInsight(insight, thinking, onAskAgain)
             }
         }
     }
@@ -153,22 +167,7 @@ private fun StageRow(stage: CmfSleepStage, seconds: Int, night: Int) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text(readableDuration(seconds), style = MaterialTheme.typography.titleMedium)
-    }
-}
-
-/**
- * Hours and minutes, or minutes alone under an hour.
- *
- * "0 h 47 min" makes the reader do arithmetic to find out it says forty-seven minutes.
- */
-@Composable
-private fun readableDuration(seconds: Int): String {
-    val minutes = seconds / 60
-    return if (minutes >= MINUTES_IN_HOUR) {
-        stringResource(R.string.duration_hm, minutes / MINUTES_IN_HOUR, minutes % MINUTES_IN_HOUR)
-    } else {
-        stringResource(R.string.duration_m, minutes)
+        Text(readableDuration(seconds.toLong()), style = MaterialTheme.typography.titleMedium)
     }
 }
 
@@ -202,7 +201,6 @@ private val ORDERED_STAGES = listOf(
     CmfSleepStage.UNKNOWN,
 )
 
-private const val MINUTES_IN_HOUR = 60
 
 private val TIMELINE_HEIGHT = 40.dp
 
