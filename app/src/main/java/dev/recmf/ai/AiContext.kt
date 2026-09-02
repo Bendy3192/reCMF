@@ -35,6 +35,64 @@ object AiContext {
         val steps: Int? = null,
     )
 
+
+    /**
+     * What somebody has said about themselves, for the coach to read.
+     *
+     * Four fields and a free-text note, rather than a form. Age, height and weight are the
+     * ones that change how a figure should be read at all — a resting pulse means something
+     * different at twenty and at sixty — and everything else somebody might want said about
+     * themselves is theirs to write. Building a form of sensitive categories would mean
+     * choosing which ones exist; a blank box does not.
+     *
+     * Sent only when the coach is switched on. The other opt-in sends numbers with nobody's
+     * name against them, and that stays true.
+     */
+    data class Profile(
+        val name: String = "",
+        val birthYear: Int = 0,
+        val heightCm: Int = 0,
+        val weightKg: Int = 0,
+        val notes: String = "",
+    ) {
+        /** Whether there is anything here worth sending. An empty profile is not a profile. */
+        val filled: Boolean get() = name.isNotBlank() || birthYear > 0 ||
+            heightCm > 0 || weightKg > 0 || notes.isNotBlank()
+    }
+
+    /**
+     * The profile as lines, or empty when there is nothing in it.
+     *
+     * Each field is written only when it has been given. A profile saying "height: 0" is
+     * worse than one that does not mention height: the first is a claim about somebody and
+     * the second is silence.
+     *
+     * @param thisYear so an age can be worked out without this function needing a clock,
+     *   which is what lets it be tested.
+     */
+    fun about(profile: Profile, thisYear: Int): String {
+        if (!profile.filled) return ""
+
+        val lines = buildList {
+            profile.name.takeIf { it.isNotBlank() }?.let { add("Name: ${it.trim()}") }
+            profile.birthYear.takeIf { it in 1900..thisYear }?.let { add("Age: ${thisYear - it}") }
+            profile.heightCm.takeIf { it > 0 }?.let { add("Height: $it cm") }
+            profile.weightKg.takeIf { it > 0 }?.let { add("Weight: $it kg") }
+        }
+
+        return buildString {
+            if (lines.isNotEmpty()) {
+                appendLine("About this person:")
+                lines.forEach { appendLine(it) }
+            }
+            profile.notes.trim().takeIf { it.isNotBlank() }?.let {
+                if (lines.isNotEmpty()) appendLine()
+                appendLine("In their own words:")
+                appendLine(it)
+            }
+        }.trimEnd()
+    }
+
     /**
      * The prompt used until somebody writes their own.
      *
@@ -100,19 +158,18 @@ object AiContext {
     /**
      * The whole of what is sent for one question, assembled in the order it is read.
      *
-     * @param notes the things the numbers cannot say, or blank. Kept apart from the table
-     *   so that a reader of the preview can see exactly which part is data and which part
-     *   is something they typed about themselves.
+     * @param about the profile as [about] rendered it, or blank. Kept below the table and
+     *   plainly headed, so a reader of the preview can see exactly which part came from the
+     *   watch and which part is about them.
      */
-    fun user(question: String, days: List<Day>, notes: String = ""): String = buildString {
+    fun user(question: String, days: List<Day>, about: String = ""): String = buildString {
         appendLine(question)
         appendLine()
         appendLine("Daily figures, oldest first:")
         appendLine(table(days))
-        if (notes.isNotBlank()) {
+        if (about.isNotBlank()) {
             appendLine()
-            appendLine("Things this person has noted about themselves:")
-            appendLine(notes.trim())
+            appendLine(about.trim())
         }
     }.trimEnd()
 

@@ -72,6 +72,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.Instant
+import java.time.Year
 import java.util.Locale
 import java.time.LocalDate
 import java.time.ZoneId
@@ -826,6 +827,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsStore.setAiKey(key) }
     }
 
+    fun setAiProfile(profile: AiContext.Profile) {
+        viewModelScope.launch { settingsStore.setAiProfile(profile) }
+    }
+
     fun setAiWebSearch(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setAiWebSearch(enabled) }
     }
@@ -915,7 +920,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val answer = aiClient.ask(
                     settings = settings,
                     system = AiContext.instructions(settings.systemPrompt, readerLanguage()),
-                    user = AiContext.user(AiContext.aboutMetric(metric, todayValue), days),
+                    user = AiContext.user(
+                        question = AiContext.aboutMetric(metric, todayValue),
+                        days = days,
+                        // The other opt-in sends numbers with nobody's name against them,
+                        // and this is the line that keeps that true.
+                        about = if (settings.coachEnabled) settings.aboutMe() else "",
+                    ),
                 )
 
                 if (answer is AiClient.Answer.Said) {
@@ -942,6 +953,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      * to a language has already said which one they read, and asking again would be a
      * second place for the same answer to be wrong.
      */
+    /** The profile as the request will carry it, or nothing when there is none. */
+    private fun AiSettings.aboutMe(): String =
+        AiContext.about(profile, Year.now().value)
+
     private fun readerLanguage(): String =
         Locale.getDefault().getDisplayLanguage(Locale.ENGLISH)
 

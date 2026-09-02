@@ -120,6 +120,7 @@ import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.ui.theme.Motion
 import dev.recmf.data.WatchPreferences
+import java.time.Year
 import dev.recmf.data.WatchSetting
 import dev.recmf.protocol.BatteryStatus
 import dev.recmf.protocol.CmfAlarm
@@ -183,6 +184,7 @@ fun HomeScreen(
     onAiProbe: () -> Unit,
     onAiModels: (String) -> Unit,
     onAiWebSearch: (Boolean) -> Unit,
+    onAiProfile: (AiContext.Profile) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -266,6 +268,7 @@ fun HomeScreen(
                         onAiProbe = onAiProbe,
                         onAiModels = onAiModels,
                         onAiWebSearch = onAiWebSearch,
+                        onAiProfile = onAiProfile,
                         onExportBackup = onExportBackup,
                         onImportBackup = onImportBackup,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -349,6 +352,7 @@ private fun TabContent(
     onAiProbe: () -> Unit,
     onAiModels: (String) -> Unit,
     onAiWebSearch: (Boolean) -> Unit,
+    onAiProfile: (AiContext.Profile) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -515,6 +519,7 @@ private fun TabContent(
                         onProbe = onAiProbe,
                         onModels = onAiModels,
                         onWebSearch = onAiWebSearch,
+                        onProfile = onAiProfile,
                     )
                 }
                 item { BackupCard(backupState, onExportBackup, onImportBackup) }
@@ -1408,6 +1413,7 @@ private fun AiCard(
     onProbe: () -> Unit,
     onModels: (String) -> Unit,
     onWebSearch: (Boolean) -> Unit,
+    onProfile: (AiContext.Profile) -> Unit,
 ) {
     var showing by rememberSaveable { mutableStateOf(false) }
     var editingPrompt by rememberSaveable { mutableStateOf(false) }
@@ -1446,6 +1452,10 @@ private fun AiCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            if (settings.coachEnabled) {
+                AiProfileFields(settings, onProfile)
+            }
+
             HorizontalDivider()
 
             AiEndpointFields(settings, models, onEndpoint, onModels, onWebSearch)
@@ -1482,8 +1492,19 @@ private fun AiCard(
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Text(
-                        // The same call the request itself makes, on the same days.
-                        AiContext.user(question = PREVIEW_QUESTION, days = days),
+                        // The same call the request itself makes, on the same days, and
+                        // with the profile exactly when a real request would carry it. A
+                        // preview missing a section the request sends would be worse than
+                        // no preview at all.
+                        AiContext.user(
+                            question = PREVIEW_QUESTION,
+                            days = days,
+                            about = if (settings.coachEnabled) {
+                                AiContext.about(settings.profile, Year.now().value)
+                            } else {
+                                ""
+                            },
+                        ),
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())
                             .padding(12.dp),
@@ -1757,6 +1778,102 @@ private fun AiProbeResult(answer: AiClient.Answer) {
         },
         style = MaterialTheme.typography.bodySmall,
         color = if (bad) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+/**
+ * The profile, shown only while the coach is on.
+ *
+ * Hidden rather than greyed out when it is off, because a form for a switched-off feature
+ * is a screen full of questions nobody has a reason to answer. Turning the coach on is
+ * what makes them worth asking.
+ *
+ * Numbers are held as text while they are being typed. A field that turns "17" into 17 the
+ * moment the first digit lands cannot be typed into at all, and one that reads a half-typed
+ * year as an age is worse than one that waits.
+ */
+@Composable
+private fun AiProfileFields(settings: AiSettings, onProfile: (AiContext.Profile) -> Unit) {
+    val saved = settings.profile
+
+    var name by rememberSaveable(saved.name) { mutableStateOf(saved.name) }
+    var born by rememberSaveable(saved.birthYear) {
+        mutableStateOf(saved.birthYear.takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var height by rememberSaveable(saved.heightCm) {
+        mutableStateOf(saved.heightCm.takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var weight by rememberSaveable(saved.weightKg) {
+        mutableStateOf(saved.weightKg.takeIf { it > 0 }?.toString().orEmpty())
+    }
+    var notes by rememberSaveable(saved.notes) { mutableStateOf(saved.notes) }
+
+    Text(
+        stringResource(R.string.ai_profile),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        stringResource(R.string.ai_profile_explainer),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    OutlinedTextField(
+        value = name,
+        onValueChange = { name = it },
+        label = { Text(stringResource(R.string.ai_profile_name)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        NumberField(born, { born = it }, R.string.ai_profile_born, Modifier.weight(1.2f))
+        NumberField(height, { height = it }, R.string.ai_profile_height, Modifier.weight(1f))
+        NumberField(weight, { weight = it }, R.string.ai_profile_weight, Modifier.weight(1f))
+    }
+
+    OutlinedTextField(
+        value = notes,
+        onValueChange = { notes = it },
+        label = { Text(stringResource(R.string.ai_profile_notes)) },
+        placeholder = { Text(stringResource(R.string.ai_profile_notes_hint)) },
+        minLines = 3,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    val edited = AiContext.Profile(
+        name = name,
+        birthYear = born.toIntOrNull() ?: 0,
+        heightCm = height.toIntOrNull() ?: 0,
+        weightKg = weight.toIntOrNull() ?: 0,
+        notes = notes,
+    )
+
+    if (edited != saved) {
+        FilledTonalButton(onClick = { onProfile(edited) }) {
+            Text(stringResource(R.string.action_save))
+        }
+    }
+}
+
+/** A field that takes digits and nothing else, and stays a string until it is read. */
+@Composable
+private fun NumberField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    @StringRes label: Int,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        // Filtered rather than validated: a letter typed into a year should simply not
+        // appear, which is quieter than a field that turns red to explain itself.
+        onValueChange = { typed -> onValueChange(typed.filter { it.isDigit() }.take(4)) },
+        label = { Text(stringResource(label)) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier,
     )
 }
 

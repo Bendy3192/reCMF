@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.recmf.ai.AiContext
 import dev.recmf.ai.AiEndpoint
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfAlarm
@@ -69,6 +70,13 @@ data class AiSettings(
      * rather their question did not reach a search engine.
      */
     val webSearch: Boolean = true,
+    /**
+     * What the wearer has said about themselves, sent only when [coachEnabled].
+     *
+     * Held here beside the switch that governs it, so there is one place to look when
+     * asking what the coach knows.
+     */
+    val profile: AiContext.Profile = AiContext.Profile(),
     val key: String? = null,
     /** Editable, because a prompt somebody cannot read is a prompt they cannot trust. */
     val systemPrompt: String = "",
@@ -454,6 +462,13 @@ class SettingsStore(private val context: Context) {
             baseUrl = prefs[KEY_AI_BASE_URL] ?: DEFAULT_AI_BASE_URL,
             model = prefs[KEY_AI_MODEL] ?: "",
             webSearch = prefs[KEY_AI_WEB_SEARCH] ?: true,
+            profile = AiContext.Profile(
+                name = prefs[KEY_AI_NAME].orEmpty(),
+                birthYear = prefs[KEY_AI_BORN] ?: 0,
+                heightCm = prefs[KEY_AI_HEIGHT] ?: 0,
+                weightKg = prefs[KEY_AI_WEIGHT] ?: 0,
+                notes = prefs[KEY_AI_NOTES].orEmpty(),
+            ),
             wire = prefs[KEY_AI_WIRE]
                 ?.let { name -> AiEndpoint.Wire.entries.firstOrNull { it.name == name } }
                 ?: AiEndpoint.Wire.CHAT,
@@ -489,6 +504,17 @@ class SettingsStore(private val context: Context) {
         val sealed = key?.trim()?.takeIf { it.isNotEmpty() }?.let { SecretVault.seal(it.toByteArray()) }
         context.dataStore.edit { prefs ->
             if (sealed == null) prefs.remove(KEY_AI_KEY) else prefs[KEY_AI_KEY] = sealed
+        }
+    }
+
+    /** Stores the profile, with a blank field meaning "not given" rather than "zero". */
+    suspend fun setAiProfile(profile: AiContext.Profile) {
+        context.dataStore.edit {
+            it[KEY_AI_NAME] = profile.name.trim()
+            it[KEY_AI_BORN] = profile.birthYear
+            it[KEY_AI_HEIGHT] = profile.heightCm
+            it[KEY_AI_WEIGHT] = profile.weightKg
+            it[KEY_AI_NOTES] = profile.notes.trim()
         }
     }
 
@@ -645,6 +671,16 @@ class SettingsStore(private val context: Context) {
         val KEY_AI_PROMPT = stringPreferencesKey("ai_system_prompt")
         val KEY_AI_WIRE = stringPreferencesKey("ai_wire")
         val KEY_AI_WEB_SEARCH = booleanPreferencesKey("ai_web_search")
+
+        // The profile. Ordinary preferences rather than the vault: a name and a height are
+        // personal, but they are not secrets in the way a key is, and sealing them would
+        // mean they could not travel in a backup — which is exactly where somebody would
+        // want them to be.
+        val KEY_AI_NAME = stringPreferencesKey("ai_name")
+        val KEY_AI_BORN = intPreferencesKey("ai_birth_year")
+        val KEY_AI_HEIGHT = intPreferencesKey("ai_height_cm")
+        val KEY_AI_WEIGHT = intPreferencesKey("ai_weight_kg")
+        val KEY_AI_NOTES = stringPreferencesKey("ai_notes")
 
         /**
          * Where requests go unless told otherwise.

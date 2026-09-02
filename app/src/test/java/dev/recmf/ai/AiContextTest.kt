@@ -70,23 +70,6 @@ class AiContextTest {
     }
 
     @Test
-    fun `notes are kept apart from the figures`() {
-        // Somebody reading the preview has to be able to tell which part is data from the
-        // watch and which part is something they typed about themselves.
-        val sent = AiContext.user("How am I?", week, notes = "Recovering from flu.")
-
-        assertTrue("Things this person has noted about themselves:" in sent)
-        assertTrue(sent.indexOf("Daily figures") < sent.indexOf("Recovering from flu."))
-    }
-
-    @Test
-    fun `blank notes add no section at all`() {
-        val sent = AiContext.user("How am I?", week, notes = "   ")
-
-        assertFalse("noted about themselves" in sent)
-    }
-
-    @Test
     fun `the default prompt forbids the two things a model would invent`() {
         // The stress index has no published bands and there is no HRV. Both are places a
         // model left to itself answers confidently and wrongly.
@@ -139,6 +122,67 @@ class AiContextTest {
     @Test
     fun `no language named means no language sentence`() {
         assertEquals("Be brief.", AiContext.instructions("Be brief.", ""))
+    }
+
+
+    @Test
+    fun `an empty profile says nothing at all`() {
+        assertEquals("", AiContext.about(AiContext.Profile(), 2026))
+    }
+
+    @Test
+    fun `a field left blank is not mentioned`() {
+        // "Height: 0" is a claim about somebody; saying nothing about height is silence.
+        val partial = AiContext.Profile(name = "Ivan", weightKg = 74)
+
+        val said = AiContext.about(partial, 2026)
+
+        assertTrue("Name: Ivan" in said)
+        assertTrue("Weight: 74 kg" in said)
+        assertFalse("Height" in said)
+        assertFalse("Age" in said)
+    }
+
+    @Test
+    fun `a birth year becomes an age`() {
+        assertTrue("Age: 30" in AiContext.about(AiContext.Profile(birthYear = 1996), 2026))
+    }
+
+    @Test
+    fun `a birth year that cannot be one is ignored`() {
+        // Half-typed input, and a year in the future. Neither should reach the request as
+        // an age of minus four.
+        assertFalse("Age" in AiContext.about(AiContext.Profile(birthYear = 19, notes = "x"), 2026))
+        assertFalse("Age" in AiContext.about(AiContext.Profile(birthYear = 2030, notes = "x"), 2026))
+    }
+
+    @Test
+    fun `notes are kept in their own section under their own heading`() {
+        val said = AiContext.about(
+            AiContext.Profile(name = "Ivan", notes = "Recovering from flu."),
+            2026,
+        )
+
+        assertTrue(said.indexOf("About this person:") < said.indexOf("In their own words:"))
+        assertTrue("Recovering from flu." in said)
+    }
+
+    @Test
+    fun `notes alone are a profile`() {
+        val said = AiContext.about(AiContext.Profile(notes = "Trains Tue and Thu."), 2026)
+
+        assertTrue("In their own words:" in said)
+        assertFalse("About this person:" in said)
+    }
+
+    @Test
+    fun `the profile sits below the figures, never inside them`() {
+        val days = listOf(AiContext.Day("2026-08-28", 61, 431, 38, 44, 9012))
+        val about = AiContext.about(AiContext.Profile(name = "Ivan"), 2026)
+
+        val sent = AiContext.user("How am I?", days, about)
+
+        assertTrue(sent.indexOf("2026-08-28") < sent.indexOf("Name: Ivan"))
     }
 
 }

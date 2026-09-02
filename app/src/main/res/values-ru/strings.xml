@@ -216,6 +216,14 @@
     <string name="ai_insights_explainer">Отправляет цифры и ничего, что вас называет: пульс покоя, длительность сна, индекс стресса, шаги. Столбик чисел.</string>
     <string name="ai_coach">Тренер</string>
     <string name="ai_coach_explainer">Дополнительно отправляет профиль — имя, рост, вес и то, что вы о себе записали. Это та часть, которая про человека, а не про запястье.</string>
+    <string name="ai_profile">О вас</string>
+    <string name="ai_profile_explainer">Отправляется, только пока включён Тренер. Возраст, рост и вес меняют то, как вообще следует читать цифру: пульс покоя в двадцать и в шестьдесят означает разное. Остальное — на ваше усмотрение, можно и не заполнять.</string>
+    <string name="ai_profile_name">Имя</string>
+    <string name="ai_profile_born">Год рождения</string>
+    <string name="ai_profile_height">Рост, см</string>
+    <string name="ai_profile_weight">Вес, кг</string>
+    <string name="ai_profile_notes">Что-нибудь ещё</string>
+    <string name="ai_profile_notes_hint">Восстанавливаюсь после гриппа. Тренируюсь вт и чт. Без советов про питание.</string>
     <string name="ai_endpoint">Куда обращаться</string>
     <string name="ai_base_url">Адрес</string>
     <string name="ai_model">Модель</string>

@@ -237,6 +237,7 @@ class MainActivity : ComponentActivity() {
                     onAiProbe = model::probeAi,
                     onAiModels = model::fetchAiModels,
                     onAiWebSearch = model::setAiWebSearch,
+                    onAiProfile = model::setAiProfile,
                     onExportBackup = { saveBackup.launch(backupFileName) },
                     // Anything, not just JSON: a file manager that has forgotten what a
                     // .json is would otherwise grey out the only file worth picking.

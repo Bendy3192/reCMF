@@ -216,6 +216,14 @@
     <string name="ai_insights_explainer">Sends figures and nothing that names you: resting pulse, sleep length, the stress index, steps. A column of numbers.</string>
     <string name="ai_coach">Coach</string>
     <string name="ai_coach_explainer">Also sends your profile — name, height, weight, anything you note about yourself. This is the part that is about a person rather than a wrist.</string>
+    <string name="ai_profile">About you</string>
+    <string name="ai_profile_explainer">Sent only while Coach is on. Age, height and weight change how a figure should be read at all — a resting pulse means something different at twenty and at sixty. Everything else is yours to write, or to leave blank.</string>
+    <string name="ai_profile_name">Name</string>
+    <string name="ai_profile_born">Year of birth</string>
+    <string name="ai_profile_height">Height, cm</string>
+    <string name="ai_profile_weight">Weight, kg</string>
+    <string name="ai_profile_notes">Anything else</string>
+    <string name="ai_profile_notes_hint">Recovering from flu. Train Tue and Thu. No advice about diet.</string>
     <string name="ai_endpoint">Where to ask</string>
     <string name="ai_base_url">Address</string>
     <string name="ai_model">Model</string>
