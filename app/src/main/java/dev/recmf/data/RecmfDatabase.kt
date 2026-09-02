@@ -19,8 +19,9 @@ import androidx.sqlite.execSQL
         RestingHeartRateSampleEntity::class,
         StressSampleEntity::class,
         SleepSessionEntity::class,
+        AiInsightEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class RecmfDatabase : RoomDatabase() {
@@ -130,12 +131,33 @@ abstract class RecmfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the table the assistant's answers are kept in.
+         *
+         * Nothing to back-fill and nothing lost if it were dropped — every row in it can be
+         * asked for again. It is a cache, and it exists so that opening a tile shows an
+         * answer at once instead of billing somebody for one they already had.
+         */
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ai_insights` (" +
+                        "`metric` TEXT NOT NULL, " +
+                        "`text` TEXT NOT NULL, " +
+                        "`sources` TEXT NOT NULL, " +
+                        "`atSeconds` INTEGER NOT NULL, " +
+                        "`through` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`metric`))",
+                )
+            }
+        }
+
         fun get(context: Context): RecmfDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 RecmfDatabase::class.java,
                 "recmf.db",
-            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5).build().also { instance = it }
+            ).addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6).build().also { instance = it }
         }
     }
 }

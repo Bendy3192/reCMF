@@ -60,6 +60,16 @@ interface SampleDao {
     suspend fun allSleep(): List<SleepSessionEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertInsight(insight: AiInsightEntity)
+
+    @Query("SELECT * FROM ai_insights")
+    fun insights(): Flow<List<AiInsightEntity>>
+
+    /** Everything the assistant has said, dropped in one go when somebody asks. */
+    @Query("DELETE FROM ai_insights")
+    suspend fun clearInsights(): Int
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSleep(sessions: List<SleepSessionEntity>)
 
     /**

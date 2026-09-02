@@ -41,6 +41,7 @@ import kotlin.math.roundToInt
 import dev.recmf.ai.AiClient
 import dev.recmf.ai.AiContext
 import dev.recmf.ai.AiEndpoint
+import dev.recmf.data.AiInsightEntity
 import dev.recmf.data.AiSettings
 import dev.recmf.data.Backup
 import dev.recmf.data.BackupStore
@@ -143,6 +144,15 @@ sealed interface BackupState {
     data object NotOurs : BackupState
     data class Failed(val reason: String) : BackupState
 }
+
+/** Something the assistant said about a measurement, and when. */
+data class AiInsight(
+    val text: String,
+    val sources: List<String>,
+    val atSeconds: Long,
+    /** The newest day it was shown. An answer about older data than there is now is stale. */
+    val through: String,
+)
 
 /** One app in the notification list, as the settings screen shows it. */
 data class NotificationApp(
@@ -848,6 +858,87 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /**
+     * What the assistant has said about each metric, straight from the cache.
+     *
+     * Keyed by the metric's own string so the sheet can look one up without knowing
+     * anything about how it was stored.
+     */
+    val aiInsights: StateFlow<Map<String, AiInsight>> = dao.insights()
+        .map { rows ->
+            rows.associate { row ->
+                row.metric to AiInsight(
+                    text = row.text,
+                    sources = row.sources.lines().filter { it.isNotBlank() },
+                    atSeconds = row.atSeconds,
+                    through = row.through,
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyMap())
+
+    private val _aiAsking = MutableStateFlow<Set<String>>(emptySet())
+
+    /** Which metrics have a question in flight, so the sheet can show it thinking. */
+    val aiAsking: StateFlow<Set<String>> = _aiAsking.asStateFlow()
+
+    /**
+     * Asks about a metric, unless there is already a good answer or a question in flight.
+     *
+     * The cache is what keeps this from being expensive. An answer stays good until either
+     * enough time passes or the data behind it moves — a figure that has not changed does
+     * not need explaining again however old the explanation is, and one that has changed
+     * needs it again however new.
+     *
+     * @param force ignores both of those, for somebody who simply wants another answer.
+     */
+    fun askAboutMetric(metric: String, todayValue: String, force: Boolean = false) {
+        viewModelScope.launch {
+            if (metric in _aiAsking.value) return@launch
+
+            val settings = settingsStore.ai.first()
+            if (!settings.insightsEnabled || !settings.usable) return@launch
+
+            val days = aiDays.first()
+            val through = days.lastOrNull()?.date.orEmpty()
+            val now = Instant.now().epochSecond
+
+            val had = aiInsights.value[metric]
+            val stillGood = had != null &&
+                had.through == through &&
+                now - had.atSeconds < INSIGHT_GOOD_FOR_SECONDS
+            if (!force && stillGood) return@launch
+
+            _aiAsking.value = _aiAsking.value + metric
+            try {
+                val answer = aiClient.ask(
+                    settings = settings,
+                    system = settings.systemPrompt.ifBlank { AiContext.DEFAULT_SYSTEM_PROMPT },
+                    user = AiContext.user(AiContext.aboutMetric(metric, todayValue), days),
+                )
+
+                if (answer is AiClient.Answer.Said) {
+                    dao.insertInsight(
+                        AiInsightEntity(
+                            metric = metric,
+                            text = answer.text,
+                            sources = answer.sources.joinToString("\n"),
+                            atSeconds = now,
+                            through = through,
+                        ),
+                    )
+                }
+            } finally {
+                _aiAsking.value = _aiAsking.value - metric
+            }
+        }
+    }
+
+    /** Drops every answer the assistant has given, for somebody who wants them gone. */
+    fun forgetAiInsights() {
+        viewModelScope.launch { dao.clearInsights() }
+    }
+
     private val backupStore = BackupStore(application, dao)
 
     private val _backup = MutableStateFlow<BackupState?>(null)
@@ -999,6 +1090,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         /** How many days back readiness reads. The nights table keeps thirty. */
         const val BASELINE_DAYS = 30L
+
+        /**
+         * How long an answer about a metric stays good, all else being equal.
+         *
+         * Six hours rather than the three that first suggested themselves, because the
+         * figures underneath move slower than that: a resting pulse is worked out once a
+         * night and a stress index a handful of times a day. Anything shorter would be
+         * paying for the same answer twice.
+         */
+        const val INSIGHT_GOOD_FOR_SECONDS = 6L * 60 * 60
 
         /**
          * How far back the workouts screen looks.

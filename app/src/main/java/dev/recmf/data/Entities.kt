@@ -131,6 +131,32 @@ data class SleepSessionEntity(
 }
 
 /**
+ * What the assistant said about one measurement, kept so it is not asked twice.
+ *
+ * Keyed on the metric rather than on metric-and-day: only the newest answer about a figure
+ * is ever wanted, and keeping the old ones would be a growing table nobody reads.
+ *
+ * The cache is the whole cost control. Opening a tile is meant to show an answer straight
+ * away, and without this every tap would be a paid request — six tiles glanced at five
+ * times in a day is thirty of them.
+ *
+ * @param atSeconds when it was asked, which is what staleness is judged on.
+ * @param through the newest day it was told about, as that day's own date. A cached answer
+ *   whose data has since moved is out of date even if it is minutes old, and one whose data
+ *   has not moved is still good however old it is. A date rather than a hash of one, so a
+ *   row can be read and understood by somebody looking at the table.
+ */
+@Entity(tableName = "ai_insights")
+data class AiInsightEntity(
+    @PrimaryKey val metric: String,
+    val text: String,
+    /** URLs, one per line, or empty. Most models cannot cite and that is not an error. */
+    val sources: String,
+    val atSeconds: Long,
+    val through: String,
+)
+
+/**
  * What the watch has counted since a given moment — in practice, since midnight.
  *
  * Not a table: a projection of [ActivitySampleEntity], four running totals read in one

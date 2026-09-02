@@ -227,6 +227,14 @@
     <string name="ai_web_search">Let it look things up</string>
     <string name="ai_web_search_explainer">Only applies to the Responses format, where search is a tool that has to be asked for. It costs more per question, and it means the question reaches a search engine as well as the model. Perplexity shows its sources for its own Sonar models; other models search without being able to cite.</string>
     <string name="ai_sources">Read: %1$s</string>
+    <string name="ai_insight">What this looks like</string>
+    <string name="ai_insight_thinking">Reading your last few weeks…</string>
+    <string name="ai_insight_off">Turn the assistant on in Watch settings to have this explained against your own history.</string>
+    <string name="ai_insight_when">Asked %1$s</string>
+    <string name="action_ai_again">Ask again</string>
+    <string name="ago_now">just now</string>
+    <string name="ago_minutes">%1$d min ago</string>
+    <string name="ago_hours">%1$d h ago</string>
     <string name="action_ai_models">List the models</string>
     <string name="ai_models_asking">Asking…</string>
     <string name="ai_models_none">This provider does not publish a list. Type the model name from its documentation.</string>

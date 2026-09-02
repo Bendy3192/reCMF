@@ -190,6 +190,8 @@ class MainActivity : ComponentActivity() {
                 val ai by model.ai.collectAsStateWithLifecycle()
                 val aiProbe by model.aiProbe.collectAsStateWithLifecycle()
                 val aiModels by model.aiModels.collectAsStateWithLifecycle()
+                val aiInsights by model.aiInsights.collectAsStateWithLifecycle()
+                val aiAsking by model.aiAsking.collectAsStateWithLifecycle()
                 // Collected here rather than read off the flow's value inside the
                 // card: a WhileSubscribed flow nobody subscribes to never starts,
                 // which is why the payload preview showed no days at all.
@@ -223,6 +225,9 @@ class MainActivity : ComponentActivity() {
                     ai = ai,
                     aiProbe = aiProbe,
                     aiModels = aiModels,
+                    aiInsights = aiInsights,
+                    aiAsking = aiAsking,
+                    onAskAboutMetric = model::askAboutMetric,
                     aiDays = aiDays,
                     onAiInsights = model::setAiInsightsEnabled,
                     onAiCoach = model::setAiCoachEnabled,

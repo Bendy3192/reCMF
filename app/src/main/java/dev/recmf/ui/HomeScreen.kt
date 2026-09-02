@@ -74,6 +74,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -170,6 +171,9 @@ fun HomeScreen(
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
     aiModels: AiClient.Models?,
+    aiInsights: Map<String, AiInsight>,
+    aiAsking: Set<String>,
+    onAskAboutMetric: (String, String, Boolean) -> Unit,
     aiDays: List<AiContext.Day>,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
@@ -250,6 +254,9 @@ fun HomeScreen(
                         ai = ai,
                         aiProbe = aiProbe,
                         aiModels = aiModels,
+                        aiInsights = aiInsights,
+                        aiAsking = aiAsking,
+                        onAskAboutMetric = onAskAboutMetric,
                         aiDays = aiDays,
                         onAiInsights = onAiInsights,
                         onAiCoach = onAiCoach,
@@ -330,6 +337,9 @@ private fun TabContent(
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
     aiModels: AiClient.Models?,
+    aiInsights: Map<String, AiInsight>,
+    aiAsking: Set<String>,
+    onAskAboutMetric: (String, String, Boolean) -> Unit,
     aiDays: List<AiContext.Day>,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
@@ -516,11 +526,22 @@ private fun TabContent(
 
     opened?.let { tile ->
         val context = LocalContext.current
+        val name = stringResource(tile.label)
+        val reading = tile.value(context)
+
+        // Asked on opening, and again whenever the sheet is reopened onto a metric whose
+        // answer has gone stale. The view model decides whether that costs a request; from
+        // here it is simply "show me what you have on this".
+        LaunchedEffect(name, reading) { onAskAboutMetric(name, reading, false) }
+
         MetricDetailSheet(
             icon = tile.icon,
-            label = stringResource(tile.label),
-            value = tile.value(context),
+            label = name,
+            value = reading,
             explains = stringResource(tile.explains),
+            insight = aiInsights[name],
+            thinking = name in aiAsking,
+            onAskAgain = { onAskAboutMetric(name, reading, true) },
             week = tile.week,
             format = { number -> tile.format(context, number) },
             onDismiss = { opened = null },

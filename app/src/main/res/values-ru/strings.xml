@@ -227,6 +227,14 @@
     <string name="ai_web_search">Разрешить искать в вебе</string>
     <string name="ai_web_search_explainer">Работает только в формате Responses, где поиск — инструмент, который нужно запросить. Это дороже за запрос и означает, что вопрос попадёт ещё и в поисковик. Perplexity показывает источники для своих моделей Sonar; остальные модели ищут, но сослаться не могут.</string>
     <string name="ai_sources">Читал: %1$s</string>
+    <string name="ai_insight">Как это выглядит</string>
+    <string name="ai_insight_thinking">Читаю ваши последние недели…</string>
+    <string name="ai_insight_off">Включите ассистента в настройках часов, чтобы это разбиралось на фоне вашей же истории.</string>
+    <string name="ai_insight_when">Спрошено %1$s</string>
+    <string name="action_ai_again">Спросить снова</string>
+    <string name="ago_now">только что</string>
+    <string name="ago_minutes">%1$d мин назад</string>
+    <string name="ago_hours">%1$d ч назад</string>
     <string name="action_ai_models">Показать модели</string>
     <string name="ai_models_asking">Спрашиваю…</string>
     <string name="ai_models_none">Этот провайдер не публикует список. Впишите имя модели из его документации.</string>

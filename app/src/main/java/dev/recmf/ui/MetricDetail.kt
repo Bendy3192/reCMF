@@ -21,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -62,6 +63,9 @@ fun MetricDetailSheet(
     label: String,
     value: String,
     explains: String,
+    insight: AiInsight?,
+    thinking: Boolean,
+    onAskAgain: () -> Unit,
     week: List<DayValue>,
     format: (Float) -> String,
     onDismiss: () -> Unit,
@@ -109,6 +113,13 @@ fun MetricDetailSheet(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            // Between what the figure is and what the week did: the explanation says what
+            // the number means at all, and this says what yours has been doing.
+            if (insight != null || thinking) {
+                HorizontalDivider()
+                MetricInsight(insight, thinking, onAskAgain)
+            }
+
             val readings = week.mapNotNull { it.value }
             if (readings.size < 2) {
                 // One day is not a week. Saying so is more use than a chart of one bar and
@@ -135,6 +146,87 @@ fun MetricDetailSheet(
             Statistic(R.string.metric_stat_avg, format(readings.average().toFloat()))
             Statistic(R.string.metric_stat_min, format(readings.min()))
         }
+    }
+}
+
+/**
+ * What the assistant made of this figure, when there is one to be had.
+ *
+ * Asked for on opening rather than behind a button, which is the whole point — somebody
+ * who has turned this on wants the answer to be there, not to be a thing they request. The
+ * cost of that is controlled by the cache underneath rather than by making them tap.
+ *
+ * The stars are shown while it thinks and never as a bar or a spinner. A wait of unknown
+ * length that ends in a piece of writing wants a shape that says composing, not loading.
+ */
+@Composable
+private fun MetricInsight(
+    insight: AiInsight?,
+    thinking: Boolean,
+    onAgain: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Sparkles(
+                color = MaterialTheme.colorScheme.primary,
+                // Still while there is an answer on the screen: an animation that never
+                // stops is one the eye keeps going back to for no reason.
+                size = if (thinking) 22.dp else 18.dp,
+            )
+            Text(
+                stringResource(R.string.ai_insight),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        when {
+            thinking && insight == null -> Text(
+                stringResource(R.string.ai_insight_thinking),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            insight != null -> {
+                Text(insight.text, style = MaterialTheme.typography.bodyMedium)
+
+                if (insight.sources.isNotEmpty()) {
+                    Text(
+                        stringResource(R.string.ai_sources, insight.sources.joinToString(", ")),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(
+                        stringResource(R.string.ai_insight_when, insight.atSeconds.asAgo()),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onAgain, enabled = !thinking) {
+                        Text(stringResource(R.string.action_ai_again))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** When something happened, in the words somebody would use rather than a timestamp. */
+@Composable
+private fun Long.asAgo(): String {
+    val minutes = ((System.currentTimeMillis() / 1000) - this) / 60
+    return when {
+        minutes < 1 -> stringResource(R.string.ago_now)
+        minutes < 60 -> stringResource(R.string.ago_minutes, minutes.toInt())
+        else -> stringResource(R.string.ago_hours, (minutes / 60).toInt())
     }
 }
 
