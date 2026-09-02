@@ -1120,17 +1120,26 @@ private fun ChartsCard(charts: HealthCharts) {
                 val low = charts.spo2.minOf { it.value }.toInt()
                 val high = charts.spo2.maxOf { it.value }.toInt()
 
-                ChartSection(
-                    stringResource(R.string.chart_spo2),
-                    note = stringResource(R.string.chart_range_percent, low, high),
-                ) {
+                // Resolved here rather than inside the chart: the label is written while
+                // the canvas is being drawn, which is past the point resources can be read.
+                val percent = stringResource(R.string.chart_percent)
+
+                // The range used to be printed beside the heading. It says the same thing
+                // the axis now says, in the same two numbers, and only the axis says which
+                // row is which — so it moved to where it is still needed, which is the
+                // screen reader: a canvas of dots is otherwise silent.
+                val spoken = stringResource(R.string.chart_range_percent, low, high)
+
+                ChartSection(stringResource(R.string.chart_spo2)) {
                     // Four percent is the narrowest scale worth the full height: a day
                     // that never leaves 97-99 still shows which readings were the low
                     // ones. A fixed 90-100 was tried and drew that day as a flat row.
                     DotChart(
                         charts.spo2,
                         MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.clearAndSetSemantics { contentDescription = spoken },
                         minimumSpan = 4f,
+                        label = { percent.format(it.toInt()) },
                     )
                 }
             }
@@ -2252,23 +2261,13 @@ private fun StepsRing(steps: Int, goal: Int) {
  * percent, where the shape is the only thing the dots can show.
  */
 @Composable
-private fun ChartSection(title: String, note: String? = null, chart: @Composable () -> Unit) {
+private fun ChartSection(title: String, chart: @Composable () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                title,
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
-            )
-            note?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
+        Text(
+            title,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         chart()
     }
 }
