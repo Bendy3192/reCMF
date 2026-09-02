@@ -12,7 +12,7 @@ import org.json.JSONObject
  *
  * ## What travels, and what deliberately does not
  *
- * Two things are left behind, and for different reasons.
+ * Things are left behind, and for different reasons.
  *
  * The **pairing key** is a secret, and this app already decided what to do with secrets:
  * [SecretVault] wraps it in a key held by the Android Keystore that never leaves the
@@ -20,6 +20,11 @@ import org.json.JSONObject
  * on the other phone could open. Exporting it unsealed would put the one value that
  * decrypts a watch's entire traffic into a file destined for somebody's cloud drive. So it
  * stays.
+ *
+ * The **assistant's API key**, if one has been set, is sealed the same way and stays for a
+ * plainer reason: it is somebody's money. It buys tokens against their account, and a file
+ * bound for a cloud drive is the last place for it. On the new phone it is pasted in once,
+ * from wherever it came from.
  *
  * The **watch's address and name** stay with it. Restoring those without the key would
  * leave the app showing a paired watch it has no way of talking to, which is a worse
@@ -59,6 +64,7 @@ object Backup {
      */
     val NEVER_LEAVES: Set<String> = setOf(
         "watch_auth_key_sealed",
+        "ai_key_sealed",
         "watch_address",
         "watch_name",
     )

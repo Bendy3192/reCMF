@@ -37,6 +37,36 @@ data class SleepSummary(
     val raw: String,
 )
 
+/**
+ * What the assistant is allowed to do, and what it is pointed at.
+ *
+ * Two switches rather than one, because they send different things and the difference
+ * matters. [insightsEnabled] sends numbers and nothing that names anybody; [coachEnabled]
+ * additionally sends the profile below, which is the part that is actually about a person.
+ * Somebody may reasonably want the first and not the second, and one switch would take
+ * that choice away.
+ *
+ * Both default to off. Until one is turned on deliberately, nothing about the wearer
+ * leaves the phone — which is what this app promised before an assistant existed and is
+ * not something a new feature gets to quietly revise.
+ *
+ * @param key the API key, sealed by [SecretVault], exactly as the watch's pairing key is.
+ *   It is in [Backup.NEVER_LEAVES], so no export carries it.
+ */
+data class AiSettings(
+    val insightsEnabled: Boolean = false,
+    val coachEnabled: Boolean = false,
+    val baseUrl: String = "",
+    val model: String = "",
+    val key: String? = null,
+    /** Editable, because a prompt somebody cannot read is a prompt they cannot trust. */
+    val systemPrompt: String = "",
+) {
+    /** Whether anything can be asked at all: a switch on with no key is just an intention. */
+    val usable: Boolean get() = (insightsEnabled || coachEnabled) &&
+        !key.isNullOrBlank() && baseUrl.isNotBlank() && model.isNotBlank()
+}
+
 /** What the user paired with, and how far the sync has got. */
 data class WatchSettings(
     val address: String? = null,
@@ -399,6 +429,57 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_PHONE_ALARMS] = enabled }
     }
 
+    /**
+     * The assistant's settings, with the key unsealed only here.
+     *
+     * Unsealing on read rather than holding it about the place: the Keystore is the only
+     * copy, and the plaintext should exist for as long as one request needs it and no
+     * longer.
+     */
+    val ai: Flow<AiSettings> = context.dataStore.data.map { prefs ->
+        AiSettings(
+            insightsEnabled = prefs[KEY_AI_INSIGHTS] ?: false,
+            coachEnabled = prefs[KEY_AI_COACH] ?: false,
+            baseUrl = prefs[KEY_AI_BASE_URL] ?: DEFAULT_AI_BASE_URL,
+            model = prefs[KEY_AI_MODEL] ?: DEFAULT_AI_MODEL,
+            key = prefs[KEY_AI_KEY]?.let { SecretVault.unseal(it)?.decodeToString() },
+            systemPrompt = prefs[KEY_AI_PROMPT] ?: "",
+        )
+    }
+
+    suspend fun setAiInsightsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_AI_INSIGHTS] = enabled }
+    }
+
+    suspend fun setAiCoachEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_AI_COACH] = enabled }
+    }
+
+    suspend fun setAiEndpoint(baseUrl: String, model: String) {
+        context.dataStore.edit {
+            it[KEY_AI_BASE_URL] = baseUrl.trim()
+            it[KEY_AI_MODEL] = model.trim()
+        }
+    }
+
+    /**
+     * Stores the key sealed, or clears it when given nothing.
+     *
+     * A key the Keystore refuses to seal is not written in the clear as a fallback. It is
+     * dropped, and the switch that needed it simply has no key — which the screen can say
+     * plainly, where a silently-plaintext secret could not be noticed at all.
+     */
+    suspend fun setAiKey(key: String?) {
+        val sealed = key?.trim()?.takeIf { it.isNotEmpty() }?.let { SecretVault.seal(it.toByteArray()) }
+        context.dataStore.edit { prefs ->
+            if (sealed == null) prefs.remove(KEY_AI_KEY) else prefs[KEY_AI_KEY] = sealed
+        }
+    }
+
+    suspend fun setAiSystemPrompt(prompt: String) {
+        context.dataStore.edit { it[KEY_AI_PROMPT] = prompt }
+    }
+
     suspend fun setGpsAlmanacAuto(enabled: Boolean) {
         context.dataStore.edit { it[KEY_ALMANAC_AUTO] = enabled }
     }
@@ -533,6 +614,27 @@ class SettingsStore(private val context: Context) {
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
+
+        val KEY_AI_INSIGHTS = booleanPreferencesKey("ai_insights_enabled")
+        val KEY_AI_COACH = booleanPreferencesKey("ai_coach_enabled")
+        val KEY_AI_BASE_URL = stringPreferencesKey("ai_base_url")
+        val KEY_AI_MODEL = stringPreferencesKey("ai_model")
+
+        /** Sealed, and named in [Backup.NEVER_LEAVES] so no export can carry it. */
+        val KEY_AI_KEY = stringPreferencesKey("ai_key_sealed")
+        val KEY_AI_PROMPT = stringPreferencesKey("ai_system_prompt")
+
+        /**
+         * Where requests go unless told otherwise.
+         *
+         * Perplexity because it is what this was first pointed at, and its endpoint speaks
+         * the OpenAI shape — which is the actual decision here. Anything that speaks it,
+         * hosted or local, is three fields away, so the default is a starting point rather
+         * than a commitment.
+         */
+        const val DEFAULT_AI_BASE_URL = "https://api.perplexity.ai"
+        const val DEFAULT_AI_MODEL = "sonar"
+
         val KEY_ALMANAC_AUTO = booleanPreferencesKey("gps_almanac_auto")
         val KEY_ALMANAC_SENT_AT = longPreferencesKey("almanac_sent_at")
         val KEY_ALMANAC_FORMAT = intPreferencesKey("almanac_format")

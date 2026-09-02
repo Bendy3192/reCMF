@@ -38,6 +38,29 @@ class BackupTest {
     }
 
     @Test
+    fun `the assistant's key is somebody's money and does not travel`() {
+        // Sealed or not: a key in a file bound for a cloud drive buys tokens against
+        // somebody's account. It is pasted in once on the new phone instead.
+        val withKey = everySort + Setting("ai_key_sealed", SettingType.STRING, "pplx-secret")
+
+        val text = Backup.write(Backup.Contents(settings = withKey))
+
+        assertTrue("pplx-secret" !in text, "the assistant's key was written to the backup")
+        assertTrue("ai_key_sealed" !in text)
+    }
+
+    @Test
+    fun `a file carrying the assistant's key is stripped on the way in`() {
+        val forged = """
+            {"format":1,"app":1,"writtenAt":1,
+             "settings":[{"key":"ai_key_sealed","type":"STRING","value":"pplx-secret"}],
+             "tables":{}}
+        """.trimIndent()
+
+        assertEquals(emptyList<Setting>(), Backup.read(forged)!!.settings)
+    }
+
+    @Test
     fun `the watch's address and name stay with the watch`() {
         val paired = listOf(
             Setting("watch_address", SettingType.STRING, "AA:BB:CC:DD:EE:FF"),
