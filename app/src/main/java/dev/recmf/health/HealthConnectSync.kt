@@ -61,9 +61,20 @@ enum class HealthConnectAvailability {
  */
 class HealthConnectSync(private val context: Context) {
 
+    /**
+     * Null whenever Health Connect cannot be talked to, for any reason at all.
+     *
+     * `getOrCreate` throws rather than returning null when the provider is missing or
+     * unusable, and the availability check above does not cover every way that happens —
+     * a provider disabled by the user, or one that fails to bind, still reports as
+     * installed. Every caller in this class already treats a null client as "there is no
+     * Health Connect here", which is also the right answer when creating it fails, so the
+     * throw is turned into that rather than being allowed out. It would otherwise reach
+     * whoever asked, and one of the askers is a view model's constructor.
+     */
     private val client: HealthConnectClient? by lazy {
         if (availability() == HealthConnectAvailability.AVAILABLE) {
-            HealthConnectClient.getOrCreate(context)
+            runCatching { HealthConnectClient.getOrCreate(context) }.getOrNull()
         } else {
             null
         }
@@ -92,10 +103,18 @@ class HealthConnectSync(private val context: Context) {
     suspend fun hasExtraPermissions(): Boolean =
         grantedPermissions().containsAll(EXTRA_PERMISSIONS)
 
+    /**
+     * Nothing granted is the honest reading of an unanswerable question, and the safe one:
+     * every caller uses this to decide whether to read or to ask, and both are harmless
+     * where the truth is unknown. Reading it can fail — the provider is a separate app and
+     * the call crosses a process boundary — and a permission check is never worth crashing
+     * over.
+     */
     private suspend fun grantedPermissions(): Set<String> =
-        client?.permissionController?.getGrantedPermissions() ?: emptySet()
+        runCatching { client?.permissionController?.getGrantedPermissions() }
+            .getOrNull() ?: emptySet()
 
-/**
+    /**
      * What is actually in Health Connect, and which app put it there.
      *
      * Written because the alternative was guessing. Whether the Google Health app publishes

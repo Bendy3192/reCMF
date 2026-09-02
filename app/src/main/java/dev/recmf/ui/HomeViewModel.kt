@@ -239,17 +239,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private var scanJob: Job? = null
 
-    init {
-        refreshHeartRateVariability()
-
-        // A watch that has been used with the stock app is already paired at the OS
-        // level, and may not advertise at all while it is connected to something else.
-        // Offer it before the user asks for a scan.
-        _discovered.value = scanner.bonded()
-
-        checkForUpdateOnOpen()
-    }
-
     private val watchInfo = combine(
         combine(WatchStatus.battery, WatchStatus.firmware, WatchStatus.serialNumber, ::Triple),
         WatchStatus.lastRecordEpochSeconds,
@@ -1138,6 +1127,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setHealthConnectEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setHealthConnectEnabled(enabled) }
+    }
+
+    /**
+     * Everything that has to happen once, when the screen is first built.
+     *
+     * Last in the class on purpose, and it has to stay last. Property initialisers and
+     * init blocks run in declaration order, so an init block placed at the top — where it
+     * reads best — runs while every property below it is still null. Nothing warns about
+     * it: the calls here are ordinary methods, and the property they touch is only read
+     * inside them. `refreshHeartRateVariability` did exactly that and crashed the app on
+     * opening, every time, because the flow it writes to is declared six hundred lines
+     * further down. `checkForUpdateOnOpen` had the same fault and survived it only by
+     * suspending on a disk read before it reached its own state.
+     *
+     * So: new work goes at the end of this block, and this block stays at the end of the
+     * class.
+     */
+    init {
+        refreshHeartRateVariability()
+
+        // A watch that has been used with the stock app is already paired at the OS
+        // level, and may not advertise at all while it is connected to something else.
+        // Offer it before the user asks for a scan.
+        _discovered.value = scanner.bonded()
+
+        checkForUpdateOnOpen()
     }
 
     private companion object {
