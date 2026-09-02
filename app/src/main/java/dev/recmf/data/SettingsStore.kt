@@ -74,6 +74,15 @@ data class WatchSettings(
     val weatherEnabled: Boolean = false,
     /** The place the user typed, as the provider resolved it. */
     val weatherCity: String? = null,
+    /**
+     * Whether the place is taken from the phone rather than typed.
+     *
+     * How often it is taken depends on what the wearer has granted: with ordinary
+     * location, whenever the app is opened; with "all the time", before every forecast,
+     * app open or not.
+     */
+    val weatherAutoPlace: Boolean = false,
+
     val weatherLatitude: Double = 0.0,
     val weatherLongitude: Double = 0.0,
     val lastSyncEpochSeconds: Long = 0,
@@ -166,6 +175,7 @@ class SettingsStore(private val context: Context) {
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
             weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
             weatherCity = prefs[KEY_WEATHER_CITY],
+            weatherAutoPlace = prefs[KEY_WEATHER_AUTO_PLACE] ?: false,
             weatherLatitude = prefs[KEY_WEATHER_LAT] ?: 0.0,
             weatherLongitude = prefs[KEY_WEATHER_LON] ?: 0.0,
             lastSyncEpochSeconds = prefs[KEY_LAST_SYNC] ?: 0L,
@@ -403,6 +413,10 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_WEATHER_ENABLED] = enabled }
     }
 
+    suspend fun setWeatherAutoPlace(enabled: Boolean) {
+        context.dataStore.edit { it[KEY_WEATHER_AUTO_PLACE] = enabled }
+    }
+
     suspend fun setWeatherPlace(name: String, latitude: Double, longitude: Double) {
         context.dataStore.edit { prefs ->
             prefs[KEY_WEATHER_CITY] = name
@@ -523,6 +537,7 @@ class SettingsStore(private val context: Context) {
         val KEY_ALMANAC_FORMAT = intPreferencesKey("almanac_format")
         val KEY_WEATHER_ENABLED = booleanPreferencesKey("weather_enabled")
         val KEY_WEATHER_CITY = stringPreferencesKey("weather_city")
+        val KEY_WEATHER_AUTO_PLACE = booleanPreferencesKey("weather_auto_place")
         val KEY_WEATHER_LAT = doublePreferencesKey("weather_latitude")
         val KEY_WEATHER_LON = doublePreferencesKey("weather_longitude")
         val KEY_LAST_SYNC = longPreferencesKey("last_sync_epoch_seconds")

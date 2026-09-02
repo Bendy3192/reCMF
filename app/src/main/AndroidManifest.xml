@@ -37,6 +37,16 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <!--
+        For the weather following the wearer while the app is closed, and only when they
+        have turned that on and granted "all the time" in system settings themselves.
+        Android shows no dialog for this one, so it can only ever be a thing the wearer
+        goes and does; with it ungranted the place is taken when the app is opened, and
+        everything else still works.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!--
       For installing an update reCMF downloaded itself. Declaring it is not enough: the
       user also has to allow reCMF to install apps, in system settings. Android shows its
       own confirmation for every install regardless — there is no silent path here short
@@ -129,7 +139,7 @@
         <service
             android:name=".service.WatchService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location" />
 
         <!--
             Notification access is granted in system settings, not by a permission

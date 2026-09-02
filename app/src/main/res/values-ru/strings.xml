@@ -340,4 +340,7 @@
     <string name="sport_parkour">Паркур</string>
     <string name="weather_here">Здесь</string>
     <string name="weather_no_position">Телефон не знает, где он</string>
+    <string name="weather_auto_place">Следовать за мной</string>
+    <string name="weather_auto_foreground">Место берётся при открытии reCMF. Чтобы оно менялось и с закрытым приложением, разрешите доступ к местоположению «Всегда» в настройках системы.</string>
+    <string name="weather_auto_background">Место следует за вами, открыто приложение или нет.</string>
 </resources>

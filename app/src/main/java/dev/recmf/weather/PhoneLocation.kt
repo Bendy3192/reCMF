@@ -46,6 +46,20 @@ object PhoneLocation {
     val PERMISSIONS: Array<String> = arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION)
 
     /**
+     * Whether the place can be taken while nobody is looking at the app.
+     *
+     * A separate grant, and one Android will not show a dialog for: "allow all the time"
+     * is reached through the system settings screen, after the ordinary permission has
+     * been given. So this is a thing to *check* and explain, never a thing to ask for.
+     */
+    fun grantedInBackground(context: Context): Boolean =
+        granted(context) &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+
+    /**
      * The last position any app on the phone has already established, named if possible.
      *
      * Deliberately the *last known* position rather than a fresh fix. Something on the

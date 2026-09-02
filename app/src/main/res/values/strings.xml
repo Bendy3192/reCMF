@@ -339,4 +339,7 @@
     <string name="sport_parkour">Parkour</string>
     <string name="weather_here">Here</string>
     <string name="weather_no_position">The phone does not know where it is</string>
+    <string name="weather_auto_place">Follow me</string>
+    <string name="weather_auto_foreground">The place is taken when you open reCMF. To have it follow you with the app closed, allow location access all the time in system settings.</string>
+    <string name="weather_auto_background">The place follows you, app open or not.</string>
 </resources>

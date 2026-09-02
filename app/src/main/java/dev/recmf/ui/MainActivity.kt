@@ -137,6 +137,11 @@ class MainActivity : ComponentActivity() {
                  * pressed. Refusal is an answer rather than a failure: the city can still
                  * be typed, which is what every version before this one required.
                  */
+                // Opening the app is the moment the place is allowed to be taken without
+                // any special permission, so it is taken here — when the wearer has asked
+                // for that and not otherwise.
+                LaunchedEffect(Unit) { model.refreshPlaceIfAutomatic() }
+
                 val askLocation = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestMultiplePermissions(),
                 ) { granted ->
@@ -194,6 +199,13 @@ class MainActivity : ComponentActivity() {
                     cityLookup = cityLookup,
                     onWeatherEnabled = model::setWeatherEnabled,
                     onFindCity = model::findCity,
+                    onAutoPlace = { on ->
+                        if (on && !PhoneLocation.granted(this@MainActivity)) {
+                            askLocation.launch(PhoneLocation.PERMISSIONS)
+                        }
+                        model.setWeatherAutoPlace(on)
+                    },
+                    followsInBackground = PhoneLocation.grantedInBackground(this@MainActivity),
                     onUseMyLocation = {
                         // Asked for at the moment it is used, not at startup: this app
                         // works entirely without it, and a permission dialog on first

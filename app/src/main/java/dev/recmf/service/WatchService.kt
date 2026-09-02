@@ -34,6 +34,7 @@ import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import dev.recmf.alarms.PhoneAlarms
 import dev.recmf.data.SettingsStore
+import dev.recmf.data.WatchSettings
 import dev.recmf.data.SleepSummary
 import dev.recmf.data.WatchPreferences
 import dev.recmf.data.WatchSetting
@@ -55,6 +56,7 @@ import dev.recmf.protocol.CmfParsers
 import dev.recmf.protocol.CmfSettings
 import dev.recmf.protocol.CmfWatchfaceFile
 import dev.recmf.protocol.CmfWeather
+import dev.recmf.weather.PhoneLocation
 import dev.recmf.protocol.CmfWorkouts
 import dev.recmf.protocol.CmfWorkouts.looksLikeAPlace
 import dev.recmf.protocol.toHex
@@ -416,8 +418,25 @@ class WatchService : LifecycleService() {
      * hour; the watch is given what we have every time it asks.
      */
     private suspend fun sendWeather() {
-        val current = settings.current()
+        var current = settings.current()
         if (!current.weatherEnabled) return
+
+        // Where the wearer is now, if they asked for that and Android will say while the
+        // app is closed. Before the staleness check below, so a forecast fetched for a
+        // place they have left is replaced rather than merely refreshed.
+        if (current.weatherAutoPlace && PhoneLocation.grantedInBackground(this)) {
+            val here = withContext(Dispatchers.IO) { PhoneLocation.current(this@WatchService) }
+
+            if (here != null && here.movedFrom(current)) {
+                ProtocolLog.note("Weather: the phone has moved to ${here.name}")
+                settings.setWeatherPlace(here.name, here.latitude, here.longitude)
+                current = settings.current()
+
+                // The old place's forecast is not this place's, however fresh it is.
+                weatherFetchedAtMillis = 0L
+                weatherSnapshot = null
+            }
+        }
 
         val city = current.weatherCity
         if (city == null) {
@@ -1864,13 +1883,40 @@ class WatchService : LifecycleService() {
         getSystemService<NotificationManager>()?.createNotificationChannel(channel)
     }
 
-    private fun promoteToForeground(state: ConnectionState) {
-        ServiceCompat.startForeground(
-            this,
-            NOTIFICATION_ID,
-            buildNotification(state),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+    /**
+     * Far enough to be a different forecast.
+     *
+     * A phone reports a slightly different position every time it is asked, and rewriting
+     * the place — and throwing away the forecast — for thirty metres of drift would mean
+     * fetching the weather afresh every half hour for no reason. Ten kilometres is about
+     * where a forecast starts to disagree with itself.
+     */
+    private fun PhoneLocation.Place.movedFrom(settings: WatchSettings): Boolean {
+        val results = FloatArray(1)
+        android.location.Location.distanceBetween(
+            settings.weatherLatitude,
+            settings.weatherLongitude,
+            latitude,
+            longitude,
+            results,
         )
+        return results[0] >= WEATHER_PLACE_MOVED_METRES
+    }
+
+    private fun promoteToForeground(state: ConnectionState) {
+        // The location type is claimed only when the wearer has actually granted location
+        // in the background. Declaring it unconditionally would be worse than useless:
+        // Android refuses to start a service claiming a type it has no permission for,
+        // and this service starts at boot — so an ungranted permission would stop the
+        // watch connecting at all, to make the weather slightly more convenient.
+        val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+            if (PhoneLocation.grantedInBackground(this)) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+            } else {
+                0
+            }
+
+        ServiceCompat.startForeground(this, NOTIFICATION_ID, buildNotification(state), types)
     }
 
     private fun updateNotification(state: ConnectionState) {
@@ -1917,6 +1963,9 @@ class WatchService : LifecycleService() {
 
         /** A forecast does not change faster than this, whatever the refresh interval is. */
         private const val WEATHER_REFRESH_MILLIS = 30 * 60_000L
+
+        /** How far the phone has to have gone before the forecast is for somewhere else. */
+        private const val WEATHER_PLACE_MOVED_METRES = 10_000f
 
         /** Long enough for the watch to drop the refused link before we open a new one. */
         private const val RE_PAIR_DELAY_MILLIS = 2_000L

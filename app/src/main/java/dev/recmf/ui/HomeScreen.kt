@@ -157,6 +157,8 @@ fun HomeScreen(
     onWeatherEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
     onUseMyLocation: () -> Unit,
+    onAutoPlace: (Boolean) -> Unit,
+    followsInBackground: Boolean,
     onGrantNotificationAccess: () -> Unit,
     onAllowBackgroundWork: () -> Unit,
     onScan: () -> Unit,
@@ -213,6 +215,8 @@ fun HomeScreen(
                         onWeatherEnabled = onWeatherEnabled,
                         onFindCity = onFindCity,
                         onUseMyLocation = onUseMyLocation,
+                        onAutoPlace = onAutoPlace,
+                        followsInBackground = followsInBackground,
                         onGrantNotificationAccess = onGrantNotificationAccess,
                         onAllowBackgroundWork = onAllowBackgroundWork,
                         onForget = onForget,
@@ -275,6 +279,8 @@ private fun TabContent(
     onWeatherEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
     onUseMyLocation: () -> Unit,
+    onAutoPlace: (Boolean) -> Unit,
+    followsInBackground: Boolean,
     onGrantNotificationAccess: () -> Unit,
     onAllowBackgroundWork: () -> Unit,
     onForget: () -> Unit,
@@ -359,7 +365,15 @@ private fun TabContent(
                     WatchSettingsCard(watchPreferences, state.connection.isUsable, onWatchPreferences)
                 }
                 item {
-                    WeatherCard(state, cityLookup, onWeatherEnabled, onFindCity, onUseMyLocation)
+                    WeatherCard(
+                        state = state,
+                        lookup = cityLookup,
+                        onEnabled = onWeatherEnabled,
+                        onFindCity = onFindCity,
+                        onUseMyLocation = onUseMyLocation,
+                        onAutoPlace = onAutoPlace,
+                        followsInBackground = followsInBackground,
+                    )
                 }
                 item {
                     NotificationsCard(
@@ -1474,6 +1488,8 @@ private fun WeatherCard(
     onEnabled: (Boolean) -> Unit,
     onFindCity: (String) -> Unit,
     onUseMyLocation: () -> Unit,
+    onAutoPlace: (Boolean) -> Unit,
+    followsInBackground: Boolean,
 ) {
     var typed by remember(state.settings.weatherCity) {
         mutableStateOf(state.settings.weatherCity.orEmpty())
@@ -1501,6 +1517,29 @@ private fun WeatherCard(
             HorizontalDivider()
 
             Text(stringResource(R.string.weather_explainer), style = MaterialTheme.typography.bodyMedium)
+
+            SettingSwitch(
+                label = stringResource(R.string.weather_auto_place),
+                checked = state.settings.weatherAutoPlace,
+                onCheckedChange = onAutoPlace,
+            )
+
+            // Says which of the two it is doing, because the difference is the whole
+            // question the wearer will have: with "all the time" the watch follows them,
+            // and without it the place is taken when they open this screen.
+            if (state.settings.weatherAutoPlace) {
+                Text(
+                    stringResource(
+                        if (followsInBackground) {
+                            R.string.weather_auto_background
+                        } else {
+                            R.string.weather_auto_foreground
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             OutlinedTextField(
                 value = typed,

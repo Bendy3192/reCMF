@@ -363,6 +363,38 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun setWeatherAutoPlace(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsStore.setWeatherAutoPlace(enabled)
+            if (enabled) useCurrentLocation()
+        }
+    }
+
+    /**
+     * Takes the place again when the app is opened, if that is how it is set up.
+     *
+     * This is the half of "automatic" that needs no special permission: opening the app
+     * puts it in the foreground, where ordinary location is allowed. With "all the time"
+     * granted the service does it too, and this becomes a formality; without it, this is
+     * the whole feature — arrive somewhere, open reCMF once, and the watch has the right
+     * forecast for as long as you stay.
+     *
+     * Silent about failure on purpose. Nobody opened the app to be told that the phone
+     * has not worked out where it is yet.
+     */
+    fun refreshPlaceIfAutomatic() {
+        viewModelScope.launch {
+            val settings = settingsStore.current()
+            if (!settings.weatherAutoPlace) return@launch
+            if (!PhoneLocation.granted(getApplication())) return@launch
+
+            val here = withContext(Dispatchers.IO) { PhoneLocation.current(getApplication()) }
+                ?: return@launch
+
+            settingsStore.setWeatherPlace(here.name, here.latitude, here.longitude)
+        }
+    }
+
     /** Restarts the scan. Cancelling the previous one stops the radio between presses. */
     fun startScan() {
         scanJob?.cancel()
