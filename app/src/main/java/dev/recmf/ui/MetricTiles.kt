@@ -14,6 +14,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -174,14 +175,22 @@ fun MetricTile(
             // The reading is the reason the tile exists, so it is given the weight to
             // say so: a size up, and heavy enough to be read across a room rather than
             // sitting at the same volume as its own label.
-            Text(
-                value,
-                style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.SemiBold,
-                ),
-                color = content,
-                maxLines = 1,
-            )
+            //
+            // And it arrives rather than appears. A sync brings numbers that are minutes
+            // old; without this they simply *are* different the next time the screen is
+            // looked at, and there is nothing anywhere to say the watch has just been
+            // heard from. A figure that changes in front of you is the whole difference
+            // between a readout and a report.
+            AnimatedContent(targetState = value, label = "reading") { reading ->
+                Text(
+                    reading,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                    color = content,
+                    maxLines = 1,
+                )
+            }
 
             // Two days is the least that can show a direction. One bar under a number is
             // decoration, and the tile is better without it.

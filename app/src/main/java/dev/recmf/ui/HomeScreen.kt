@@ -87,6 +87,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -2717,6 +2719,8 @@ private fun GpsDataCard(
 
 @Composable
 private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = UtilityCardShape,
@@ -2727,7 +2731,16 @@ private fun FindWatchCard(connected: Boolean, onFindWatch: () -> Unit) {
                 stringResource(R.string.find_watch_explainer),
                 style = MaterialTheme.typography.bodyMedium,
             )
-            FilledTonalButton(onClick = onFindWatch, enabled = connected) {
+            FilledTonalButton(
+                onClick = {
+                    // The phone buzzes as the watch is told to. Everything else this
+                    // button does happens on the other side of a radio and out of sight —
+                    // a press with no answer at all reads as a press that missed.
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onFindWatch()
+                },
+                enabled = connected,
+            ) {
                 Text(stringResource(R.string.action_find_watch))
             }
         }
