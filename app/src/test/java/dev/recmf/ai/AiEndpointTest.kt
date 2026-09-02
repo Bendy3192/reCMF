@@ -2,6 +2,7 @@ package dev.recmf.ai
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
+import dev.recmf.ai.AiEndpoint.Wire
 import org.junit.jupiter.api.Test
 
 class AiEndpointTest {
@@ -37,6 +38,48 @@ class AiEndpointTest {
     @Test
     fun `whitespace around a pasted url is not the user's problem`() {
         assertEquals("https://api.perplexity.ai/chat/completions", AiEndpoint.of("  https://api.perplexity.ai  "))
+    }
+
+    @Test
+    fun `the model list is asked for beside the endpoint, not inside it`() {
+        assertEquals("https://api.perplexity.ai/models", AiEndpoint.models("https://api.perplexity.ai"))
+        assertEquals("https://api.openai.com/v1/models", AiEndpoint.models("https://api.openai.com/v1"))
+    }
+
+    @Test
+    fun `pasting the whole completions endpoint still finds the list`() {
+        // Otherwise somebody who pasted what their provider's page showed them gets a 404
+        // from a URL with two paths stuck together, which explains nothing.
+        assertEquals(
+            "https://openrouter.ai/api/v1/models",
+            AiEndpoint.models("https://openrouter.ai/api/v1/chat/completions"),
+        )
+    }
+
+    @Test
+    fun `the responses shape gets its own path`() {
+        assertEquals(
+            "https://api.perplexity.ai/v1/responses",
+            AiEndpoint.of("https://api.perplexity.ai/v1", Wire.RESPONSES),
+        )
+    }
+
+    @Test
+    fun `switching shape does not stack one path on the other`() {
+        // Somebody pastes the completions URL, then switches to Responses. Without
+        // stripping both, the request would go to /chat/completions/responses.
+        val pasted = "https://api.perplexity.ai/v1/chat/completions"
+
+        assertEquals("https://api.perplexity.ai/v1/responses", AiEndpoint.of(pasted, Wire.RESPONSES))
+        assertEquals("https://api.perplexity.ai/v1/chat/completions", AiEndpoint.of(pasted, Wire.CHAT))
+    }
+
+    @Test
+    fun `perplexity's agent alias is understood as the same place`() {
+        assertEquals(
+            "https://api.perplexity.ai/v1/responses",
+            AiEndpoint.of("https://api.perplexity.ai/v1/agent", Wire.RESPONSES),
+        )
     }
 
     @Test

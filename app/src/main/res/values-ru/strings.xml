@@ -219,6 +219,15 @@
     <string name="ai_endpoint">Куда обращаться</string>
     <string name="ai_base_url">Адрес</string>
     <string name="ai_model">Модель</string>
+
+    <string name="ai_wire">Формат запроса</string>
+    <string name="ai_wire_chat">Chat completions</string>
+    <string name="ai_wire_responses">Responses</string>
+    <string name="ai_wire_explainer">OpenAI, OpenRouter, Groq и большинство локальных серверов используют chat completions. Agent API у Perplexity использует Responses — а их эндпоинты Sonar, работающие в первом формате, отключаются 27 сентября 2026.</string>
+    <string name="action_ai_models">Показать модели</string>
+    <string name="ai_models_asking">Спрашиваю…</string>
+    <string name="ai_models_none">Этот провайдер не публикует список. Впишите имя модели из его документации.</string>
+    <string name="ai_models_failed">Не удалось спросить: %1$s</string>
     <string name="ai_key">Ключ API</string>
     <string name="ai_key_set">Сохранён. Запечатан в хранилище ключей Android и в резервную копию не попадает.</string>
     <string name="ai_key_missing">Ключа пока нет. Без него ничего спросить нельзя.</string>

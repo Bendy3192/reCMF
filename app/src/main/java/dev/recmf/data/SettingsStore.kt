@@ -13,6 +13,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import dev.recmf.ai.AiEndpoint
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfWeekday
@@ -58,6 +59,7 @@ data class AiSettings(
     val coachEnabled: Boolean = false,
     val baseUrl: String = "",
     val model: String = "",
+    val wire: AiEndpoint.Wire = AiEndpoint.Wire.CHAT,
     val key: String? = null,
     /** Editable, because a prompt somebody cannot read is a prompt they cannot trust. */
     val systemPrompt: String = "",
@@ -441,7 +443,10 @@ class SettingsStore(private val context: Context) {
             insightsEnabled = prefs[KEY_AI_INSIGHTS] ?: false,
             coachEnabled = prefs[KEY_AI_COACH] ?: false,
             baseUrl = prefs[KEY_AI_BASE_URL] ?: DEFAULT_AI_BASE_URL,
-            model = prefs[KEY_AI_MODEL] ?: DEFAULT_AI_MODEL,
+            model = prefs[KEY_AI_MODEL] ?: "",
+            wire = prefs[KEY_AI_WIRE]
+                ?.let { name -> AiEndpoint.Wire.entries.firstOrNull { it.name == name } }
+                ?: AiEndpoint.Wire.CHAT,
             key = prefs[KEY_AI_KEY]?.let { SecretVault.unseal(it)?.decodeToString() },
             systemPrompt = prefs[KEY_AI_PROMPT] ?: "",
         )
@@ -455,10 +460,11 @@ class SettingsStore(private val context: Context) {
         context.dataStore.edit { it[KEY_AI_COACH] = enabled }
     }
 
-    suspend fun setAiEndpoint(baseUrl: String, model: String) {
+    suspend fun setAiEndpoint(baseUrl: String, model: String, wire: AiEndpoint.Wire) {
         context.dataStore.edit {
             it[KEY_AI_BASE_URL] = baseUrl.trim()
             it[KEY_AI_MODEL] = model.trim()
+            it[KEY_AI_WIRE] = wire.name
         }
     }
 
@@ -623,17 +629,24 @@ class SettingsStore(private val context: Context) {
         /** Sealed, and named in [Backup.NEVER_LEAVES] so no export can carry it. */
         val KEY_AI_KEY = stringPreferencesKey("ai_key_sealed")
         val KEY_AI_PROMPT = stringPreferencesKey("ai_system_prompt")
+        val KEY_AI_WIRE = stringPreferencesKey("ai_wire")
 
         /**
          * Where requests go unless told otherwise.
          *
-         * Perplexity because it is what this was first pointed at, and its endpoint speaks
-         * the OpenAI shape — which is the actual decision here. Anything that speaks it,
-         * hosted or local, is three fields away, so the default is a starting point rather
-         * than a commitment.
+         * Perplexity because it is what this was first pointed at, and because the shape
+         * its API speaks is one anything else speaks too — which is the actual decision
+         * here. Anything is three fields away, so this is a starting point and not a
+         * commitment.
+         *
+         * The `/v1` is part of it because Perplexity's Agent API lives there, and their
+         * Sonar endpoints — which do not — retire on 27 September 2026.
+         *
+         * No default model, deliberately. The obvious one to have written here was `sonar`,
+         * which stops answering that month; a default that expires is worse than a blank
+         * field, because a blank field says plainly that something is needed.
          */
-        const val DEFAULT_AI_BASE_URL = "https://api.perplexity.ai"
-        const val DEFAULT_AI_MODEL = "sonar"
+        const val DEFAULT_AI_BASE_URL = "https://api.perplexity.ai/v1"
 
         val KEY_ALMANAC_AUTO = booleanPreferencesKey("gps_almanac_auto")
         val KEY_ALMANAC_SENT_AT = longPreferencesKey("almanac_sent_at")

@@ -219,6 +219,15 @@
     <string name="ai_endpoint">Where to ask</string>
     <string name="ai_base_url">Address</string>
     <string name="ai_model">Model</string>
+
+    <string name="ai_wire">Request format</string>
+    <string name="ai_wire_chat">Chat completions</string>
+    <string name="ai_wire_responses">Responses</string>
+    <string name="ai_wire_explainer">OpenAI, OpenRouter, Groq and most local servers use chat completions. Perplexity\'s Agent API uses Responses — and their Sonar endpoints, which use the other one, retire on 27 September 2026.</string>
+    <string name="action_ai_models">List the models</string>
+    <string name="ai_models_asking">Asking…</string>
+    <string name="ai_models_none">This provider does not publish a list. Type the model name from its documentation.</string>
+    <string name="ai_models_failed">Could not ask: %1$s</string>
     <string name="ai_key">API key</string>
     <string name="ai_key_set">Stored. It is sealed in the Android keystore and never goes into a backup.</string>
     <string name="ai_key_missing">No key yet. Nothing can be asked without one.</string>

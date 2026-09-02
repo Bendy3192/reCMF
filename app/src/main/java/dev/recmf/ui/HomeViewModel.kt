@@ -40,6 +40,7 @@ import androidx.core.net.toUri
 import kotlin.math.roundToInt
 import dev.recmf.ai.AiClient
 import dev.recmf.ai.AiContext
+import dev.recmf.ai.AiEndpoint
 import dev.recmf.data.AiSettings
 import dev.recmf.data.Backup
 import dev.recmf.data.BackupStore
@@ -787,8 +788,27 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { settingsStore.setAiCoachEnabled(enabled) }
     }
 
-    fun setAiEndpoint(baseUrl: String, model: String) {
-        viewModelScope.launch { settingsStore.setAiEndpoint(baseUrl, model) }
+    fun setAiEndpoint(baseUrl: String, model: String, wire: AiEndpoint.Wire) {
+        viewModelScope.launch { settingsStore.setAiEndpoint(baseUrl, model, wire) }
+    }
+
+    private val _aiModels = MutableStateFlow<AiClient.Models?>(null)
+
+    /** What the provider said it will answer for, or why it would not say. */
+    val aiModels: StateFlow<AiClient.Models?> = _aiModels.asStateFlow()
+
+    /**
+     * Asks the provider what models it has.
+     *
+     * Offered rather than required: not every provider serves a list, and one that does not
+     * is answered with a sentence saying so rather than an error. Typing the name stays
+     * possible either way, which is the only thing that works everywhere.
+     */
+    fun fetchAiModels(baseUrl: String) {
+        viewModelScope.launch {
+            _aiModels.value = AiClient.Models.Asking
+            _aiModels.value = aiClient.models(baseUrl, settingsStore.ai.first().key)
+        }
     }
 
     fun setAiKey(key: String?) {
@@ -798,17 +818,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun setAiSystemPrompt(prompt: String) {
         viewModelScope.launch { settingsStore.setAiSystemPrompt(prompt) }
     }
-
-    /**
-     * Exactly what would be sent, assembled the same way a real request assembles it.
-     *
-     * A question is needed to build one, so a plain one stands in. The point of the preview
-     * is the figures underneath it, which are the part somebody would object to.
-     */
-    fun aiPreview(): String = AiContext.user(
-        question = "How am I doing?",
-        days = aiDays.value,
-    )
 
     private val aiClient = AiClient()
 

@@ -36,12 +36,54 @@ class AiClient {
         data object NotConfigured : Answer
     }
 
+    /** What a provider said it will answer for, when asked. */
+    sealed interface Models {
+        data object Asking : Models
+        data class Listed(val ids: List<String>) : Models
+
+        /** It has no list to give, which is common and is not a failure. */
+        data object NoList : Models
+        data class Failed(val why: String) : Models
+    }
+
+    /**
+     * The provider's own list of models.
+     *
+     * Some serve it and some do not — Perplexity is one that does not — so "no list" is a
+     * plain answer rather than an error, and the text field beside it never goes away.
+     */
+    suspend fun models(baseUrl: String, key: String?): Models {
+        val url = AiEndpoint.models(baseUrl) ?: return Models.Failed("no address")
+
+        return withContext(Dispatchers.IO) {
+            var connection: HttpURLConnection? = null
+            try {
+                connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = CONNECT_TIMEOUT_MILLIS
+                    readTimeout = CONNECT_TIMEOUT_MILLIS
+                    requestMethod = "GET"
+                    if (!key.isNullOrBlank()) setRequestProperty("Authorization", "Bearer $key")
+                }
+
+                if (connection.responseCode !in 200..299) return@withContext Models.NoList
+
+                val ids = AiChat.models(connection.inputStream.bufferedReader().use { it.readText() })
+                if (ids.isEmpty()) Models.NoList else Models.Listed(ids)
+            } catch (e: IOException) {
+                Log.i(TAG, "Could not ask for the model list: ${e.message}")
+                Models.Failed(e.message ?: e.javaClass.simpleName)
+            } finally {
+                connection?.disconnect()
+            }
+        }
+    }
+
     suspend fun ask(settings: AiSettings, system: String, user: String): Answer {
-        val url = AiEndpoint.of(settings.baseUrl) ?: return Answer.NotConfigured
+        val url = AiEndpoint.of(settings.baseUrl, settings.wire) ?: return Answer.NotConfigured
         val key = settings.key?.takeIf { it.isNotBlank() } ?: return Answer.NotConfigured
         if (settings.model.isBlank()) return Answer.NotConfigured
 
-        return post(url, key, AiChat.body(settings.model, system, user))
+        return post(url, key, AiChat.body(settings.model, system, user, settings.wire))
     }
 
     private suspend fun post(url: String, key: String, body: String): Answer =

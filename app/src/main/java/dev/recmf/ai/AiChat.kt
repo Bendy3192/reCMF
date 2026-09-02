@@ -27,15 +27,30 @@ object AiChat {
      * a settings screen, they differ in meaning between providers, and none of them changes
      * whether the thing said about somebody's resting pulse is true.
      */
-    fun body(model: String, system: String, user: String): String = JSONObject()
-        .put("model", model)
-        .put(
-            "messages",
-            JSONArray()
-                .put(JSONObject().put("role", "system").put("content", system))
-                .put(JSONObject().put("role", "user").put("content", user)),
-        )
-        .toString()
+    fun body(
+        model: String,
+        system: String,
+        user: String,
+        wire: AiEndpoint.Wire = AiEndpoint.Wire.CHAT,
+    ): String = when (wire) {
+        AiEndpoint.Wire.CHAT -> JSONObject()
+            .put("model", model)
+            .put(
+                "messages",
+                JSONArray()
+                    .put(JSONObject().put("role", "system").put("content", system))
+                    .put(JSONObject().put("role", "user").put("content", user)),
+            )
+            .toString()
+
+        // The Responses shape: the standing instruction is a field of its own rather than
+        // a message with a role, and what is being asked is `input`.
+        AiEndpoint.Wire.RESPONSES -> JSONObject()
+            .put("model", model)
+            .put("instructions", system)
+            .put("input", user)
+            .toString()
+    }
 
     /**
      * The assistant's words, or null when the reply carried none.
@@ -45,15 +60,71 @@ object AiChat {
      *   somebody looking at the screen.
      */
     fun reply(json: String): String? = try {
-        JSONObject(json)
-            .optJSONArray("choices")
-            ?.optJSONObject(0)
-            ?.optJSONObject("message")
-            ?.optString("content")
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
+        val root = JSONObject(json)
+
+        // Every place either shape is known to put the answer, tried in turn. Reading is
+        // deliberately looser than writing: a reply that arrives in a shape not quite
+        // expected is still worth an answer, and the alternative — a parser that only
+        // knows the one endpoint it was written against — is what makes an app like this
+        // break when a provider moves.
+        chatReply(root) ?: responsesReply(root)
     } catch (e: JSONException) {
         null
+    }
+
+    /**
+     * The ids out of a `/models` reply, in whichever of the two usual shapes it came.
+     *
+     * Sorted, because a provider's own order is not one anybody is looking for, and a list
+     * somebody has to scan for a name is easier to scan alphabetically.
+     */
+    fun models(json: String): List<String> = try {
+        val root = JSONObject(json)
+        val list = root.optJSONArray("data") ?: root.optJSONArray("models") ?: JSONArray()
+
+        (0 until list.length()).mapNotNull { at ->
+            when (val entry = list.opt(at)) {
+                is JSONObject -> entry.optString("id").takeIf { it.isNotEmpty() }
+                    ?: entry.optString("name").takeIf { it.isNotEmpty() }
+                is String -> entry.takeIf { it.isNotEmpty() }
+                else -> null
+            }
+        }.sorted()
+    } catch (e: JSONException) {
+        emptyList()
+    }
+
+    /** `choices[0].message.content`, which is the chat-completions shape. */
+    private fun chatReply(root: JSONObject): String? = root
+        .optJSONArray("choices")
+        ?.optJSONObject(0)
+        ?.optJSONObject("message")
+        ?.optString("content")
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() }
+
+    /**
+     * The Responses shape, which nests further and offers a shortcut.
+     *
+     * `output_text` is the convenience field; where it is absent the text lives inside
+     * `output[]`, whose entries carry a `content[]` of their own. Both are walked, and
+     * everything found is joined — a reply split across several parts is one answer.
+     */
+    private fun responsesReply(root: JSONObject): String? {
+        root.optString("output_text").trim().takeIf { it.isNotEmpty() }?.let { return it }
+
+        val output = root.optJSONArray("output") ?: return null
+        val text = buildList {
+            for (i in 0 until output.length()) {
+                val item = output.optJSONObject(i) ?: continue
+                val content = item.optJSONArray("content") ?: continue
+                for (j in 0 until content.length()) {
+                    content.optJSONObject(j)?.optString("text")?.takeIf { it.isNotEmpty() }?.let(::add)
+                }
+            }
+        }.joinToString("\n").trim()
+
+        return text.takeIf { it.isNotEmpty() }
     }
 
     /**

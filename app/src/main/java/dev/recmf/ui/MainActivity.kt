@@ -189,6 +189,11 @@ class MainActivity : ComponentActivity() {
                 val backupState by model.backup.collectAsStateWithLifecycle()
                 val ai by model.ai.collectAsStateWithLifecycle()
                 val aiProbe by model.aiProbe.collectAsStateWithLifecycle()
+                val aiModels by model.aiModels.collectAsStateWithLifecycle()
+                // Collected here rather than read off the flow's value inside the
+                // card: a WhileSubscribed flow nobody subscribes to never starts,
+                // which is why the payload preview showed no days at all.
+                val aiDays by model.aiDays.collectAsStateWithLifecycle()
                 val backupFileName = stringResource(R.string.backup_file_name)
 
                 // Re-read on every composition rather than caching: the user grants this
@@ -217,13 +222,15 @@ class MainActivity : ComponentActivity() {
                     backupState = backupState,
                     ai = ai,
                     aiProbe = aiProbe,
-                    onAiPreview = model::aiPreview,
+                    aiModels = aiModels,
+                    aiDays = aiDays,
                     onAiInsights = model::setAiInsightsEnabled,
                     onAiCoach = model::setAiCoachEnabled,
                     onAiEndpoint = model::setAiEndpoint,
                     onAiKey = model::setAiKey,
                     onAiSystemPrompt = model::setAiSystemPrompt,
                     onAiProbe = model::probeAi,
+                    onAiModels = model::fetchAiModels,
                     onExportBackup = { saveBackup.launch(backupFileName) },
                     // Anything, not just JSON: a file manager that has forgotten what a
                     // .json is would otherwise grey out the only file worth picking.

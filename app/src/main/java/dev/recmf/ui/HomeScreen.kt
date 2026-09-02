@@ -60,6 +60,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.TimeInput
@@ -112,6 +113,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import dev.recmf.ai.AiClient
 import dev.recmf.ai.AiContext
+import dev.recmf.ai.AiEndpoint
 import dev.recmf.data.AiSettings
 import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
@@ -167,13 +169,15 @@ fun HomeScreen(
     backupState: BackupState?,
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
-    onAiPreview: () -> String,
+    aiModels: AiClient.Models?,
+    aiDays: List<AiContext.Day>,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
-    onAiEndpoint: (String, String) -> Unit,
+    onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
     onAiKey: (String?) -> Unit,
     onAiSystemPrompt: (String) -> Unit,
     onAiProbe: () -> Unit,
+    onAiModels: (String) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -244,13 +248,15 @@ fun HomeScreen(
                         backupState = backupState,
                         ai = ai,
                         aiProbe = aiProbe,
-                        onAiPreview = onAiPreview,
+                        aiModels = aiModels,
+                        aiDays = aiDays,
                         onAiInsights = onAiInsights,
                         onAiCoach = onAiCoach,
                         onAiEndpoint = onAiEndpoint,
                         onAiKey = onAiKey,
                         onAiSystemPrompt = onAiSystemPrompt,
                         onAiProbe = onAiProbe,
+                        onAiModels = onAiModels,
                         onExportBackup = onExportBackup,
                         onImportBackup = onImportBackup,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -321,13 +327,15 @@ private fun TabContent(
     backupState: BackupState?,
     ai: AiSettings,
     aiProbe: AiClient.Answer?,
-    onAiPreview: () -> String,
+    aiModels: AiClient.Models?,
+    aiDays: List<AiContext.Day>,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
-    onAiEndpoint: (String, String) -> Unit,
+    onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
     onAiKey: (String?) -> Unit,
     onAiSystemPrompt: (String) -> Unit,
     onAiProbe: () -> Unit,
+    onAiModels: (String) -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -484,13 +492,15 @@ private fun TabContent(
                     AiCard(
                         settings = ai,
                         probe = aiProbe,
-                        preview = onAiPreview,
+                        models = aiModels,
+                        days = aiDays,
                         onInsights = onAiInsights,
                         onCoach = onAiCoach,
                         onEndpoint = onAiEndpoint,
                         onKey = onAiKey,
                         onPrompt = onAiSystemPrompt,
                         onProbe = onAiProbe,
+                        onModels = onAiModels,
                     )
                 }
                 item { BackupCard(backupState, onExportBackup, onImportBackup) }
@@ -1363,13 +1373,15 @@ private fun BackupCard(
 private fun AiCard(
     settings: AiSettings,
     probe: AiClient.Answer?,
-    preview: () -> String,
+    models: AiClient.Models?,
+    days: List<AiContext.Day>,
     onInsights: (Boolean) -> Unit,
     onCoach: (Boolean) -> Unit,
-    onEndpoint: (String, String) -> Unit,
+    onEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
     onKey: (String?) -> Unit,
     onPrompt: (String) -> Unit,
     onProbe: () -> Unit,
+    onModels: (String) -> Unit,
 ) {
     var showing by rememberSaveable { mutableStateOf(false) }
     var editingPrompt by rememberSaveable { mutableStateOf(false) }
@@ -1410,7 +1422,7 @@ private fun AiCard(
 
             HorizontalDivider()
 
-            AiEndpointFields(settings, onEndpoint)
+            AiEndpointFields(settings, models, onEndpoint, onModels)
             AiKeyField(settings, onKey)
             AiPromptField(settings, editingPrompt, { editingPrompt = it }, onPrompt)
 
@@ -1444,7 +1456,8 @@ private fun AiCard(
                     shape = RoundedCornerShape(8.dp),
                 ) {
                     Text(
-                        preview(),
+                        // The same call the request itself makes, on the same days.
+                        AiContext.user(question = PREVIEW_QUESTION, days = days),
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())
                             .padding(12.dp),
@@ -1457,12 +1470,21 @@ private fun AiCard(
     }
 }
 
+/** Stands in for a real question, so the preview has something to be a preview of. */
+private const val PREVIEW_QUESTION = "How am I doing?"
+
 @Composable
-private fun AiEndpointFields(settings: AiSettings, onEndpoint: (String, String) -> Unit) {
+private fun AiEndpointFields(
+    settings: AiSettings,
+    models: AiClient.Models?,
+    onEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
+    onModels: (String) -> Unit,
+) {
     // Held locally while being typed and pushed on the way out, so a store write does not
     // happen on every keystroke and the cursor does not jump.
     var url by rememberSaveable(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
     var model by rememberSaveable(settings.model) { mutableStateOf(settings.model) }
+    var wire by rememberSaveable(settings.wire) { mutableStateOf(settings.wire) }
 
     Text(
         stringResource(R.string.ai_endpoint),
@@ -1485,17 +1507,93 @@ private fun AiEndpointFields(settings: AiSettings, onEndpoint: (String, String) 
         modifier = Modifier.fillMaxWidth(),
     )
 
-    if (url != settings.baseUrl || model != settings.model) {
-        FilledTonalButton(onClick = { onEndpoint(url, model) }) {
-            Text(stringResource(R.string.action_save))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { onModels(url) }) {
+            Text(stringResource(R.string.action_ai_models))
+        }
+        if (url != settings.baseUrl || model != settings.model || wire != settings.wire) {
+            FilledTonalButton(onClick = { onEndpoint(url, model, wire) }) {
+                Text(stringResource(R.string.action_save))
+            }
         }
     }
+
+    models?.let { AiModelList(it) { picked -> model = picked } }
+
+    Text(
+        stringResource(R.string.ai_wire),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AiEndpoint.Wire.entries.forEach { option ->
+            FilterChip(
+                selected = wire == option,
+                onClick = { wire = option },
+                label = {
+                    Text(
+                        stringResource(
+                            when (option) {
+                                AiEndpoint.Wire.CHAT -> R.string.ai_wire_chat
+                                AiEndpoint.Wire.RESPONSES -> R.string.ai_wire_responses
+                            },
+                        ),
+                    )
+                },
+            )
+        }
+    }
+    Text(
+        stringResource(R.string.ai_wire_explainer),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 
     Text(
         stringResource(R.string.ai_shape),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+/**
+ * What the provider said it has, or why it said nothing.
+ *
+ * A list is a convenience and never a gate: providers that serve one save somebody a trip
+ * to the documentation, and the ones that do not — Perplexity among them — get a sentence
+ * saying so while the text field carries on working.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AiModelList(models: AiClient.Models, onPick: (String) -> Unit) {
+    when (models) {
+        AiClient.Models.Asking -> Text(
+            stringResource(R.string.ai_models_asking),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        AiClient.Models.NoList -> Text(
+            stringResource(R.string.ai_models_none),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        is AiClient.Models.Failed -> Text(
+            stringResource(R.string.ai_models_failed, models.why),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+
+        is AiClient.Models.Listed -> FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            models.ids.forEach { id ->
+                SuggestionChip(onClick = { onPick(id) }, label = { Text(id) })
+            }
+        }
+    }
 }
 
 @Composable
