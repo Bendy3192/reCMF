@@ -89,6 +89,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -759,7 +761,21 @@ private fun BatteryRing(battery: BatteryStatus) {
     val ring = if (low) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
     val track = MaterialTheme.colorScheme.surfaceContainerHighest
 
-    Box(contentAlignment = Alignment.Center, modifier = Modifier.padding(end = 4.dp)) {
+    // Said in words for anyone who cannot see the ring. Without this a screen reader
+    // reads the figure in the middle as a bare number with nothing to say what it counts,
+    // which is worse than the card it replaced — that at least said "battery".
+    val spoken = if (battery.isCharging) {
+        stringResource(R.string.battery_charging, battery.levelPercent)
+    } else {
+        stringResource(R.string.battery_level, battery.levelPercent)
+    }
+
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .padding(end = 4.dp)
+            .clearAndSetSemantics { contentDescription = spoken },
+    ) {
         Canvas(Modifier.size(34.dp)) {
             val stroke = 3.dp.toPx()
             val inset = stroke / 2

@@ -12,7 +12,6 @@
     <string name="status_authenticating">Pairing…</string>
     <string name="status_ready">Connected</string>
 
-    <string name="no_watch_paired">No watch paired</string>
     <string name="unnamed_watch">Unnamed device</string>
 
     <string name="battery_level">Battery %1$d%%</string>

@@ -10,7 +10,6 @@
     <string name="status_authenticating">Сопряжение…</string>
     <string name="status_ready">Подключено</string>
 
-    <string name="no_watch_paired">Часы не подключены</string>
     <string name="unnamed_watch">Без названия</string>
 
     <string name="battery_level">Заряд %1$d%%</string>
