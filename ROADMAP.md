@@ -939,6 +939,42 @@ writing the difference there would count those steps twice. So the baseline know
 of the two it is, and only the first reading of a batch is measured against a recorded
 total — every reading after it is a counter against a counter.
 
+## GPS has never produced a fix, and the software side is exhausted
+
+Written down because two days went into it and the conclusion is a negative one, which is
+exactly the kind that gets re-derived by the next person who looks.
+
+What was actually wrong, and is now fixed:
+
+- **`GPS_COORDS` had latitude and longitude the wrong way round**, and was twelve bytes
+  where the watch reads sixteen. A position in Moscow went out as one in Uzbekistan.
+  Confirmed against the official app's own frame, decrypted out of a capture: the second
+  field is longitude, the third latitude, the fourth a constant.
+- **The almanac had thirty-two satellites to a slot where the watch reads fifty-six**, so
+  every slot after the first began in the wrong place. Confirmed by rebuilding and
+  comparing with the file the official app uploaded the same morning: the twelve slot
+  hours now agree slot for slot.
+
+What is still missing, and is not reCMF's to fix:
+
+- The official file carries **GLONASS 65-88 in record 1, BeiDou in record 2 and Galileo in
+  record 3**. reCMF sends record 1 with the GLONASS half marked absent and no records 2 or
+  3, because MediaTek publishes only `EPO.DAT` — GPS alone — at a public address. The
+  combined `EPO_GR_3_N.DAT` its own driver names is not served there, and the official
+  app keeps no copy on disk to borrow.
+
+Why the software side is nonetheless finished:
+
+- The watch **does not fix with the official app either**, on the same hardware in the
+  same place, after a factory reset.
+- reCMF's own uploader was then given the official app's file verbatim — all four records,
+  100464 bytes — and the watch took it whole and still did not fix.
+
+So a fix that never arrives is not a thing reCMF is doing wrong. The community forum
+carries a long thread of the same symptom on stock software. Before suspecting this code
+again, check that: the receiver only runs inside an outdoor exercise mode, the firmware is
+current, and the watch has been reset.
+
 ## Unidentified
 
 Bytes seen on a real watch that nothing here explains yet. Written down so the next capture
