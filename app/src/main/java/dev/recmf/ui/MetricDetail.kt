@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -38,9 +40,17 @@ import java.time.format.TextStyle
 /**
  * One measurement, opened from its tile.
  *
- * A tile answers "what does this read now". This answers the question that follows, which is
- * always some form of "is that a lot": the same seven days drawn large enough to read a day
- * off, and the three figures — lowest, average, highest — that a strip of bars cannot say.
+ * A tile answers "what does this read now". This answers the two questions that follow.
+ *
+ * The first is "is that a lot", and seven days drawn large enough to read a day off answer
+ * it better than any band would — along with the lowest, average and highest that a strip
+ * of bars cannot say.
+ *
+ * The second is "what is this even", and it needed asking. "Stress 50" is not information
+ * to anybody, and for some of these figures the honest answer is that there is no standard
+ * to hold them against — one of them is a field whose meaning reCMF inferred and never
+ * confirmed. Saying so is the point: a sentence admitting what is not known is worth more
+ * than a confident band invented to fill the space.
  *
  * It is deliberately still only seven days. That is what the app keeps, and a screen that
  * implied a month of history it cannot show would be worse than the tile it replaced.
@@ -51,6 +61,7 @@ fun MetricDetailSheet(
     @DrawableRes icon: Int,
     label: String,
     value: String,
+    explains: String,
     week: List<DayValue>,
     format: (Float) -> String,
     onDismiss: () -> Unit,
@@ -59,8 +70,13 @@ fun MetricDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     ) {
+        // Scrollable, because the explanations are not all short: the stress one runs to a
+        // paragraph, and without this the week and its figures would sit below the fold on
+        // a small screen with no way to reach them.
         Column(
-            Modifier.padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
+            Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(start = 24.dp, end = 24.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Row(
@@ -84,6 +100,14 @@ fun MetricDetailSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+
+            // Above the week, not below it: someone who does not know what the number is
+            // cannot read the chart of it either, and this is short enough to pass over.
+            Text(
+                explains,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
 
             val readings = week.mapNotNull { it.value }
             if (readings.size < 2) {

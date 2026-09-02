@@ -206,6 +206,19 @@
     <string name="metric_stat_max">Highest</string>
     <string name="metric_stat_avg">Average</string>
     <string name="metric_stat_min">Lowest</string>
+
+    <!--
+        What each figure is, said plainly. Written because a number with no scale beside it
+        is not information: "Stress 50" tells nobody anything, and the honest answer for
+        some of these is that there is no standard to compare against at all.
+    -->
+    <string name="explain_heart_rate">The last reading the watch took, from the optical sensor against your wrist. A resting adult is usually somewhere between 60 and 100 bpm, and whatever you were doing pushes it up. A wrist is an awkward place to measure this: a loose strap and any movement both spoil a reading, so a single odd number is far more often a bad measurement than a bad heart. The week below is the part worth reading.</string>
+    <string name="explain_resting_heart_rate">The lowest level the watch sees you hold for a while, which in practice is mostly while you sleep. Most adults sit somewhere between 55 and 85, and the fitter you are the lower it tends to run. The figure itself matters less than a change in it: several beats above your own usual level, held for days rather than hours, is what tends to come with illness, a bad night or alcohol. A single day is noise.</string>
+    <string name="explain_spo2">The share of the haemoglobin in your blood that is carrying oxygen. At sea level 95 to 100 percent is the ordinary range. A wrist is a poor place to measure it — considerably worse than a fingertip oximeter — and cold hands, movement and a loose strap all push a reading down, so one low figure is usually the measurement rather than you. Several low ones across a quiet night are worth more attention.</string>
+    <string name="explain_stress">The watch\'s own number, from 0 to 100, and the one figure here with nothing to compare it against. CMF publishes neither how it is worked out nor what counts as high, so reCMF reads the value out of the watch and shows it exactly as it arrives, without inventing bands for it. Health Connect has no record type for stress at all, which is a fair measure of how non-standard it is. It is worth something only against yourself: notice what a quiet evening reads and what a bad day reads. On its own, one number means nothing.</string>
+    <string name="explain_distance">Worked out by the watch rather than measured. No satellite is involved in this figure — it follows from your step count and whatever stride length the watch assumes for you. That makes it good for comparing one day against another and poor as a surveyed distance: if the watch\'s idea of your stride is off, every day here is off by the same proportion.</string>
+    <string name="explain_calories">The watch\'s estimate of what you burned, from your movement and the profile it holds. Every wearable estimates this its own way and they disagree with each other by a wide margin — the same walk can differ by a third between two devices. It is a number to watch move over a week, not a budget to spend against.</string>
+    <string name="explain_climbs">Floors climbed — and the one figure in reCMF whose meaning is inferred rather than confirmed. Nothing in the watch labels it. What reCMF found is a number that climbs through the day and resets at midnight, sitting in the same place and the same size as the floors count in the watch\'s goal block. That is the whole of the evidence. It behaves like floors and is shown as floors; if it turns out to be something else, this is where the mistake is.</string>
     <string name="tab_faces">Faces</string>
     <string name="watchfaces_waiting">Connect the watch to see the faces it holds and switch between them.</string>
     <string name="alarms_mirror_phone">Mirror the phone\'s alarms</string>

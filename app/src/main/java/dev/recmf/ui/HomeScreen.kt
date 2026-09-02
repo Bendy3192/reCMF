@@ -439,6 +439,7 @@ private fun TabContent(
             icon = tile.icon,
             label = stringResource(tile.label),
             value = tile.value(context),
+            explains = stringResource(tile.explains),
             week = tile.week,
             format = { number -> tile.format(context, number) },
             onDismiss = { opened = null },
@@ -953,7 +954,8 @@ private fun LazyListScope.metricTiles(
         state.latestHeartRate?.let { latest ->
             add(
                 TileSpec(
-                    R.drawable.ic_metric_heart, R.string.metric_heart_rate, weekly.heartRate,
+                    R.drawable.ic_metric_heart, R.string.metric_heart_rate,
+                    R.string.explain_heart_rate, weekly.heartRate,
                     format = { context, bpm ->
                         context.getString(R.string.value_bpm, bpm.roundToInt())
                     },
@@ -964,7 +966,7 @@ private fun LazyListScope.metricTiles(
             add(
                 TileSpec(
                     R.drawable.ic_metric_heart, R.string.metric_resting_heart_rate,
-                    weekly.restingHeartRate,
+                    R.string.explain_resting_heart_rate, weekly.restingHeartRate,
                     format = { context, beats ->
                         context.getString(R.string.value_bpm, beats.roundToInt())
                     },
@@ -974,7 +976,8 @@ private fun LazyListScope.metricTiles(
         state.spo2?.let { percent ->
             add(
                 TileSpec(
-                    R.drawable.ic_metric_oxygen, R.string.metric_spo2, weekly.spo2,
+                    R.drawable.ic_metric_oxygen, R.string.metric_spo2,
+                    R.string.explain_spo2, weekly.spo2,
                     format = { context, share ->
                         context.getString(R.string.value_percent, share.roundToInt())
                     },
@@ -983,7 +986,10 @@ private fun LazyListScope.metricTiles(
         }
         state.stress?.let { level ->
             add(
-                TileSpec(R.drawable.ic_metric_stress, R.string.metric_stress, weekly.stress) {
+                TileSpec(
+                    R.drawable.ic_metric_stress, R.string.metric_stress,
+                    R.string.explain_stress, weekly.stress,
+                ) {
                     level.toString()
                 },
             )
@@ -992,7 +998,7 @@ private fun LazyListScope.metricTiles(
             add(
                 TileSpec(
                     R.drawable.ic_metric_distance, R.string.metric_distance,
-                    weekly.distanceMeters,
+                    R.string.explain_distance, weekly.distanceMeters,
                     format = { context, metres -> context.readableDistance(metres.roundToInt()) },
                 ) { it.readableDistance(state.today.distanceMeters) },
             )
@@ -1000,7 +1006,8 @@ private fun LazyListScope.metricTiles(
         if (state.today.calories > 0 || weekly.calories.hasReadings()) {
             add(
                 TileSpec(
-                    R.drawable.ic_metric_calories, R.string.metric_calories, weekly.calories,
+                    R.drawable.ic_metric_calories, R.string.metric_calories,
+                    R.string.explain_calories, weekly.calories,
                     format = { context, kcal ->
                         context.getString(R.string.value_kcal, kcal.roundToInt())
                     },
@@ -1009,7 +1016,10 @@ private fun LazyListScope.metricTiles(
         }
         if (state.today.climbs > 0 || weekly.climbs.hasReadings()) {
             add(
-                TileSpec(R.drawable.ic_metric_climbs, R.string.metric_climbs, weekly.climbs) {
+                TileSpec(
+                    R.drawable.ic_metric_climbs, R.string.metric_climbs,
+                    R.string.explain_climbs, weekly.climbs,
+                ) {
                     state.today.climbs.toString()
                 },
             )
@@ -1063,6 +1073,9 @@ private fun LazyListScope.metricTiles(
 private class TileSpec(
     @param:DrawableRes val icon: Int,
     @param:StringRes val label: Int,
+    // What the number is, for the sheet that opens on a tap. Required rather than
+    // defaulted: a metric nobody could write a sentence about should not be on the screen.
+    @param:StringRes val explains: Int,
     val week: List<DayValue> = emptyList(),
     // Ahead of [value] so the trailing lambda at every call site still binds to that one.
     // A metric whose unit is worth saying overrides it; a plain count does not need to.
