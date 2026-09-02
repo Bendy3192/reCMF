@@ -19,10 +19,62 @@ class AiContextTest {
         // table like this must not blur, since the model cannot ask.
         val quiet = Day("2026-08-29")
 
-        val row = AiContext.table(listOf(quiet)).lines().last()
+        val row = AiContext.table(week + quiet).lines().last()
 
         assertTrue("-" in row, "an absent reading should be written as a dash: $row")
         assertFalse("0" in row.substringAfter("2026-08-29"), "an absent reading became a zero: $row")
+    }
+
+    @Test
+    fun `a figure nothing ever measured is not a column of dashes`() {
+        // Asked about blood oxygen with no oxygen column, the assistant answered — quite
+        // correctly — that it had nothing to go on. A column of dashes would not have
+        // helped it; the fix is that every metric with a tile reaches the table, and a
+        // metric with no readings at all takes up no room at the same time.
+        val table = AiContext.table(week)
+
+        assertFalse("spo2_pct" in table, table)
+        assertFalse("kcal" in table, table)
+    }
+
+    @Test
+    fun `every measured figure reaches the table`() {
+        val full = Day(
+            date = "2026-08-29",
+            restingHeartRate = 61,
+            sleepMinutes = 431,
+            restfulPercent = 38,
+            stress = 44,
+            steps = 9012,
+            heartRateVariability = 42,
+            bloodOxygen = 97,
+            calories = 585,
+            distanceMeters = 7800,
+            climbs = 12,
+        )
+
+        val sent = AiContext.table(listOf(full))
+
+        listOf("resting", "sleep_min", "restful_pct", "stress", "steps", "spo2_pct", "kcal", "distance_m", "climbs", "hrv_ms")
+            .forEach { assertTrue(it in sent, "$it missing from the header") }
+        listOf("97", "585", "7800", "12").forEach {
+            assertTrue(it in sent.lines().last(), "$it missing from $sent")
+        }
+    }
+
+    @Test
+    fun `a wide column and a narrow one each take the room they need`() {
+        val days = listOf(
+            Day("2026-08-27", restingHeartRate = 61, steps = 9012),
+            Day("2026-08-28", restingHeartRate = 60, steps = 11040),
+        )
+
+        val lines = AiContext.table(days).lines()
+        val at = lines.first().indexOf("steps")
+
+        lines.drop(1).forEach { row ->
+            assertTrue(row.length > at && row[at] != ' ', "steps starts at $at but that is blank in: $row")
+        }
     }
 
     @Test

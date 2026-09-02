@@ -41,7 +41,48 @@ object AiContext {
          * what it is: an extra, not part of what this watch reports.
          */
         val heartRateVariability: Int? = null,
+
+        /** Blood oxygen, averaged over the day's readings. */
+        val bloodOxygen: Int? = null,
+
+        /** The watch's own estimates, all three worked out from step count and a stride. */
+        val calories: Int? = null,
+        val distanceMeters: Int? = null,
+        val climbs: Int? = null,
     )
+
+    /** One column of the table, and how to get it out of a day. */
+    private class Column(val header: String, val of: (Day) -> Int?)
+
+    /**
+     * Every figure a day can carry, in the order it is worth reading.
+     *
+     * The list exists because the alternative was writing each column out twice — once in
+     * a header string and once in the row builder — and they drifted the moment a column
+     * was added. Worse, they drifted silently: the table still lined up, and only the
+     * numbers underneath the headings were wrong.
+     *
+     * Order is deliberate. What the watch measures directly comes first, what it estimates
+     * from step count comes next, and the one figure from another device comes last.
+     */
+    private val COLUMNS: List<Column> = listOf(
+        Column("resting") { it.restingHeartRate },
+        Column("sleep_min") { it.sleepMinutes },
+        Column("restful_pct") { it.restfulPercent },
+        Column("stress") { it.stress },
+        Column("spo2_pct") { it.bloodOxygen },
+        Column("steps") { it.steps },
+        Column("climbs") { it.climbs },
+        Column("distance_m") { it.distanceMeters },
+        Column("kcal") { it.calories },
+        Column("hrv_ms") { it.heartRateVariability },
+    )
+
+    /** The date column, which is always there and never varies in width. */
+    private const val DATE_WIDTH = 12
+
+    /** Blank between columns. Two is enough to read as a gap and cheap enough to send. */
+    private const val GAP = 2
 
 
     /**
@@ -151,23 +192,29 @@ object AiContext {
     fun table(days: List<Day>): String {
         if (days.isEmpty()) return "No days recorded yet."
 
-        // The variability column is written only when some day has one, so a phone with
-        // no second wearable is not handed an empty column to wonder about.
-        val anyVariability = days.any { it.heartRateVariability != null }
+        // Only the columns something actually filled. A watch that never took a blood
+        // oxygen reading should not hand the assistant a column of dashes to reason about,
+        // and a phone with one wearable should not be shown a variability heading at all.
+        // The alternative was demonstrated: asked about a figure whose column was missing,
+        // the assistant correctly answered that it had nothing, which is a true statement
+        // about the wrong thing.
+        val shown = COLUMNS.filter { column -> days.any { column.of(it) != null } }
 
-        val header = "date        resting  sleep_min  restful_pct  stress  steps" +
-            if (anyVariability) "    hrv_ms" else ""
-        val rows = days.map { day ->
-            buildString {
-                append(day.date.padEnd(12))
-                append(day.restingHeartRate.cell(9))
-                append(day.sleepMinutes.cell(11))
-                append(day.restfulPercent.cell(13))
-                append(day.stress.cell(8))
-                append(day.steps.cell(if (anyVariability) 9 else 7))
-                if (anyVariability) append(day.heartRateVariability.cell(6))
-            }.trimEnd()
+        fun cell(value: Int?): String = value?.toString() ?: "-"
+
+        // Measured rather than fixed, so a column of four-digit steps and a column of
+        // two-digit pulses each take the room they need and no more.
+        val widths = shown.map { column ->
+            maxOf(column.header.length, days.maxOf { cell(column.of(it)).length }) + GAP
         }
+
+        fun row(date: String, at: (Int) -> String) = buildString {
+            append(date.padEnd(DATE_WIDTH))
+            shown.indices.forEach { append(at(it).padEnd(widths[it])) }
+        }.trimEnd()
+
+        val header = row("date") { shown[it].header }
+        val rows = days.map { day -> row(day.date) { cell(shown[it].of(day)) } }
 
         return (listOf(header) + rows).joinToString("\n")
     }
@@ -246,5 +293,4 @@ object AiContext {
         "Today's $metric is $todayValue. Is that ordinary for this person, and what would " +
             "you notice about the last few weeks of it?"
 
-    private fun Int?.cell(width: Int): String = (this?.toString() ?: "-").padEnd(width)
 }
