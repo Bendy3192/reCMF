@@ -9,7 +9,6 @@ import android.content.pm.PackageManager
 import android.location.Geocoder
 import android.location.Location
 import android.location.LocationManager
-import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
@@ -63,7 +62,7 @@ object PhoneLocation {
         val manager = context.getSystemService<LocationManager>() ?: return null
 
         val fix = try {
-            manager.providers(context).mapNotNull { manager.getLastKnownLocation(it) }
+            manager.providers().mapNotNull { manager.getLastKnownLocation(it) }
                 .maxByOrNull { it.time }
         } catch (e: SecurityException) {
             // The permission can be revoked between the check above and here.
@@ -81,13 +80,15 @@ object PhoneLocation {
      *
      * The fused provider is the one Android would rather everything used, and it is not
      * present on every device — a phone without Play Services has the network provider
-     * and nothing else. Both are asked and the newest answer wins.
+     * and nothing else. All are asked, the disabled ones drop out, and the newest answer
+     * wins. No version check: this app's minimum is already past the release that added
+     * the fused provider, and lint rejects a test that can only be true.
      */
-    private fun LocationManager.providers(context: Context): List<String> = buildList {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) add(LocationManager.FUSED_PROVIDER)
-        add(LocationManager.NETWORK_PROVIDER)
-        add(LocationManager.PASSIVE_PROVIDER)
-    }.filter { runCatching { isProviderEnabled(it) }.getOrDefault(false) }
+    private fun LocationManager.providers(): List<String> = listOf(
+        LocationManager.FUSED_PROVIDER,
+        LocationManager.NETWORK_PROVIDER,
+        LocationManager.PASSIVE_PROVIDER,
+    ).filter { runCatching { isProviderEnabled(it) }.getOrDefault(false) }
 
     /**
      * A name for the place, or its coordinates written out.
