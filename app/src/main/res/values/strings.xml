@@ -40,6 +40,8 @@
     <string name="action_show">Show</string>
     <string name="action_hide">Hide</string>
     <string name="action_clear">Clear</string>
+    <string name="action_save">Save</string>
+    <string name="action_edit">Edit</string>
     <string name="notifications">Notifications</string>
     <string name="notifications_explainer">Messages and alerts from your phone are forwarded to the watch.</string>
     <string name="notifications_need_access">Android grants notification access in system settings, not here.</string>
@@ -206,6 +208,36 @@
     <string name="metric_stat_max">Highest</string>
     <string name="metric_stat_avg">Average</string>
     <string name="metric_stat_min">Lowest</string>
+
+    <!-- The assistant. Two opt-ins, because they send different things. -->
+    <string name="ai">Assistant</string>
+    <string name="ai_explainer">Off until you turn it on. reCMF has never sent anything about you anywhere, and this is the first thing that would — so it is two switches rather than one, and you can see exactly what leaves before it does.</string>
+    <string name="ai_insights">Explain my metrics</string>
+    <string name="ai_insights_explainer">Sends figures and nothing that names you: resting pulse, sleep length, the stress index, steps. A column of numbers.</string>
+    <string name="ai_coach">Coach</string>
+    <string name="ai_coach_explainer">Also sends your profile — name, height, weight, anything you note about yourself. This is the part that is about a person rather than a wrist.</string>
+    <string name="ai_endpoint">Where to ask</string>
+    <string name="ai_base_url">Address</string>
+    <string name="ai_model">Model</string>
+    <string name="ai_key">API key</string>
+    <string name="ai_key_set">Stored. It is sealed in the Android keystore and never goes into a backup.</string>
+    <string name="ai_key_missing">No key yet. Nothing can be asked without one.</string>
+    <string name="ai_key_hint">Paste a key</string>
+    <string name="action_ai_key_forget">Forget the key</string>
+    <string name="ai_shape">Anything speaking the OpenAI chat format works — Perplexity, OpenAI, OpenRouter, or a model running on your own machine. Change the address and the model and it goes there instead.</string>
+    <string name="ai_prompt">Instructions</string>
+    <string name="ai_prompt_explainer">What the assistant is told before your figures. Editable, because a prompt you cannot read is one you cannot trust.</string>
+    <string name="action_ai_prompt_reset">Back to the default</string>
+    <string name="action_ai_preview">Show what would be sent</string>
+    <string name="action_ai_hide_preview">Hide</string>
+    <string name="ai_preview_explainer">This is the message itself, not a description of it.</string>
+    <string name="action_ai_probe">Try the connection</string>
+    <string name="ai_probe_said">It answered: %1$s</string>
+    <string name="ai_probe_refused">Refused (%1$d): %2$s</string>
+    <string name="ai_probe_refused_bare">Refused: %1$d. Nothing more was said.</string>
+    <string name="ai_probe_unreachable">Could not be reached: %1$s</string>
+    <string name="ai_probe_unreadable">It answered, and the answer had nothing in it.</string>
+    <string name="ai_probe_unconfigured">Fill in the address, the model and a key first.</string>
 
     <!-- Backup: everything but the pairing key, in a file the wearer keeps. -->
     <string name="backup">Backup</string>

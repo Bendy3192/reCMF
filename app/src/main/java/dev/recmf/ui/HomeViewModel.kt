@@ -37,6 +37,10 @@ import dev.recmf.update.AvailableUpdate
 import dev.recmf.update.UpdateState
 import dev.recmf.update.Updater
 import androidx.core.net.toUri
+import kotlin.math.roundToInt
+import dev.recmf.ai.AiClient
+import dev.recmf.ai.AiContext
+import dev.recmf.data.AiSettings
 import dev.recmf.data.Backup
 import dev.recmf.data.BackupStore
 import dev.recmf.health.Readiness
@@ -722,6 +726,113 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     /** Hands the watch its own list back with a different face marked active. */
     fun selectWatchface(index: Int) {
         WatchService.setWatchface(getApplication(), index)
+    }
+
+    /**
+     * The days exactly as the assistant would be shown them.
+     *
+     * Built from the same tables the screen draws, so the preview is not a mock-up of what
+     * would be sent — it is what would be sent. If this and the request ever disagreed, the
+     * preview would be worse than not offering one.
+     */
+    val aiDays: StateFlow<List<AiContext.Day>> = combine(
+        dao.restingHeartRateSince(startOfBaseline()),
+        dao.stressSince(startOfBaseline()),
+        dao.sleepSince(startOfBaseline()),
+        dao.activitySince(startOfBaseline()),
+    ) { resting, stress, nights, activity ->
+        val zone = ZoneId.systemDefault()
+
+        fun <T> mean(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
+            rows.groupBy { Instant.ofEpochSecond(at(it)).atZone(zone).toLocalDate() }
+                .mapValues { (_, day) -> day.mapNotNull(value) }
+                .filterValues { it.isNotEmpty() }
+                .mapValues { (_, values) -> values.average().toFloat() }
+
+        val restingByDay = mean(resting, { it.timestamp }, { it.bpm.toFloat() })
+        val stressByDay = mean(stress, { it.timestamp }, { it.level.toFloat() })
+        val sleepByDay = mean(nights, { it.wakeTimestamp }, { it.asleepSeconds / 60f })
+        val restfulByDay = mean(nights, { it.wakeTimestamp }, { it.restfulShare?.times(100f) })
+
+        // Steps are a counter the watch resets at midnight, so the day's figure is the
+        // highest reading of it and never the sum of the readings.
+        val stepsByDay = activity
+            .groupBy { Instant.ofEpochSecond(it.timestamp).atZone(zone).toLocalDate() }
+            .mapValues { (_, day) -> day.maxOf { it.steps } }
+
+        val dates = (restingByDay.keys + stressByDay.keys + sleepByDay.keys + stepsByDay.keys)
+            .sorted()
+
+        dates.map { date ->
+            AiContext.Day(
+                date = date.toString(),
+                restingHeartRate = restingByDay[date]?.roundToInt(),
+                sleepMinutes = sleepByDay[date]?.roundToInt(),
+                restfulPercent = restfulByDay[date]?.roundToInt(),
+                stress = stressByDay[date]?.roundToInt(),
+                steps = stepsByDay[date],
+            )
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
+
+    /** What the assistant is allowed to do, and where it is pointed. */
+    val ai: StateFlow<AiSettings> = settingsStore.ai
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AiSettings())
+
+    fun setAiInsightsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setAiInsightsEnabled(enabled) }
+    }
+
+    fun setAiCoachEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsStore.setAiCoachEnabled(enabled) }
+    }
+
+    fun setAiEndpoint(baseUrl: String, model: String) {
+        viewModelScope.launch { settingsStore.setAiEndpoint(baseUrl, model) }
+    }
+
+    fun setAiKey(key: String?) {
+        viewModelScope.launch { settingsStore.setAiKey(key) }
+    }
+
+    fun setAiSystemPrompt(prompt: String) {
+        viewModelScope.launch { settingsStore.setAiSystemPrompt(prompt) }
+    }
+
+    /**
+     * Exactly what would be sent, assembled the same way a real request assembles it.
+     *
+     * A question is needed to build one, so a plain one stands in. The point of the preview
+     * is the figures underneath it, which are the part somebody would object to.
+     */
+    fun aiPreview(): String = AiContext.user(
+        question = "How am I doing?",
+        days = aiDays.value,
+    )
+
+    private val aiClient = AiClient()
+
+    private val _aiProbe = MutableStateFlow<AiClient.Answer?>(null)
+
+    /** How the last "try it" went, or null until one is asked for. */
+    val aiProbe: StateFlow<AiClient.Answer?> = _aiProbe.asStateFlow()
+
+    /**
+     * Sends one short question, to find out whether the key and the endpoint work.
+     *
+     * Deliberately not a health question: this is about whether the connection is right,
+     * and somebody testing their settings should not have to spend their own data to do it.
+     */
+    fun probeAi() {
+        viewModelScope.launch {
+            _aiProbe.value = null
+            val settings = settingsStore.ai.first()
+            _aiProbe.value = aiClient.ask(
+                settings = settings,
+                system = "Answer in exactly three words.",
+                user = "Say hello.",
+            )
+        }
     }
 
     private val backupStore = BackupStore(application, dao)

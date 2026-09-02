@@ -187,6 +187,8 @@ class MainActivity : ComponentActivity() {
                 ) { uri -> if (uri != null) model.importBackup(uri.toString()) }
 
                 val backupState by model.backup.collectAsStateWithLifecycle()
+                val ai by model.ai.collectAsStateWithLifecycle()
+                val aiProbe by model.aiProbe.collectAsStateWithLifecycle()
                 val backupFileName = stringResource(R.string.backup_file_name)
 
                 // Re-read on every composition rather than caching: the user grants this
@@ -213,6 +215,15 @@ class MainActivity : ComponentActivity() {
                     alarmMirrorProblem = alarmMirrorProblem,
                     readiness = readiness,
                     backupState = backupState,
+                    ai = ai,
+                    aiProbe = aiProbe,
+                    onAiPreview = model::aiPreview,
+                    onAiInsights = model::setAiInsightsEnabled,
+                    onAiCoach = model::setAiCoachEnabled,
+                    onAiEndpoint = model::setAiEndpoint,
+                    onAiKey = model::setAiKey,
+                    onAiSystemPrompt = model::setAiSystemPrompt,
+                    onAiProbe = model::probeAi,
                     onExportBackup = { saveBackup.launch(backupFileName) },
                     // Anything, not just JSON: a file manager that has forgotten what a
                     // .json is would otherwise grey out the only file worth picking.

@@ -37,6 +37,8 @@
     <string name="action_show">Показать</string>
     <string name="action_hide">Скрыть</string>
     <string name="action_clear">Очистить</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_edit">Изменить</string>
     <string name="notifications">Уведомления</string>
     <string name="notifications_explainer">Сообщения и оповещения с телефона отправляются на часы.</string>
     <string name="notifications_need_access">Доступ к уведомлениям выдаётся в системных настройках, а не здесь.</string>
@@ -207,6 +209,35 @@
     <string name="metric_stat_max">Максимум</string>
     <string name="metric_stat_avg">Среднее</string>
     <string name="metric_stat_min">Минимум</string>
+
+    <string name="ai">Ассистент</string>
+    <string name="ai_explainer">Выключен, пока вы его не включите. reCMF никогда ничего о вас никуда не отправлял, и это первое, что стало бы — поэтому здесь два переключателя, а не один, и вы можете увидеть, что именно уходит, до того как оно уйдёт.</string>
+    <string name="ai_insights">Объяснять метрики</string>
+    <string name="ai_insights_explainer">Отправляет цифры и ничего, что вас называет: пульс покоя, длительность сна, индекс стресса, шаги. Столбик чисел.</string>
+    <string name="ai_coach">Тренер</string>
+    <string name="ai_coach_explainer">Дополнительно отправляет профиль — имя, рост, вес и то, что вы о себе записали. Это та часть, которая про человека, а не про запястье.</string>
+    <string name="ai_endpoint">Куда обращаться</string>
+    <string name="ai_base_url">Адрес</string>
+    <string name="ai_model">Модель</string>
+    <string name="ai_key">Ключ API</string>
+    <string name="ai_key_set">Сохранён. Запечатан в хранилище ключей Android и в резервную копию не попадает.</string>
+    <string name="ai_key_missing">Ключа пока нет. Без него ничего спросить нельзя.</string>
+    <string name="ai_key_hint">Вставьте ключ</string>
+    <string name="action_ai_key_forget">Забыть ключ</string>
+    <string name="ai_shape">Подходит всё, что говорит в формате OpenAI chat — Perplexity, OpenAI, OpenRouter или модель на вашей машине. Поменяйте адрес и модель, и запросы пойдут туда.</string>
+    <string name="ai_prompt">Инструкции</string>
+    <string name="ai_prompt_explainer">Что ассистенту говорят перед вашими цифрами. Редактируется, потому что промпту, который нельзя прочитать, нельзя доверять.</string>
+    <string name="action_ai_prompt_reset">Вернуть по умолчанию</string>
+    <string name="action_ai_preview">Показать, что уйдёт</string>
+    <string name="action_ai_hide_preview">Скрыть</string>
+    <string name="ai_preview_explainer">Это само сообщение, а не его описание.</string>
+    <string name="action_ai_probe">Проверить связь</string>
+    <string name="ai_probe_said">Ответил: %1$s</string>
+    <string name="ai_probe_refused">Отказ (%1$d): %2$s</string>
+    <string name="ai_probe_refused_bare">Отказ с кодом %1$d, без пояснений.</string>
+    <string name="ai_probe_unreachable">Не удалось достучаться: %1$s</string>
+    <string name="ai_probe_unreadable">Ответил, и в ответе ничего не было.</string>
+    <string name="ai_probe_unconfigured">Сначала заполните адрес, модель и ключ.</string>
 
     <string name="backup">Резервная копия</string>
     <string name="backup_explainer">Записывает настройки, будильники, цели и историю здоровья, которую хранит reCMF, в выбранный вами файл. Восстановление добавляется к тому, что уже есть, поэтому повторный импорт того же файла ничего не меняет.</string>

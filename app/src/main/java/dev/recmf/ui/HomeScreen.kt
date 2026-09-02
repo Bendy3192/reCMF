@@ -91,7 +91,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -107,6 +106,13 @@ import dev.recmf.ble.DiscoveredWatch
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import dev.recmf.ble.ProtocolLog
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import dev.recmf.ai.AiClient
+import dev.recmf.ai.AiContext
+import dev.recmf.data.AiSettings
 import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.ui.theme.Motion
@@ -159,6 +165,15 @@ fun HomeScreen(
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
     backupState: BackupState?,
+    ai: AiSettings,
+    aiProbe: AiClient.Answer?,
+    onAiPreview: () -> String,
+    onAiInsights: (Boolean) -> Unit,
+    onAiCoach: (Boolean) -> Unit,
+    onAiEndpoint: (String, String) -> Unit,
+    onAiKey: (String?) -> Unit,
+    onAiSystemPrompt: (String) -> Unit,
+    onAiProbe: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -227,6 +242,15 @@ fun HomeScreen(
                         alarmMirrorProblem = alarmMirrorProblem,
                         readiness = readiness,
                         backupState = backupState,
+                        ai = ai,
+                        aiProbe = aiProbe,
+                        onAiPreview = onAiPreview,
+                        onAiInsights = onAiInsights,
+                        onAiCoach = onAiCoach,
+                        onAiEndpoint = onAiEndpoint,
+                        onAiKey = onAiKey,
+                        onAiSystemPrompt = onAiSystemPrompt,
+                        onAiProbe = onAiProbe,
                         onExportBackup = onExportBackup,
                         onImportBackup = onImportBackup,
                         onNotificationAppBlocked = onNotificationAppBlocked,
@@ -295,6 +319,15 @@ private fun TabContent(
     alarmMirrorProblem: AlarmMirrorProblem?,
     readiness: Readiness?,
     backupState: BackupState?,
+    ai: AiSettings,
+    aiProbe: AiClient.Answer?,
+    onAiPreview: () -> String,
+    onAiInsights: (Boolean) -> Unit,
+    onAiCoach: (Boolean) -> Unit,
+    onAiEndpoint: (String, String) -> Unit,
+    onAiKey: (String?) -> Unit,
+    onAiSystemPrompt: (String) -> Unit,
+    onAiProbe: () -> Unit,
     onExportBackup: () -> Unit,
     onImportBackup: () -> Unit,
     onNotificationAppBlocked: (String, Boolean) -> Unit,
@@ -447,6 +480,19 @@ private fun TabContent(
                 }
                 item { SectionHeading(R.string.section_app) }
                 item { UpdateCard(updateState, onCheckForUpdate, onInstallUpdate) }
+                item {
+                    AiCard(
+                        settings = ai,
+                        probe = aiProbe,
+                        preview = onAiPreview,
+                        onInsights = onAiInsights,
+                        onCoach = onAiCoach,
+                        onEndpoint = onAiEndpoint,
+                        onKey = onAiKey,
+                        onPrompt = onAiSystemPrompt,
+                        onProbe = onAiProbe,
+                    )
+                }
                 item { BackupCard(backupState, onExportBackup, onImportBackup) }
                 item { ProtocolLogCard() }
                 item { PairedWatchCard(state, onForget) }
@@ -1296,6 +1342,277 @@ private fun BackupCard(
             }
         }
     }
+}
+
+/**
+ * The assistant: two opt-ins, where to ask, and exactly what would be sent.
+ *
+ * Everything here is arranged around one claim the app has made since before an assistant
+ * existed — that nothing about the wearer leaves the phone. That claim is now conditional,
+ * and the card's job is to make the condition legible rather than to bury it in a switch.
+ *
+ * Hence two switches for what could have been one. Figures without a name on them and a
+ * profile that describes a person are different things to send, and somebody may want the
+ * first and not the second.
+ *
+ * Hence, too, the preview being the message itself. It is not a summary of what is sent or
+ * a sample of the shape — it is the string, built by the same code that builds the real
+ * one. Anything less and the reassurance would be worth less than nothing.
+ */
+@Composable
+private fun AiCard(
+    settings: AiSettings,
+    probe: AiClient.Answer?,
+    preview: () -> String,
+    onInsights: (Boolean) -> Unit,
+    onCoach: (Boolean) -> Unit,
+    onEndpoint: (String, String) -> Unit,
+    onKey: (String?) -> Unit,
+    onPrompt: (String) -> Unit,
+    onProbe: () -> Unit,
+) {
+    var showing by rememberSaveable { mutableStateOf(false) }
+    var editingPrompt by rememberSaveable { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = FeatureCardShape,
+        colors = featureCardColors(settings.insightsEnabled || settings.coachEnabled),
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CardTitle(R.drawable.ic_ui_charts, R.string.ai)
+
+            Text(stringResource(R.string.ai_explainer), style = MaterialTheme.typography.bodyMedium)
+
+            HorizontalDivider()
+
+            SettingSwitch(
+                label = stringResource(R.string.ai_insights),
+                checked = settings.insightsEnabled,
+                onCheckedChange = onInsights,
+            )
+            Text(
+                stringResource(R.string.ai_insights_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            SettingSwitch(
+                label = stringResource(R.string.ai_coach),
+                checked = settings.coachEnabled,
+                onCheckedChange = onCoach,
+            )
+            Text(
+                stringResource(R.string.ai_coach_explainer),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
+            AiEndpointFields(settings, onEndpoint)
+            AiKeyField(settings, onKey)
+            AiPromptField(settings, editingPrompt, { editingPrompt = it }, onPrompt)
+
+            HorizontalDivider()
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilledTonalButton(onClick = { showing = !showing }) {
+                    Text(
+                        stringResource(
+                            if (showing) R.string.action_ai_hide_preview else R.string.action_ai_preview,
+                        ),
+                    )
+                }
+                OutlinedButton(onClick = onProbe) {
+                    Text(stringResource(R.string.action_ai_probe))
+                }
+            }
+
+            probe?.let { AiProbeResult(it) }
+
+            if (showing) {
+                Text(
+                    stringResource(R.string.ai_preview_explainer),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                // Monospaced and scrolling sideways: the figures are a table, and a table
+                // reflowed to the card's width stops being one.
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        preview(),
+                        modifier = Modifier
+                            .horizontalScroll(rememberScrollState())
+                            .padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiEndpointFields(settings: AiSettings, onEndpoint: (String, String) -> Unit) {
+    // Held locally while being typed and pushed on the way out, so a store write does not
+    // happen on every keystroke and the cursor does not jump.
+    var url by rememberSaveable(settings.baseUrl) { mutableStateOf(settings.baseUrl) }
+    var model by rememberSaveable(settings.model) { mutableStateOf(settings.model) }
+
+    Text(
+        stringResource(R.string.ai_endpoint),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    OutlinedTextField(
+        value = url,
+        onValueChange = { url = it },
+        label = { Text(stringResource(R.string.ai_base_url)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    OutlinedTextField(
+        value = model,
+        onValueChange = { model = it },
+        label = { Text(stringResource(R.string.ai_model)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    if (url != settings.baseUrl || model != settings.model) {
+        FilledTonalButton(onClick = { onEndpoint(url, model) }) {
+            Text(stringResource(R.string.action_save))
+        }
+    }
+
+    Text(
+        stringResource(R.string.ai_shape),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+}
+
+@Composable
+private fun AiKeyField(settings: AiSettings, onKey: (String?) -> Unit) {
+    // Never shown back, not even masked. A key that can be read off the screen is a key
+    // that can be read off a screenshot, and nothing here needs to display it — the only
+    // question worth answering is whether there is one.
+    var typed by rememberSaveable { mutableStateOf("") }
+    val stored = !settings.key.isNullOrBlank()
+
+    Text(
+        stringResource(if (stored) R.string.ai_key_set else R.string.ai_key_missing),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (stored) {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.error
+        },
+    )
+
+    OutlinedTextField(
+        value = typed,
+        onValueChange = { typed = it },
+        label = { Text(stringResource(R.string.ai_key)) },
+        placeholder = { Text(stringResource(R.string.ai_key_hint)) },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier.fillMaxWidth(),
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (typed.isNotBlank()) {
+            FilledTonalButton(
+                onClick = {
+                    onKey(typed)
+                    typed = ""
+                },
+            ) { Text(stringResource(R.string.action_save)) }
+        }
+        if (stored) {
+            OutlinedButton(onClick = { onKey(null) }) {
+                Text(stringResource(R.string.action_ai_key_forget))
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiPromptField(
+    settings: AiSettings,
+    editing: Boolean,
+    onEditing: (Boolean) -> Unit,
+    onPrompt: (String) -> Unit,
+) {
+    val inUse = settings.systemPrompt.ifBlank { AiContext.DEFAULT_SYSTEM_PROMPT }
+    var draft by rememberSaveable(inUse) { mutableStateOf(inUse) }
+
+    Text(
+        stringResource(R.string.ai_prompt),
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Text(
+        stringResource(R.string.ai_prompt_explainer),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+
+    if (!editing) {
+        OutlinedButton(onClick = { onEditing(true) }) {
+            Text(stringResource(R.string.action_edit))
+        }
+        return
+    }
+
+    OutlinedTextField(
+        value = draft,
+        onValueChange = { draft = it },
+        modifier = Modifier.fillMaxWidth(),
+        minLines = 6,
+        textStyle = MaterialTheme.typography.bodySmall,
+    )
+
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilledTonalButton(
+            onClick = {
+                onPrompt(draft)
+                onEditing(false)
+            },
+        ) { Text(stringResource(R.string.action_save)) }
+
+        OutlinedButton(onClick = { draft = AiContext.DEFAULT_SYSTEM_PROMPT }) {
+            Text(stringResource(R.string.action_ai_prompt_reset))
+        }
+    }
+}
+
+/** What came back from a connection test, in the words the card has for it. */
+@Composable
+private fun AiProbeResult(answer: AiClient.Answer) {
+    val bad = answer !is AiClient.Answer.Said
+
+    Text(
+        when (answer) {
+            is AiClient.Answer.Said -> stringResource(R.string.ai_probe_said, answer.text)
+            is AiClient.Answer.Refused -> answer.reason
+                ?.let { stringResource(R.string.ai_probe_refused, answer.code, it) }
+                ?: stringResource(R.string.ai_probe_refused_bare, answer.code)
+            is AiClient.Answer.Unreachable ->
+                stringResource(R.string.ai_probe_unreachable, answer.why)
+            AiClient.Answer.Unreadable -> stringResource(R.string.ai_probe_unreadable)
+            AiClient.Answer.NotConfigured -> stringResource(R.string.ai_probe_unconfigured)
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (bad) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 /**
