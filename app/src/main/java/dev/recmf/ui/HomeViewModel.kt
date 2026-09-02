@@ -884,10 +884,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // Paired rather than passed separately: combine takes five flows and this needs
         // six. The two that travel together are the two the watch sends in the same
         // exchange.
-        combine(dao.activitySince(startOfBaseline()), dao.spo2Since(startOfBaseline()), ::Pair),
+        combine(
+            dao.activitySince(startOfBaseline()),
+            dao.spo2Since(startOfBaseline()),
+            dao.heartRateSince(startOfBaseline()),
+            ::Triple,
+        ),
         // The two readings that come from other devices, likewise paired.
         combine(_hrv, _nightsElsewhere, ::Pair),
-    ) { resting, stress, own, (activity, spo2), (hrv, elsewhere) ->
+    ) { resting, stress, own, (activity, spo2, pulse), (hrv, elsewhere) ->
         val zone = ZoneId.systemDefault()
 
         fun <T> mean(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
@@ -919,12 +924,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // total, and the day's average is what the seven-day strip already shows.
         val oxygenByDay = mean(spo2, { it.timestamp }, { it.percent.toFloat() })
 
+        // Every beat the watch reported, workouts included, because that is what the tile
+        // and the week strip above it already average. A column that quietly excluded
+        // exercise would disagree with the screen it is meant to explain.
+        val pulseByDay = mean(pulse, { it.timestamp }, { it.bpm.toFloat() })
+
         // Variability days count too, even though nothing else may have happened on them:
         // it is the one column here the watch did not produce, and a day it is the only
         // reading for is still a day worth showing.
         val dates = (
             restingByDay.keys + stressByDay.keys + sleepByDay.keys + stepsByDay.keys +
-                oxygenByDay.keys + hrv.keys
+                oxygenByDay.keys + pulseByDay.keys + hrv.keys
             ).sorted()
 
         dates.map { date ->
@@ -940,6 +950,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 calories = caloriesByDay[date],
                 distanceMeters = distanceByDay[date],
                 climbs = climbsByDay[date],
+                heartRate = pulseByDay[date]?.roundToInt(),
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
@@ -1054,7 +1065,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
      *
      * @param force ignores both of those, for somebody who simply wants another answer.
      */
-    fun askAboutMetric(metric: String, todayValue: String, force: Boolean = false) {
+    fun askAboutMetric(
+        metric: String,
+        todayValue: String,
+        column: String,
+        force: Boolean = false,
+    ) {
         viewModelScope.launch {
             if (metric in _aiAsking.value) return@launch
 
@@ -1077,7 +1093,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     settings = settings,
                     system = AiContext.instructions(settings.systemPrompt, readerLanguage()),
                     user = AiContext.user(
-                        question = AiContext.aboutMetric(metric, todayValue),
+                        question = AiContext.aboutMetric(metric, todayValue, column),
                         days = days,
                         // The other opt-in sends numbers with nobody's name against them,
                         // and this is the line that keeps that true.

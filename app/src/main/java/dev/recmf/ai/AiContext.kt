@@ -49,6 +49,16 @@ object AiContext {
         val calories: Int? = null,
         val distanceMeters: Int? = null,
         val climbs: Int? = null,
+
+        /**
+         * The day's average pulse, which is not the same thing as [restingHeartRate].
+         *
+         * Its absence was noticed by a reader of the table rather than by anybody here:
+         * asked about a pulse of 66, the assistant found only a resting column reading 70,
+         * said so, and reconciled the two as best it could. There was no pulse column at
+         * all.
+         */
+        val heartRate: Int? = null,
     )
 
     /** One column of the table, and how to get it out of a day. */
@@ -66,6 +76,7 @@ object AiContext {
      * from step count comes next, and the one figure from another device comes last.
      */
     private val COLUMNS: List<Column> = listOf(
+        Column("hr_avg") { it.heartRate },
         Column("resting") { it.restingHeartRate },
         Column("sleep_min") { it.sleepMinutes },
         Column("restful_pct") { it.restfulPercent },
@@ -288,9 +299,32 @@ object AiContext {
         }
     }
 
-    /** The question asked when somebody opens a metric. */
-    fun aboutMetric(metric: String, todayValue: String): String =
-        "Today's $metric is $todayValue. Is that ordinary for this person, and what would " +
-            "you notice about the last few weeks of it?"
+    /**
+     * The question asked when somebody opens a metric.
+     *
+     * The column is named because the metric is not: a tile is labelled in whatever
+     * language the phone is read in, and the table is headed in English, so "Пульс" has to
+     * be matched to one of ten English headings by guesswork. It was guessed wrong — the
+     * only heading that looked close was the resting pulse, which is a different
+     * measurement, and the answer came back reconciling two numbers that were never the
+     * same one.
+     *
+     * The sentence about a day's row exists for the same reading. Several tiles show the
+     * newest reading rather than a summary of the day, and without this the difference
+     * between them looks like a contradiction in the data.
+     *
+     * @param column the heading this metric appears under, or blank for a metric with no
+     *   column of its own.
+     */
+    fun aboutMetric(metric: String, todayValue: String, column: String = ""): String =
+        buildString {
+            append("Today's $metric reads $todayValue.")
+            if (column.isNotBlank()) {
+                append(" That is the `$column` column in the table below, where each row is ")
+                append("the whole of that day — so the newest reading can differ from it.")
+            }
+            append(" Is that ordinary for this person, and what would you notice about the ")
+            append("last few weeks of it?")
+        }
 
 }

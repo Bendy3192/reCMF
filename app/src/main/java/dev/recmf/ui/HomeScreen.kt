@@ -177,7 +177,7 @@ fun HomeScreen(
     aiModels: AiClient.Models?,
     aiInsights: Map<String, AiInsight>,
     aiAsking: Set<String>,
-    onAskAboutMetric: (String, String, Boolean) -> Unit,
+    onAskAboutMetric: (String, String, String, Boolean) -> Unit,
     aiDays: List<AiContext.Day>,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
@@ -351,7 +351,7 @@ private fun TabContent(
     aiModels: AiClient.Models?,
     aiInsights: Map<String, AiInsight>,
     aiAsking: Set<String>,
-    onAskAboutMetric: (String, String, Boolean) -> Unit,
+    onAskAboutMetric: (String, String, String, Boolean) -> Unit,
     aiDays: List<AiContext.Day>,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
@@ -455,14 +455,14 @@ private fun TabContent(
                     val howLong = readableDuration(slept.toLong())
 
                     LaunchedEffect(night, howLong) {
-                        if (slept > 0) onAskAboutMetric(night, howLong, false)
+                        if (slept > 0) onAskAboutMetric(night, howLong, SLEEP_COLUMN, false)
                     }
 
                     SleepCard(
                         session = sleepSession,
                         insight = aiInsights[night],
                         thinking = night in aiAsking,
-                        onAskAgain = { onAskAboutMetric(night, howLong, true) },
+                        onAskAgain = { onAskAboutMetric(night, howLong, SLEEP_COLUMN, true) },
                     )
                 }
 
@@ -575,7 +575,7 @@ private fun TabContent(
         // Asked on opening, and again whenever the sheet is reopened onto a metric whose
         // answer has gone stale. The view model decides whether that costs a request; from
         // here it is simply "show me what you have on this".
-        LaunchedEffect(name, reading) { onAskAboutMetric(name, reading, false) }
+        LaunchedEffect(name, reading) { onAskAboutMetric(name, reading, tile.column, false) }
 
         MetricDetailSheet(
             icon = tile.icon,
@@ -584,7 +584,7 @@ private fun TabContent(
             explains = stringResource(tile.explains),
             insight = aiInsights[name],
             thinking = name in aiAsking,
-            onAskAgain = { onAskAboutMetric(name, reading, true) },
+            onAskAgain = { onAskAboutMetric(name, reading, tile.column, true) },
             week = tile.week,
             format = { number -> tile.format(context, number) },
             onDismiss = { opened = null },
@@ -1099,7 +1099,7 @@ private fun LazyListScope.metricTiles(
         state.latestHeartRate?.let { latest ->
             add(
                 TileSpec(
-                    R.drawable.ic_metric_heart, R.string.metric_heart_rate,
+                    R.drawable.ic_metric_heart, R.string.metric_heart_rate, "hr_avg",
                     R.string.explain_heart_rate, weekly.heartRate,
                     format = { context, bpm ->
                         context.getString(R.string.value_bpm, bpm.roundToInt())
@@ -1110,7 +1110,7 @@ private fun LazyListScope.metricTiles(
         state.restingHeartRate?.let { bpm ->
             add(
                 TileSpec(
-                    R.drawable.ic_metric_heart, R.string.metric_resting_heart_rate,
+                    R.drawable.ic_metric_heart, R.string.metric_resting_heart_rate, "resting",
                     R.string.explain_resting_heart_rate, weekly.restingHeartRate,
                     format = { context, beats ->
                         context.getString(R.string.value_bpm, beats.roundToInt())
@@ -1121,7 +1121,7 @@ private fun LazyListScope.metricTiles(
         state.spo2?.let { percent ->
             add(
                 TileSpec(
-                    R.drawable.ic_metric_oxygen, R.string.metric_spo2,
+                    R.drawable.ic_metric_oxygen, R.string.metric_spo2, "spo2_pct",
                     R.string.explain_spo2, weekly.spo2,
                     format = { context, share ->
                         context.getString(R.string.value_percent, share.roundToInt())
@@ -1132,7 +1132,7 @@ private fun LazyListScope.metricTiles(
         state.stress?.let { level ->
             add(
                 TileSpec(
-                    R.drawable.ic_metric_stress, R.string.metric_stress,
+                    R.drawable.ic_metric_stress, R.string.metric_stress, "stress",
                     R.string.explain_stress, weekly.stress,
                 ) {
                     level.toString()
@@ -1142,7 +1142,7 @@ private fun LazyListScope.metricTiles(
         if (state.today.distanceMeters > 0 || weekly.distanceMeters.hasReadings()) {
             add(
                 TileSpec(
-                    R.drawable.ic_metric_distance, R.string.metric_distance,
+                    R.drawable.ic_metric_distance, R.string.metric_distance, "distance_m",
                     R.string.explain_distance, weekly.distanceMeters,
                     format = { context, metres -> context.readableDistance(metres.roundToInt()) },
                 ) { it.readableDistance(state.today.distanceMeters) },
@@ -1151,7 +1151,7 @@ private fun LazyListScope.metricTiles(
         if (state.today.calories > 0 || weekly.calories.hasReadings()) {
             add(
                 TileSpec(
-                    R.drawable.ic_metric_calories, R.string.metric_calories,
+                    R.drawable.ic_metric_calories, R.string.metric_calories, "kcal",
                     R.string.explain_calories, weekly.calories,
                     format = { context, kcal ->
                         context.getString(R.string.value_kcal, kcal.roundToInt())
@@ -1162,7 +1162,7 @@ private fun LazyListScope.metricTiles(
         if (state.today.climbs > 0 || weekly.climbs.hasReadings()) {
             add(
                 TileSpec(
-                    R.drawable.ic_metric_climbs, R.string.metric_climbs,
+                    R.drawable.ic_metric_climbs, R.string.metric_climbs, "climbs",
                     R.string.explain_climbs, weekly.climbs,
                 ) {
                     state.today.climbs.toString()
@@ -2022,6 +2022,16 @@ private fun HealthConnectSurveyCard(held: List<HealthConnectSync.Held>?, onLook:
 private class TileSpec(
     @param:DrawableRes val icon: Int,
     @param:StringRes val label: Int,
+    /**
+     * The heading this metric has in the table the assistant is sent.
+     *
+     * Carried on the tile because only the tile knows: the label is translated and the
+     * headings are not, so nothing downstream can match one to the other. Asked about
+     * "Пульс" with no column named, the assistant matched it to the resting pulse, which
+     * is a different measurement, and spent a paragraph reconciling two numbers that were
+     * never the same one.
+     */
+    val column: String,
     // What the number is, for the sheet that opens on a tap. Required rather than
     // defaulted: a metric nobody could write a sentence about should not be on the screen.
     @param:StringRes val explains: Int,
@@ -2031,6 +2041,9 @@ private class TileSpec(
     val format: (Context, Float) -> String = { _, number -> number.roundToInt().toString() },
     val value: (Context) -> String,
 )
+
+/** What the night is headed in the assistant's table. The sleep card is not a tile. */
+private const val SLEEP_COLUMN = "sleep_min"
 
 /** True once any day in the week carries a reading above zero. */
 private fun List<DayValue>.hasReadings(): Boolean = any { (it.value ?: 0f) > 0f }

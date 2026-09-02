@@ -218,6 +218,38 @@ class AiContextTest {
     }
 
     @Test
+    fun `the question names the column, because the metric name is translated`() {
+        // A tile is labelled in whatever language the phone is read in and the table is
+        // headed in English. Asked about "Пульс" with no column named, the assistant
+        // matched it to the resting pulse — a different measurement — and spent a
+        // paragraph reconciling two numbers that were never the same one.
+        val asked = AiContext.aboutMetric("Пульс", "66 уд/мин", "hr_avg")
+
+        assertTrue("Пульс" in asked, asked)
+        assertTrue("`hr_avg`" in asked, asked)
+    }
+
+    @Test
+    fun `a metric with no column of its own is not given one`() {
+        val asked = AiContext.aboutMetric("Steps", "9012")
+
+        assertFalse("column" in asked, asked)
+        assertTrue(asked.startsWith("Today's Steps reads 9012."), asked)
+    }
+
+    @Test
+    fun `the pulse and the resting pulse are two columns, not one`() {
+        val day = Day("2026-08-29", restingHeartRate = 70, heartRate = 83)
+
+        val table = AiContext.table(listOf(day))
+
+        assertTrue("hr_avg" in table, table)
+        assertTrue("resting" in table, table)
+        assertTrue("83" in table.lines().last(), table)
+        assertTrue("70" in table.lines().last(), table)
+    }
+
+    @Test
     fun `the answer is asked for in the reader's language`() {
         val said = AiContext.instructions("Be brief.", "Russian")
 
