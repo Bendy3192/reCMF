@@ -235,7 +235,17 @@ class WatchService : LifecycleService() {
             onAuthKeyNegotiated = { key ->
                 // Pairing succeeded — persist K1 so the next connection skips the
                 // shell handshake entirely.
-                lifecycleScope.launch { settings.setAuthKey(key) }
+                lifecycleScope.launch {
+                    settings.setAuthKey(key)
+
+                    // And forget what this watch was told. A watch that pairs from
+                    // scratch has either been reset or is a different watch, and either
+                    // way it is not holding the almanac reCMF last sent — but the record
+                    // of having sent one would have kept a fresh one away for a day and a
+                    // half. A wearer who has just factory-reset a watch to fix its GPS
+                    // deserves better than a day and a half of no orbits at all.
+                    settings.setAlmanacSentAt(millis = 0L, format = 0)
+                }
             },
         )
 
