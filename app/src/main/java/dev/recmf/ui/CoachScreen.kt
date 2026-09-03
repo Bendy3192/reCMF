@@ -17,7 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,6 +44,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -139,19 +140,16 @@ fun CoachScreen(
         if (last >= 0) scroll.animateScrollToItem(last)
     }
 
-    // Two things stack under this screen and exactly one of them is the scaffold's job.
+    // Two things sit under this screen: the keyboard, which imePadding handles, and the
+    // floating dock, which is only there while the keyboard is not.
     //
-    // The scaffold pads for the system bars and not for the keyboard, so the keyboard is
-    // this screen's to handle — that is imePadding, and taking it away put the box to type
-    // in behind the keyboard. The floating dock is the other, and it is only there while
-    // the keyboard is not: with the keyboard up the dock is behind it, so reserving a
-    // dock's height there is a gap holding nothing.
-    //
-    // Both were wrong at once in the two attempts before this. The first padded for the
-    // keyboard and still reserved the dock's height on top, which is what pushed the box
-    // a long way up the screen; the second dropped the keyboard padding along with the
-    // dock's. One of each is the answer.
-    val clearance = if (WindowInsets.isImeVisible) 0.dp else DOCK_CLEARANCE
+    // Whether the keyboard is up is measured rather than asked. `isImeVisible` was the
+    // obvious way to ask and the box kept landing a dock's height too high, which is
+    // exactly what a false answer here produces — the clearance stays reserved for a dock
+    // that is behind the keyboard. The height of the inset is the same fact without the
+    // indirection: greater than nothing means there is a keyboard.
+    val imeBelow = WindowInsets.ime.getBottom(LocalDensity.current)
+    val clearance = if (imeBelow > 0) 0.dp else DOCK_CLEARANCE
 
     Column(
         modifier = Modifier
