@@ -25,7 +25,7 @@
     <string name="hc_survey">Что лежит в Health Connect</string>
     <string name="hc_survey_explainer">Читается прямо из Health Connect на этом телефоне, чтобы второй гаджет, который туда пишет, было видно, а не предполагалось. Отсюда никуда ничего не отправляется — это взгляд на то, что уже есть на телефоне.</string>
     <string name="action_hc_survey">Посмотреть</string>
-    <string name="hc_survey_present">записей: %1$s, последняя от %2$s</string>
+    <string name="hc_survey_present">записей: %1$s, последняя от %2$s, записана %3$s</string>
     <string name="hc_survey_empty">за две недели ничего</string>
     <string name="hc_survey_not_permitted">нет разрешения</string>
     <string name="hc_survey_refused">Health Connect отказал в чтении</string>

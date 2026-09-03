@@ -146,6 +146,7 @@ class HealthConnectSync(private val context: Context) {
                 if (records.isEmpty()) {
                     Held(label, Held.State.EMPTY)
                 } else {
+                    val newest = records.maxByOrNull { it.metadata.lastModifiedTime }
                     Held(
                         label = label,
                         state = Held.State.PRESENT,
@@ -156,8 +157,8 @@ class HealthConnectSync(private val context: Context) {
                         capped = records.size >= PAGE,
                         // Whoever wrote the newest one. Several apps can write the same
                         // type, and the newest is the one worth naming.
-                        writtenBy = records.maxByOrNull { it.metadata.lastModifiedTime }
-                            ?.metadata?.dataOrigin?.packageName.orEmpty(),
+                        writtenBy = newest?.metadata?.dataOrigin?.packageName.orEmpty(),
+                        writtenAtMillis = newest?.metadata?.lastModifiedTime?.toEpochMilli() ?: 0,
                     )
                 }
             }.getOrElse { Held(label, Held.State.REFUSED) }
@@ -294,6 +295,17 @@ class HealthConnectSync(private val context: Context) {
         val writtenBy: String = "",
         /** True when the count hit the page size and the real number is larger. */
         val capped: Boolean = false,
+
+        /**
+         * When the newest record was written, not when the reading was taken.
+         *
+         * The two differ, and the difference is the question worth answering here: whether
+         * the other app puts its data into Health Connect on its own or only while
+         * somebody is looking at it. A record from last night written this morning at the
+         * moment this survey ran is an app that syncs when opened; the same record written
+         * at four in the morning is one that does not need to be.
+         */
+        val writtenAtMillis: Long = 0,
     ) {
         enum class State {
             /** Records exist in the window. */

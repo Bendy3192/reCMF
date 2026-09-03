@@ -4,12 +4,14 @@
 package dev.recmf.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -54,6 +56,7 @@ import dev.recmf.data.CoachMessageEntity
  * turned on is a tab that opens onto an explanation of why it is empty, and there are five
  * other tabs that would rather have the room.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CoachScreen(
     messages: List<CoachMessageEntity>,
@@ -74,10 +77,18 @@ fun CoachScreen(
         if (last >= 0) scroll.animateScrollToItem(last)
     }
 
+    // The scaffold around every tab already holds its content clear of the keyboard. A
+    // second imePadding here added that height again, and the box to type in sat a whole
+    // keyboard above the keyboard, in the middle of an empty screen.
+    //
+    // What is left is the dock, which floats over the content — and only while it is
+    // visible. With the keyboard up the dock is behind it, so reserving room for it there
+    // is a gap holding nothing.
+    val clearance = if (WindowInsets.isImeVisible) 8.dp else DOCK_CLEARANCE
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .padding(horizontal = 16.dp),
     ) {
         Row(
@@ -100,7 +111,7 @@ fun CoachScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp),
             // With no box to type in, nothing else is holding the last message clear of
             // the floating dock.
-            contentPadding = PaddingValues(bottom = if (ready) 8.dp else DOCK_CLEARANCE),
+            contentPadding = PaddingValues(bottom = if (ready) 8.dp else clearance),
         ) {
             if (messages.isEmpty()) {
                 item {
@@ -148,7 +159,7 @@ fun CoachScreen(
 
         if (ready) {
             Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = DOCK_CLEARANCE),
+                modifier = Modifier.fillMaxWidth().padding(bottom = clearance),
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {

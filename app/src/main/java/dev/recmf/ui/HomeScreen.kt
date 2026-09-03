@@ -2032,6 +2032,13 @@ private fun HealthConnectSurveyCard(held: List<HealthConnectSync.Held>?, onLook:
                                     // precise-looking number that is not one.
                                     if (row.capped) "${row.count}+" else row.count.toString(),
                                     row.writtenBy.ifBlank { "?" },
+                                    // When it was put here, which is the only way to tell
+                                    // an app that publishes on its own from one that only
+                                    // does it while somebody has it open.
+                                    row.writtenAtMillis
+                                        .takeIf { it > 0 }
+                                        ?.let { SURVEY_CLOCK.format(Instant.ofEpochMilli(it)) }
+                                        ?: "?",
                                 )
                                 HealthConnectSync.Held.State.EMPTY ->
                                     stringResource(R.string.hc_survey_empty)
@@ -4010,5 +4017,13 @@ private val LOG_TIME: DateTimeFormatter =
     DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault())
 private val CLOCK_TIME: DateTimeFormatter =
     DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault())
+/**
+ * When a Health Connect record was written, for the survey.
+ *
+ * No year: the survey looks back a fortnight, so a year in every row would be four
+ * characters of noise in a line that is already long.
+ */
+private val SURVEY_CLOCK: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("d MMM, HH:mm").withZone(ZoneId.systemDefault())
 private val RECORD_STAMP: DateTimeFormatter =
     DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm").withZone(ZoneId.systemDefault())
