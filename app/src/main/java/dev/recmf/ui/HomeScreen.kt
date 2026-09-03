@@ -425,6 +425,16 @@ private fun TabContent(
             thinking = coachThinking,
             problem = coachProblem,
             ready = ai.coachEnabled && ai.usable,
+            // Built here because this is where it is known what there is to ask about.
+            // Offering "how did I sleep" to a phone with no night recorded buys an answer
+            // that begins "there is no data for that", which is worse than one suggestion
+            // fewer.
+            suggestions = buildList {
+                add(stringResource(R.string.coach_ask_overall))
+                if (sleepScore != null) add(stringResource(R.string.coach_ask_sleep))
+                if (readiness != null) add(stringResource(R.string.coach_ask_readiness))
+                add(stringResource(R.string.coach_ask_change))
+            },
             onSend = onCoachSend,
             onClear = onCoachClear,
         )
@@ -2031,7 +2041,7 @@ private fun HealthConnectSurveyCard(held: List<HealthConnectSync.Held>?, onLook:
                                     // means "at least", and printing it bare would be a
                                     // precise-looking number that is not one.
                                     if (row.capped) "${row.count}+" else row.count.toString(),
-                                    row.writtenBy.ifBlank { "?" },
+                                    row.writtenBy.joinToString(", ").ifBlank { "?" },
                                     // When it was put here, which is the only way to tell
                                     // an app that publishes on its own from one that only
                                     // does it while somebody has it open.

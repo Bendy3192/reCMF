@@ -3,6 +3,7 @@
  */
 package dev.recmf.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Column
@@ -17,7 +18,9 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +55,10 @@ import dev.recmf.data.CoachMessageEntity
  * displays; it is held here, and resent whole every time. Which is also why clearing it
  * actually clears it.
  *
+ * The openers above the box are filtered by what the app can actually answer: there is no
+ * point offering "how did I sleep" to somebody the watch has never recorded a night for,
+ * and an answer that has to begin "there is no data for that" is worse than no suggestion.
+ *
  * Its own tab, and only when the coach is switched on. A tab for a feature somebody has not
  * turned on is a tab that opens onto an explanation of why it is empty, and there are five
  * other tabs that would rather have the room.
@@ -64,6 +71,8 @@ fun CoachScreen(
     problem: String?,
     /** False when there is no key, or no model, or the switch is off. */
     ready: Boolean,
+    /** Openers to tap when nothing comes to mind, already filtered to what can be answered. */
+    suggestions: List<String>,
     onSend: (String) -> Unit,
     onClear: () -> Unit,
 ) {
@@ -158,6 +167,26 @@ fun CoachScreen(
         }
 
         if (ready) {
+            // Only while the box is empty. They are for not knowing what to ask, and
+            // somebody halfway through typing has stopped not knowing.
+            if (draft.isBlank() && suggestions.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState())
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    suggestions.forEach { opener ->
+                        AssistChip(
+                            onClick = { onSend(opener) },
+                            enabled = !thinking,
+                            label = { Text(opener) },
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = clearance),
                 verticalAlignment = Alignment.Bottom,

@@ -197,6 +197,10 @@
     <string name="coach_empty">Ask about anything the watch has been recording. Every question carries the same table of days the metric cards send, and what you have written about yourself.</string>
     <string name="coach_off">The coach is switched off. Turn it on under the assistant, on the watch tab.</string>
     <string name="coach_hint">Ask something</string>
+    <string name="coach_ask_overall">How am I doing?</string>
+    <string name="coach_ask_sleep">How did I sleep?</string>
+    <string name="coach_ask_readiness">Why that readiness?</string>
+    <string name="coach_ask_change">What should I change?</string>
     <string name="coach_send">Send</string>
     <string name="coach_clear">Clear</string>
     <string name="coach_thinking">Thinking</string>

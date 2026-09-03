@@ -198,6 +198,10 @@
     <string name="coach_empty">Спросите о чём угодно из того, что записывают часы. С каждым вопросом уходит та же таблица дней, что и с карточек метрик, и то, что вы написали о себе.</string>
     <string name="coach_off">Тренер выключен. Включите его в разделе ассистента, на вкладке часов.</string>
     <string name="coach_hint">Спросить</string>
+    <string name="coach_ask_overall">Как у меня дела?</string>
+    <string name="coach_ask_sleep">Как я спал?</string>
+    <string name="coach_ask_readiness">Почему такая готовность?</string>
+    <string name="coach_ask_change">Что мне изменить?</string>
     <string name="coach_send">Отправить</string>
     <string name="coach_clear">Очистить</string>
     <string name="coach_thinking">Думает</string>

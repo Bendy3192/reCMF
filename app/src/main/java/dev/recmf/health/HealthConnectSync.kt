@@ -146,7 +146,12 @@ class HealthConnectSync(private val context: Context) {
                 if (records.isEmpty()) {
                     Held(label, Held.State.EMPTY)
                 } else {
-                    val newest = records.maxByOrNull { it.metadata.lastModifiedTime }
+                    val writers = records
+                        .groupBy { it.metadata.dataOrigin.packageName }
+                        .mapValues { (_, rows) -> rows.maxOf { it.metadata.lastModifiedTime } }
+                        .entries
+                        .sortedByDescending { it.value }
+
                     Held(
                         label = label,
                         state = Held.State.PRESENT,
@@ -155,10 +160,8 @@ class HealthConnectSync(private val context: Context) {
                         // page size means "at least this", and saying so is the difference
                         // between a diagnostic and a number that looks exact and is not.
                         capped = records.size >= PAGE,
-                        // Whoever wrote the newest one. Several apps can write the same
-                        // type, and the newest is the one worth naming.
-                        writtenBy = newest?.metadata?.dataOrigin?.packageName.orEmpty(),
-                        writtenAtMillis = newest?.metadata?.lastModifiedTime?.toEpochMilli() ?: 0,
+                        writtenBy = writers.map { it.key },
+                        writtenAtMillis = writers.firstOrNull()?.value?.toEpochMilli() ?: 0,
                     )
                 }
             }.getOrElse { Held(label, Held.State.REFUSED) }
@@ -292,7 +295,18 @@ class HealthConnectSync(private val context: Context) {
         val label: String,
         val state: State,
         val count: Int = 0,
-        val writtenBy: String = "",
+
+        /**
+         * Every app that wrote one of these, most recently written first.
+         *
+         * All of them rather than the newest one alone, because the newest writer does not
+         * answer the question the survey gets asked. "Sleep — reCMF" reads as "nothing
+         * else writes sleep here", and what it actually means is "reCMF wrote the most
+         * recent one" — which is a certainty, since reCMF writes a night on every sync.
+         * Whether a second wearable also keeps nights here is the thing worth knowing, and
+         * it was invisible.
+         */
+        val writtenBy: List<String> = emptyList(),
         /** True when the count hit the page size and the real number is larger. */
         val capped: Boolean = false,
 
