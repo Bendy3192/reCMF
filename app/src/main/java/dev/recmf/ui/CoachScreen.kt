@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -138,18 +139,24 @@ fun CoachScreen(
         if (last >= 0) scroll.animateScrollToItem(last)
     }
 
-    // The scaffold around every tab already holds its content clear of the keyboard. A
-    // second imePadding here added that height again, and the box to type in sat a whole
-    // keyboard above the keyboard, in the middle of an empty screen.
+    // Two things stack under this screen and exactly one of them is the scaffold's job.
     //
-    // What is left is the dock, which floats over the content — and only while it is
-    // visible. With the keyboard up the dock is behind it, so reserving room for it there
-    // is a gap holding nothing.
-    val clearance = if (WindowInsets.isImeVisible) 8.dp else DOCK_CLEARANCE
+    // The scaffold pads for the system bars and not for the keyboard, so the keyboard is
+    // this screen's to handle — that is imePadding, and taking it away put the box to type
+    // in behind the keyboard. The floating dock is the other, and it is only there while
+    // the keyboard is not: with the keyboard up the dock is behind it, so reserving a
+    // dock's height there is a gap holding nothing.
+    //
+    // Both were wrong at once in the two attempts before this. The first padded for the
+    // keyboard and still reserved the dock's height on top, which is what pushed the box
+    // a long way up the screen; the second dropped the keyboard padding along with the
+    // dock's. One of each is the answer.
+    val clearance = if (WindowInsets.isImeVisible) 0.dp else DOCK_CLEARANCE
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .padding(horizontal = 16.dp),
     ) {
         Row(

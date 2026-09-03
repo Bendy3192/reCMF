@@ -160,8 +160,7 @@ class HealthConnectSync(private val context: Context) {
                         // page size means "at least this", and saying so is the difference
                         // between a diagnostic and a number that looks exact and is not.
                         capped = records.size >= PAGE,
-                        writtenBy = writers.map { it.key },
-                        writtenAtMillis = writers.firstOrNull()?.value?.toEpochMilli() ?: 0,
+                        writtenBy = writers.map { Writer(it.key, it.value.toEpochMilli()) },
                     )
                 }
             }.getOrElse { Held(label, Held.State.REFUSED) }
@@ -297,30 +296,34 @@ class HealthConnectSync(private val context: Context) {
         val count: Int = 0,
 
         /**
-         * Every app that wrote one of these, most recently written first.
+         * Every app that wrote one of these, each with its own last write, newest first.
          *
          * All of them rather than the newest one alone, because the newest writer does not
          * answer the question the survey gets asked. "Sleep — reCMF" reads as "nothing
          * else writes sleep here", and what it actually means is "reCMF wrote the most
          * recent one" — which is a certainty, since reCMF writes a night on every sync.
-         * Whether a second wearable also keeps nights here is the thing worth knowing, and
-         * it was invisible.
+         *
+         * And a time per writer rather than one for the row, for the same reason a second
+         * time: a row whose newest write is this morning says nothing about when the other
+         * app last put something there. That is exactly the question — whether a second
+         * wearable publishes on its own or only while somebody has its app open — and one
+         * shared timestamp answers it about whichever app happened to write last.
          */
-        val writtenBy: List<String> = emptyList(),
+        val writtenBy: List<Writer> = emptyList(),
         /** True when the count hit the page size and the real number is larger. */
         val capped: Boolean = false,
 
-        /**
-         * When the newest record was written, not when the reading was taken.
-         *
-         * The two differ, and the difference is the question worth answering here: whether
-         * the other app puts its data into Health Connect on its own or only while
-         * somebody is looking at it. A record from last night written this morning at the
-         * moment this survey ran is an app that syncs when opened; the same record written
-         * at four in the morning is one that does not need to be.
-         */
-        val writtenAtMillis: Long = 0,
     ) {
+        /**
+         * One app, and when it last put something of this kind into Health Connect.
+         *
+         * The write time rather than the reading's own time: a reading from last night
+         * written at four in the morning is an app that publishes on its own, and the same
+         * reading written the moment this survey ran is one that only does it while it is
+         * open. The two are indistinguishable by the reading alone.
+         */
+        data class Writer(val app: String, val atMillis: Long)
+
         enum class State {
             /** Records exist in the window. */
             PRESENT,

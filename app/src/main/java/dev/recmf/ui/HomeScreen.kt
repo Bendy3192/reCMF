@@ -2035,21 +2035,39 @@ private fun HealthConnectSurveyCard(held: List<HealthConnectSync.Held>?, onLook:
                         )
                         Text(
                             when (row.state) {
-                                HealthConnectSync.Held.State.PRESENT -> stringResource(
-                                    R.string.hc_survey_present,
-                                    // A page, not a total: "1000" out of Health Connect
-                                    // means "at least", and printing it bare would be a
-                                    // precise-looking number that is not one.
-                                    if (row.capped) "${row.count}+" else row.count.toString(),
-                                    row.writtenBy.joinToString(", ").ifBlank { "?" },
-                                    // When it was put here, which is the only way to tell
-                                    // an app that publishes on its own from one that only
-                                    // does it while somebody has it open.
-                                    row.writtenAtMillis
-                                        .takeIf { it > 0 }
-                                        ?.let { SURVEY_CLOCK.format(Instant.ofEpochMilli(it)) }
-                                        ?: "?",
-                                )
+                                HealthConnectSync.Held.State.PRESENT -> buildString {
+                                    append(
+                                        stringResource(
+                                            R.string.hc_survey_present,
+                                            // A page, not a total: "1000" out of Health
+                                            // Connect means "at least", and printing it
+                                            // bare would be a precise-looking number that
+                                            // is not one.
+                                            if (row.capped) {
+                                                "${row.count}+"
+                                            } else {
+                                                row.count.toString()
+                                            },
+                                        ),
+                                    )
+
+                                    // A line each, with its own last write. One shared
+                                    // time would answer for whichever app wrote last and
+                                    // say nothing about the other, which is the one the
+                                    // question is usually about.
+                                    row.writtenBy.forEach { writer ->
+                                        append("\n")
+                                        append(
+                                            stringResource(
+                                                R.string.hc_survey_writer,
+                                                writer.app,
+                                                SURVEY_CLOCK.format(
+                                                    Instant.ofEpochMilli(writer.atMillis),
+                                                ),
+                                            ),
+                                        )
+                                    }
+                                }
                                 HealthConnectSync.Held.State.EMPTY ->
                                     stringResource(R.string.hc_survey_empty)
                                 HealthConnectSync.Held.State.NOT_PERMITTED ->
