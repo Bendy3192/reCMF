@@ -152,13 +152,22 @@ fun CoachScreen(
     // window that was moving underneath it.
     val insets = WindowInsets.ime.exclude(WindowInsets.navigationBars)
 
-    // The dock floats over the content and is behind the keyboard while there is one, so
-    // the room reserved for it collapses then.
-    val clearance = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) {
-        0.dp
-    } else {
-        DOCK_CLEARANCE
+    // How much of the dock the keyboard is not already covering.
+    //
+    // Subtraction rather than a switch. A switch was right at both ends and wrong in
+    // between: the inset slides while the keyboard closes and the reserved room snapped
+    // back only at the very end, so for the length of the animation the box swept across
+    // the dock. Taking the lift away from the dock's height instead gives the same two
+    // answers at the ends and a continuous one throughout — and it is the more truthful
+    // arithmetic anyway, since what has to be left clear is the part of the dock still
+    // showing.
+    val density = LocalDensity.current
+    val lift = with(density) {
+        (WindowInsets.ime.getBottom(density) - WindowInsets.navigationBars.getBottom(density))
+            .coerceAtLeast(0)
+            .toDp()
     }
+    val clearance = (DOCK_CLEARANCE - lift).coerceAtLeast(0.dp)
 
     Column(
         modifier = Modifier
