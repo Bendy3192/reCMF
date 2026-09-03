@@ -180,17 +180,6 @@ fun CoachScreen(
             }
         }
 
-        // TEMPORARY, and at the top because that is the part of this screen that stays on
-        // screen. Five attempts at placing the box above the keyboard have each moved it
-        // by about a keyboard, in one direction or the other — which is not something one
-        // expression can do, so the numbers being reasoned about are not the numbers the
-        // layout is getting. This prints them. It comes out again the moment one
-        // screenshot says which of them is lying.
-        Text(
-            "ime=$imeBelow bars=$barsBelow clearance=$clearance visible=$isImeVisible",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.error,
-        )
 
         LazyColumn(
             modifier = Modifier.weight(1f),
@@ -245,6 +234,17 @@ fun CoachScreen(
         }
 
         if (ready) {
+            // TEMPORARY. It was at the top of the screen and the top of the screen is
+            // exactly what leaves when the keyboard opens — the whole window slides up,
+            // watch bar and all, and takes the numbers with it. Directly above the chips
+            // is the lowest thing that stayed visible in that state, so that is where the
+            // reading has to be taken.
+            Text(
+                "ime=$imeBelow bars=$barsBelow clear=$clearance vis=$isImeVisible",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+
             // Only while the box is empty. They are for not knowing what to ask, and
             // somebody halfway through typing has stopped not knowing.
             if (draft.isBlank() && suggestions.isNotEmpty()) {
