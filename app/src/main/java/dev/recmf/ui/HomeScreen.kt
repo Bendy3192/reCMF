@@ -297,6 +297,7 @@ fun HomeScreen(
                         onAiModels = onAiModels,
                         onAiWebSearch = onAiWebSearch,
                         onAiProfile = onAiProfile,
+                        onAiDeclined = onAiDeclined,
                         held = held,
                         onSurveyHealthConnect = onSurveyHealthConnect,
                         onExportBackup = onExportBackup,
