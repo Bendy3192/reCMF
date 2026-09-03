@@ -3,6 +3,10 @@
  */
 package dev.recmf.ui
 
+import android.content.Intent
+import android.speech.RecognizerIntent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
@@ -32,15 +37,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.recmf.R
 import dev.recmf.data.CoachMessageEntity
+import java.util.Locale
 
 /**
  * A conversation with the assistant, rather than a paragraph it volunteers.
@@ -78,6 +86,50 @@ fun CoachScreen(
 ) {
     var draft by rememberSaveable { mutableStateOf("") }
     val scroll = rememberLazyListState()
+
+    val context = LocalContext.current
+
+    // The system's recogniser, as an activity. reCMF asks for no microphone permission and
+    // never opens one: the dialog belongs to whichever app handles this, the audio is that
+    // app's business, and what comes back here is text. A speech feature that needed
+    // RECORD_AUDIO would be the app's most invasive permission by a distance, for a
+    // convenience.
+    val speech = remember {
+        Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
+            .putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+            )
+            .putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault().toLanguageTag())
+    }
+
+    // Hidden rather than shown and broken where nothing handles it. Android Go phones and
+    // de-Googled ones have no recogniser, and a button that can only apologise is worse
+    // than no button.
+    val canSpeak = remember(context) {
+        // resolveActivity on the intent rather than queryIntentActivities on the package
+        // manager: the flags overload of the latter is deprecated on this target, and a
+        // deprecation is a warning, and warnings fail this build.
+        speech.resolveActivity(context.packageManager) != null
+    }
+
+    // Read in the composition. A string resource cannot be looked up from a click handler,
+    // which is not a composition and has caught this app out before.
+    val spoken = stringResource(R.string.coach_speak)
+
+    val listen = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        val heard = result.data
+            ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+            ?.firstOrNull()
+            .orEmpty()
+
+        // Into the box, not straight out to the model. Recognition mishears names and
+        // numbers, and a question about a resting pulse of sixty-nine that went as
+        // sixty-nine hundred should be fixable before it is asked.
+        if (heard.isNotBlank()) draft = if (draft.isBlank()) heard else "$draft $heard"
+    }
 
     // Follows the conversation down as it grows, including down to the thinking row, which
     // is the one thing on the screen somebody is actually waiting for.
@@ -198,6 +250,25 @@ fun CoachScreen(
                     modifier = Modifier.weight(1f),
                     placeholder = { Text(stringResource(R.string.coach_hint)) },
                     shape = RoundedCornerShape(24.dp),
+                    trailingIcon = if (!canSpeak) {
+                        null
+                    } else {
+                        {
+                            IconButton(
+                                onClick = {
+                                    listen.launch(
+                                        Intent(speech)
+                                            .putExtra(RecognizerIntent.EXTRA_PROMPT, spoken),
+                                    )
+                                },
+                            ) {
+                                Icon(
+                                    painterResource(R.drawable.ic_ui_mic),
+                                    contentDescription = spoken,
+                                )
+                            }
+                        }
+                    },
                     // Four lines before it scrolls: enough for a real question, and short
                     // enough that a long one does not eat the conversation above it.
                     maxLines = 4,

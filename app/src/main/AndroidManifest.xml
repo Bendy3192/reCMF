@@ -94,6 +94,19 @@
         <package android:name="com.google.android.apps.healthdata" />
 
         <!--
+            Whatever handles speech, so the coach can tell whether there is anything to
+            hand a question to. Declared by intent rather than by package: the recogniser
+            is Google's on most phones and is not on all of them, and a button that can
+            only apologise is worse than no button.
+        -->
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+
+        <!--
             Every app with a launcher icon, so the notification filter can list what is
             installed rather than only what has already notified. This is the narrow
             declaration Android asks for; QUERY_ALL_PACKAGES would also work and is both

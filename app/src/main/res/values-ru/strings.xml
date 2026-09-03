@@ -203,6 +203,7 @@
     <string name="coach_ask_readiness">Почему такая готовность?</string>
     <string name="coach_ask_change">Что мне изменить?</string>
     <string name="coach_send">Отправить</string>
+    <string name="coach_speak">Сказать голосом</string>
     <string name="coach_clear">Очистить</string>
     <string name="coach_thinking">Думает</string>
     <string name="coach_failed">Не отправилось: %1$s</string>

@@ -202,6 +202,7 @@
     <string name="coach_ask_readiness">Why that readiness?</string>
     <string name="coach_ask_change">What should I change?</string>
     <string name="coach_send">Send</string>
+    <string name="coach_speak">Say it out loud</string>
     <string name="coach_clear">Clear</string>
     <string name="coach_thinking">Thinking</string>
     <string name="coach_failed">Did not go through: %1$s</string>
