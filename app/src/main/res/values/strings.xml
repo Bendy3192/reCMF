@@ -523,7 +523,7 @@
     <string name="onboarding_profile_why">Only for the arithmetic below, and only if you want it. Age, height and weight are what a resting-energy equation needs; nothing here is required and all of it can be changed or emptied later.</string>
     <string name="onboarding_energy_waiting">Fill in age, height and weight to see what a day costs you.</string>
     <string name="onboarding_energy_spent">About %1$s kcal a day</string>
-    <string name="onboarding_energy_parts">%1$s at rest, by the Mifflin-St Jeor equation, plus %2$d the watch counted as movement today.</string>
+    <string name="onboarding_energy_parts">%1$s at rest, by the Mifflin-St Jeor equation, plus %2$s the watch counted as movement today.</string>
     <string name="onboarding_energy_not_a_budget">This is an estimate of what is spent, not a target to eat to. reCMF does not propose a deficit and the assistant is told not to either.</string>
     <string name="onboarding_ai_what">Optional, and off. With it on, a tap on any measurement asks a model to say what that figure means against your own recent days.</string>
     <string name="onboarding_ai_sends">What leaves the phone is a small table of daily figures and your question — no name attached, unless you also switch on the coach and fill in the profile. You can read the exact text before every request in the settings.</string>

@@ -176,7 +176,12 @@ private fun ProfileStep(
                         stringResource(
                             R.string.onboarding_energy_parts,
                             resting.readable(),
-                            activeKcalToday,
+                            // A string rather than a number, like the half beside it.
+                            // Lint reads "%d" followed by a word as a count needing plural
+                            // forms, and this one is kilocalories; the resting figure is
+                            // already text because it can be a span, so both being text is
+                            // the symmetric answer as well as the quiet one.
+                            activeKcalToday.toString(),
                         ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
