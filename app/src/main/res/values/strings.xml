@@ -322,8 +322,9 @@
     <string name="readiness_below">below your usual</string>
     <string name="readiness_well_above">well above your usual</string>
     <string name="readiness_well_below">well below your usual</string>
-    <string name="readiness_explainer">Scored against your own recent days, not against anybody else — 50 means exactly your usual. It weighs how long you slept, how much of the night was deep or REM, your resting heart rate and the watch\'s stress index, each against its own history.</string>
-    <string name="readiness_no_hrv">Not the same number Whoop or Fitbit show. Those lean hardest on heart-rate variability, which this watch does not report at all — its pulse arrives as one figure a minute with no intervals behind it. This is built from what the watch does measure.</string>
+    <string name="readiness_explainer">Scored against your own recent days, not against anybody else — 50 means exactly your usual. Only measurements with enough history behind them count; the rest share out their weight rather than voting average, so the rows above are the whole of what this number was built from.</string>
+    <string name="readiness_no_hrv">Not the same number Whoop or Fitbit show. Those lean hardest on heart-rate variability, which this watch cannot measure — its pulse arrives as one figure a minute with no intervals behind it. Another wearable on this phone can supply it; without one, this is built from what the watch does measure.</string>
+    <string name="readiness_hrv_elsewhere">The variability above came from another wearable on this phone, through Health Connect. It is the one figure here the CMF watch cannot produce, and it carries the most weight — which is also why this number and that device\'s own score can disagree: they are not built from the same things.</string>
     <string name="readiness_thin">Not enough days yet. Wear the watch for a few nights and this fills in.</string>
     <string name="readiness_part_sleep_duration">Time asleep</string>
     <string name="readiness_part_sleep_quality">Deep and REM</string>

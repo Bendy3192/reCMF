@@ -1346,9 +1346,23 @@ private fun ReadinessCard(readiness: Readiness?) {
             )
 
             // Said on the card rather than buried in a help screen, because the comparison
-            // with Whoop is the first thing anyone who knows those apps will make.
+            // with Whoop is the first thing anyone who knows those apps will make — and on
+            // a phone that has one of those devices, the comparison is with a number
+            // sitting in another app right now. Which of the two sentences is true depends
+            // on whether the variability actually arrived, so it is read off the parts
+            // rather than off the settings: a permission granted is not a reading taken.
+            val hasVariability = readiness.parts.any {
+                it.signal == ReadinessSignal.HEART_RATE_VARIABILITY
+            }
+
             Text(
-                stringResource(R.string.readiness_no_hrv),
+                stringResource(
+                    if (hasVariability) {
+                        R.string.readiness_hrv_elsewhere
+                    } else {
+                        R.string.readiness_no_hrv
+                    },
+                ),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
