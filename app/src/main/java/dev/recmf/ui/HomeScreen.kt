@@ -186,6 +186,7 @@ fun HomeScreen(
     aiAsking: Set<String>,
     onAskAboutMetric: (String, String, String, Boolean) -> Unit,
     aiDays: List<AiContext.Day>,
+    aiWorked: AiContext.Worked,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
     onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
@@ -285,6 +286,7 @@ fun HomeScreen(
                         aiAsking = aiAsking,
                         onAskAboutMetric = onAskAboutMetric,
                         aiDays = aiDays,
+                        aiWorked = aiWorked,
                         onAiInsights = onAiInsights,
                         onAiCoach = onAiCoach,
                         onAiEndpoint = onAiEndpoint,
@@ -378,6 +380,7 @@ private fun TabContent(
     aiAsking: Set<String>,
     onAskAboutMetric: (String, String, String, Boolean) -> Unit,
     aiDays: List<AiContext.Day>,
+    aiWorked: AiContext.Worked,
     onAiInsights: (Boolean) -> Unit,
     onAiCoach: (Boolean) -> Unit,
     onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
@@ -604,6 +607,7 @@ private fun TabContent(
                         probe = aiProbe,
                         models = aiModels,
                         days = aiDays,
+                        worked = aiWorked,
                         onInsights = onAiInsights,
                         onCoach = onAiCoach,
                         onEndpoint = onAiEndpoint,
@@ -1531,6 +1535,7 @@ private fun AiCard(
     probe: AiClient.Answer?,
     models: AiClient.Models?,
     days: List<AiContext.Day>,
+    worked: AiContext.Worked,
     onInsights: (Boolean) -> Unit,
     onCoach: (Boolean) -> Unit,
     onEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
@@ -1630,6 +1635,7 @@ private fun AiCard(
                             } else {
                                 ""
                             },
+                            worked = worked,
                         ),
                         modifier = Modifier
                             .horizontalScroll(rememberScrollState())

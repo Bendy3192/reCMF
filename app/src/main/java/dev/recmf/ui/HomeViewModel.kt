@@ -55,6 +55,7 @@ import dev.recmf.health.SleepScore
 import dev.recmf.health.comparable
 import dev.recmf.health.onlyOneSource
 import dev.recmf.health.preferMeasured
+import dev.recmf.health.restingEnergy
 import dev.recmf.health.readiness as scoreReadiness
 import dev.recmf.health.sleepScore as scoreSleep
 import dev.recmf.service.AlarmMirrorProblem
@@ -1008,6 +1009,65 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), emptyList())
 
+    /**
+     * The figures reCMF worked out itself, exactly as the assistant would be told them.
+     *
+     * Assembled here, in one place, for the same reason [aiDays] is: the preview on the
+     * settings screen and the request itself read this one flow, so a preview cannot show
+     * one thing and a request send another.
+     *
+     * It exists at all because it did not, and the gap was visible on the screen. The
+     * coach offers "why is my readiness like that" as a suggestion above the box, and the
+     * answer came back — reasonably — that there is no readiness in the data and this
+     * watch does not compute one. It is computed, by this app, two tabs away.
+     */
+    val aiWorked: StateFlow<AiContext.Worked> = combine(
+        readiness,
+        sleepScore,
+        settingsStore.settings,
+        settingsStore.watchPreferences,
+        // Paired rather than passed separately: combine takes five flows and this needs
+        // six.
+        combine(settingsStore.ai, workouts, ::Pair),
+    ) { scored, night, settings, watch, (aiSettings, sessions) ->
+        val zone = ZoneId.systemDefault()
+        AiContext.Worked(
+            today = LocalDate.now().toString(),
+            readiness = scored,
+            sleep = night,
+            sleepTargetMinutes = settings.sleepTargetMinutes,
+            stepsGoal = watch.stepsGoal,
+            // The most recent handful rather than the ninety days the tab holds. A
+            // pattern is visible in ten sessions, and the rest is a month of rows bought
+            // on every question somebody asks.
+            workouts = sessions.take(WORKOUTS_SENT).map {
+                AiContext.Session(
+                    date = Instant.ofEpochSecond(it.startSeconds).atZone(zone)
+                        .toLocalDate()
+                        .toString(),
+                    minutes = (it.seconds / 60).toInt(),
+                    averageBpm = it.averageBpm,
+                    maxBpm = it.maxBpm,
+                )
+            },
+            // Only where the profile can carry it, and by the same call the wizard makes,
+            // so the two screens quote one figure rather than two.
+            restingEnergy = restingEnergy(
+                sex = aiSettings.profile.sex,
+                age = aiSettings.profile.birthYear
+                    .takeIf { it in 1900..Year.now().value }
+                    ?.let { Year.now().value - it }
+                    ?: 0,
+                heightCm = aiSettings.profile.heightCm,
+                weightKg = aiSettings.profile.weightKg,
+            ),
+        )
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        AiContext.Worked(),
+    )
+
     /** What the assistant is allowed to do, and where it is pointed. */
     val ai: StateFlow<AiSettings> = settingsStore.ai
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AiSettings())
@@ -1159,6 +1219,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         // The other opt-in sends numbers with nobody's name against them,
                         // and this is the line that keeps that true.
                         about = if (settings.coachEnabled) settings.aboutMe() else "",
+                        worked = aiWorked.first(),
                     ),
                 )
 
@@ -1230,6 +1291,16 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
             _coachThinking.value = true
             try {
+                // Read back rather than appended to a list held here: the message just
+                // written is in it, and so is anything restored from a backup.
+                val whole = dao.allCoachMessages().map { AiChat.Turn(it.fromUser, it.text) }
+
+                // Every request resends the conversation, because the far side keeps
+                // nothing. Unbounded, that is a bill that grows with every question and a
+                // request that eventually stops fitting at all — and the only cure left to
+                // somebody then is to clear the conversation and lose it.
+                val sent = AiContext.lastWithin(whole, CONVERSATION_BUDGET) { it.text.length }
+
                 val answer = aiClient.converse(
                     settings = settings,
                     system = AiContext.coaching(
@@ -1237,10 +1308,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         language = readerLanguage(),
                         days = aiDays.first(),
                         about = settings.aboutMe(),
+                        worked = aiWorked.first(),
+                        trimmed = sent.size < whole.size,
                     ),
-                    // Read back rather than appended to a list held here: the message just
-                    // written is in it, and so is anything restored from a backup.
-                    turns = dao.allCoachMessages().map { AiChat.Turn(it.fromUser, it.text) },
+                    turns = sent,
                 )
 
                 when (answer) {
@@ -1506,6 +1577,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
          * same breath.
          */
         const val LEAST_DAYS = 4
+
+        /**
+         * How much of a conversation is resent with each question, in characters.
+         *
+         * Roughly three thousand tokens of talk, which is a long exchange and still small
+         * beside the standing instructions it travels with. What falls off the front stays
+         * on the screen and in the backup; it is only no longer paid for on every turn.
+         */
+        const val CONVERSATION_BUDGET = 12_000
+
+        /** How many sessions travel with a question. Enough for a pattern, not a month. */
+        const val WORKOUTS_SENT = 10
 
         /** How many days back readiness reads. The nights table keeps thirty. */
         const val BASELINE_DAYS = 30L

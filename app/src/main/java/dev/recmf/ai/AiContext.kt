@@ -3,7 +3,14 @@
  */
 package dev.recmf.ai
 
+import dev.recmf.health.Readiness
+import dev.recmf.health.ReadinessPart
+import dev.recmf.health.ReadinessSignal
 import dev.recmf.health.Sex
+import dev.recmf.health.SleepPart
+import dev.recmf.health.SleepScore
+import dev.recmf.health.SleepScorePart
+import kotlin.math.roundToInt
 
 /**
  * What gets said to the assistant, and nothing else does.
@@ -273,10 +280,15 @@ object AiContext {
      *   plainly headed, so a reader of the preview can see exactly which part came from the
      *   watch and which part is about them.
      */
-    fun user(question: String, days: List<Day>, about: String = ""): String = buildString {
+    fun user(
+        question: String,
+        days: List<Day>,
+        about: String = "",
+        worked: Worked = Worked(),
+    ): String = buildString {
         appendLine(question)
         appendLine()
-        append(briefing(days, about))
+        append(briefing(days, about, worked))
     }.trimEnd()
 
     /**
@@ -288,18 +300,23 @@ object AiContext {
      * also mean either resending it as a fake user message every time or letting it go
      * stale after the first — and the figures move every day.
      */
-    fun briefing(days: List<Day>, about: String = ""): String = buildString {
-        appendLine("Daily figures, oldest first:")
-        appendLine(table(days))
-        if (days.any { it.heartRateVariability != null }) {
-            appendLine()
-            appendLine(VARIABILITY_LEGEND)
-        }
-        if (about.isNotBlank()) {
-            appendLine()
-            appendLine(about.trim())
-        }
-    }.trimEnd()
+    fun briefing(days: List<Day>, about: String = "", worked: Worked = Worked()): String =
+        buildString {
+            appendLine("Daily figures, oldest first:")
+            appendLine(table(days))
+            if (days.any { it.heartRateVariability != null }) {
+                appendLine()
+                appendLine(VARIABILITY_LEGEND)
+            }
+            workedOut(worked).takeIf { it.isNotBlank() }?.let {
+                appendLine()
+                appendLine(it)
+            }
+            if (about.isNotBlank()) {
+                appendLine()
+                appendLine(about.trim())
+            }
+        }.trimEnd()
 
     /**
      * What the coach is told before a word is exchanged.
@@ -309,7 +326,15 @@ object AiContext {
      * ask before it advises. The cards cannot ask — a tile has no reply box — which is
      * why that sentence lives here and not in the shared prompt.
      */
-    fun coaching(prompt: String, language: String, days: List<Day>, about: String): String =
+    fun coaching(
+        prompt: String,
+        language: String,
+        days: List<Day>,
+        about: String,
+        worked: Worked = Worked(),
+        /** True when older turns have been dropped from what is being sent. */
+        trimmed: Boolean = false,
+    ): String =
         buildString {
             appendLine(instructions(prompt, language))
             appendLine()
@@ -318,8 +343,17 @@ object AiContext {
                     "clarifying question instead of guessing, and you should when the " +
                     "figures alone cannot settle what was asked.",
             )
+            if (trimmed) {
+                appendLine()
+                appendLine(
+                    "This conversation is longer than what is being sent: the earliest " +
+                        "turns are not below. If they refer to something said earlier " +
+                        "that you cannot see, say so plainly rather than reconstructing " +
+                        "it.",
+                )
+            }
             appendLine()
-            append(briefing(days, about))
+            append(briefing(days, about, worked))
         }.trimEnd()
 
     /**
@@ -349,6 +383,36 @@ object AiContext {
     }
 
     /**
+     * The tail of a list that fits a budget, newest kept.
+     *
+     * A chat endpoint remembers nothing, so every question resends the whole conversation.
+     * Left alone that grows without limit: each turn costs money on every later request,
+     * and eventually the request stops fitting the model's context at all — at which point
+     * every answer fails and the only way out somebody has is to clear the conversation and
+     * lose it. So the oldest turns stop being sent, while staying on the screen and in the
+     * backup, where they cost nothing.
+     *
+     * Generic over the item so this can be tested without a wire format anywhere near it.
+     *
+     * @param budget the most characters worth of items to keep.
+     * @param size how long one item is.
+     * @return the newest items that fit, oldest first. Always at least one, since a
+     *   question longer than the whole budget still has to be asked.
+     */
+    fun <T> lastWithin(items: List<T>, budget: Int, size: (T) -> Int): List<T> {
+        var left = budget
+        val kept = ArrayDeque<T>()
+
+        for (item in items.asReversed()) {
+            left -= size(item)
+            if (left < 0 && kept.isNotEmpty()) break
+            kept.addFirst(item)
+        }
+
+        return kept.toList()
+    }
+
+    /**
      * The question asked when somebody opens a metric.
      *
      * The column is named because the metric is not: a tile is labelled in whatever
@@ -373,7 +437,285 @@ object AiContext {
                 append("the whole of that day — so the newest reading can differ from it.")
             }
             append(" Is that ordinary for this person, and what would you notice about the ")
-            append("last few weeks of it?")
+            // "The last few weeks" was asking about evidence that is not there. The
+            // sample tables keep a week and only the nights keep a month, so a question
+            // about weeks of a pulse column invites an answer about days nobody has.
+            append("run of days below?")
         }
+
+    /**
+     * What reCMF worked out for itself, which no row of the table can say.
+     *
+     * The app computes a readiness score, a sleep score, and a resting-energy figure, and
+     * shows all three on screens with a coach tab one tap away. None of it was ever sent.
+     * Asked "why is my readiness like that" — a question this app puts on a chip above the
+     * box, so it is the app asking it — the assistant answered, correctly and uselessly,
+     * that there is no readiness in its data and the watch does not compute one.
+     *
+     * That is the same fault three times over now: the sleep column was missing once, the
+     * pulse column was missing once, and each time the assistant reasoned impeccably from
+     * a picture that was missing the thing being asked about. So this carries the derived
+     * figures too, with the scale each one is on — a readiness of 52 is *this person's own
+     * usual*, and a model told only "52 out of 100" will call it poor.
+     *
+     * It stays data rather than a rendered string so that the sentences are built in one
+     * tested place instead of in the view model.
+     */
+    data class Worked(
+        /** Today, so the last row of the table can be recognised as a day still running. */
+        val today: String = "",
+        val readiness: Readiness? = null,
+        val sleep: SleepScore? = null,
+        /** How long this person means to sleep, in minutes. Zero when they never said. */
+        val sleepTargetMinutes: Int = 0,
+        /** The step goal the watch is set to, or zero. */
+        val stepsGoal: Int = 0,
+
+        /**
+         * Recent sessions the watch flagged as exercise, newest first.
+         *
+         * The one part of the app's own picture that a table of daily figures flattens
+         * away entirely: an hour at 150 bpm and a day of errands can leave the same
+         * average. Asked what to change, an assistant that cannot see the training is
+         * guessing at the largest thing in the week.
+         */
+        val workouts: List<Session> = emptyList(),
+        /**
+         * Resting energy by Mifflin-St Jeor, or null when the profile cannot support it.
+         *
+         * Sent so that the coach and the wizard quote the same figure. Without it a model
+         * asked what a day costs would work one out from the height and weight in the
+         * profile, choose its own equation, and disagree with the number the app showed
+         * on the first screen it ever displayed.
+         */
+        val restingEnergy: IntRange? = null,
+    ) {
+        val filled: Boolean get() = today.isNotBlank() || readiness != null || sleep != null ||
+            sleepTargetMinutes > 0 || stepsGoal > 0 || restingEnergy != null ||
+            workouts.isNotEmpty()
+    }
+
+    /**
+     * One session, as much of it as this watch allows anybody to know.
+     *
+     * There is no kind here and there will not be one: the watch keeps no summary of a
+     * session and answers no request for one, so what a workout *is* in reCMF is a run of
+     * pulse the watch marked as taken during exercise. Sending a type would mean inventing
+     * one, and an assistant told "a run" would coach a run.
+     */
+    data class Session(
+        val date: String,
+        val minutes: Int,
+        val averageBpm: Int,
+        val maxBpm: Int,
+    )
+
+    /**
+     * The derived figures in words, under the table they were derived from.
+     *
+     * Every score is given with what it is out of *and* what its middle means, because
+     * that is the part a model cannot infer and will otherwise assume. Every part is given
+     * with the figure it was measured at and the figure it was judged against, so the
+     * assistant can explain a score rather than re-deriving one of its own — and where a
+     * reading came from a second wearable, that is said next to it, since the table's own
+     * columns are the watch's.
+     */
+    fun workedOut(worked: Worked): String {
+        if (!worked.filled) return ""
+
+        return buildString {
+            appendLine(
+                "What reCMF worked out from the rows above, in the app, with plain " +
+                    "arithmetic and no model involved. Explain these figures; do not " +
+                    "recompute them or invent your own.",
+            )
+
+            worked.readiness?.let { readiness ->
+                appendLine()
+                appendLine(
+                    "Readiness ${readiness.score} out of 100. 50 is exactly this person's " +
+                        "own recent usual rather than a middling grade: 75 is a clearly " +
+                        "better morning than their own average and 25 a clearly worse one. " +
+                        "It is built from:",
+                )
+                readiness.parts.forEach { appendLine("- ${it.wording()}") }
+                appendLine(
+                    "A signal with no reading today, or with fewer than four days behind " +
+                        "it, is left out entirely and the rest share its weight.",
+                )
+
+                val borrowed = readiness.parts.filterNot { it.fromWatch }
+                if (borrowed.isNotEmpty()) {
+                    appendLine(
+                        "Read from another wearable through Health Connect rather than " +
+                            "from the watch: " +
+                            borrowed.joinToString(", ") { SIGNALS.getValue(it.signal) } +
+                            ". Every column in the table is the watch's own, so those " +
+                            "readings will not match the figures here — and that " +
+                            "difference is the two devices, not the person.",
+                    )
+                }
+            }
+
+            worked.sleep?.let { sleep ->
+                appendLine()
+                appendLine(
+                    "Sleep score ${sleep.score} out of 100 for the most recent night in " +
+                        "the table. Unlike readiness this one is not a comparison with " +
+                        "their usual: 100 is a night that met the target with an " +
+                        "ordinary-for-them composition. It is built from:",
+                )
+                sleep.parts.forEach { appendLine("- ${it.wording()}") }
+
+                if (!sleep.fromWatch) {
+                    appendLine(
+                        "That night was measured by another wearable, not by the CMF " +
+                            "watch, which recorded nothing for it.",
+                    )
+                }
+            }
+
+            if (worked.workouts.isNotEmpty()) {
+                appendLine()
+                appendLine(
+                    "Sessions the watch flagged as exercise, newest first. It reports no " +
+                        "kind and no summary, so these are runs of pulse marked as taken " +
+                        "during exercise and nothing more — do not assume what the " +
+                        "activity was:",
+                )
+                worked.workouts.forEach {
+                    appendLine(
+                        "- ${it.date}: ${clock(it.minutes)}, average ${it.averageBpm} bpm, " +
+                            "peak ${it.maxBpm} bpm",
+                    )
+                }
+            }
+
+            val notes = buildList {
+                if (worked.sleepTargetMinutes > 0) {
+                    add(
+                        "This person's own sleep target is " +
+                            "${clock(worked.sleepTargetMinutes)}; it is theirs to set and " +
+                            "the sleep score's length part is measured against it.",
+                    )
+                }
+                if (worked.stepsGoal > 0) {
+                    add("Their step goal on the watch is ${worked.stepsGoal}.")
+                }
+                worked.restingEnergy?.let { energy ->
+                    add(
+                        "reCMF puts their resting energy at ${energy.readable()} kcal a " +
+                            "day by the Mifflin-St Jeor equation" +
+                            (if (energy.first != energy.last) {
+                                ", a span rather than one figure because the coefficient " +
+                                    "for sex was not given"
+                            } else {
+                                ""
+                            }) +
+                            ". The kcal column is the watch's estimate of movement on top " +
+                            "of that, not the whole day. Quote this figure rather than " +
+                            "working out your own.",
+                    )
+                }
+                if (worked.today.isNotBlank()) {
+                    add(
+                        "Today is ${worked.today}. If a row for it appears above, that day " +
+                            "is still running: steps, distance, climbs and kcal are " +
+                            "counters that keep rising until midnight, so a low figure " +
+                            "there is an unfinished day rather than a quiet one.",
+                    )
+                }
+            }
+
+            if (notes.isNotEmpty()) {
+                appendLine()
+                notes.forEach { appendLine(it) }
+            }
+        }.trimEnd()
+    }
+
+    /** One readiness signal, as "resting pulse: 66 bpm, usual 61 (worse than usual)". */
+    private fun ReadinessPart.wording(): String = buildString {
+        append(SIGNALS.getValue(signal))
+        append(": ")
+        append(reading(signal, today))
+        append(", usual ")
+        append(reading(signal, usual))
+        append(" (")
+        append(
+            when {
+                standing > NOTABLE -> "better than usual"
+                standing < -NOTABLE -> "worse than usual"
+                else -> "about usual"
+            },
+        )
+        append(")")
+    }
+
+    /** One sleep part, in the unit it was measured in and the share of its mark it won. */
+    private fun SleepScorePart.wording(): String {
+        val mark = "${(standing * 100).roundToInt()}% of that part's mark"
+
+        return when (part) {
+            SleepPart.DURATION ->
+                "length: ${clock((measured / 60).roundToInt())} against a target of " +
+                    "${clock((against / 60).roundToInt())} ($mark)"
+
+            SleepPart.COMPOSITION ->
+                "deep and REM together: ${share(measured)} of the night, usual " +
+                    "${share(against)} ($mark)"
+
+            SleepPart.RESTORATION ->
+                "resting pulse that morning: ${measured.roundToInt()} bpm, usual " +
+                    "${against.roundToInt()} bpm ($mark)"
+
+            SleepPart.CONTINUITY ->
+                "time asleep out of time in bed: ${share(measured)}, full marks at " +
+                    "${share(against)} ($mark)"
+        }
+    }
+
+    /** A readiness reading in the unit that signal is measured in. */
+    private fun reading(signal: ReadinessSignal, value: Float): String = when (signal) {
+        ReadinessSignal.HEART_RATE_VARIABILITY -> "${value.roundToInt()} ms"
+        ReadinessSignal.SLEEP_DURATION -> clock(value.roundToInt())
+        ReadinessSignal.SLEEP_QUALITY -> share(value)
+        ReadinessSignal.RESTING_HEART_RATE -> "${value.roundToInt()} bpm"
+        // Bare, unlike the others: the signal is already named "stress index" beside it,
+        // and the unit repeated in both halves reads as two different things.
+        ReadinessSignal.STRESS -> value.roundToInt().toString()
+    }
+
+    /** What each signal is called, in the language the rest of the payload is written in. */
+    private val SIGNALS = mapOf(
+        ReadinessSignal.HEART_RATE_VARIABILITY to "heart-rate variability",
+        ReadinessSignal.SLEEP_DURATION to "sleep length",
+        ReadinessSignal.SLEEP_QUALITY to "restful share of the night",
+        ReadinessSignal.RESTING_HEART_RATE to "resting pulse",
+        ReadinessSignal.STRESS to "stress index",
+    )
+
+    /**
+     * How far from usual is worth putting a word to.
+     *
+     * The same quarter of a spread the readiness card colours a row at, so the sentence
+     * the assistant is given and the colour the wearer is looking at agree about which
+     * days were ordinary.
+     */
+    private const val NOTABLE = 0.25f
+
+    /** Minutes as hours and minutes, with no locale anywhere near it. */
+    private fun clock(minutes: Int): String {
+        val hours = minutes / 60
+        val rest = minutes % 60
+        return if (hours > 0) "${hours}h ${rest}m" else "${rest}m"
+    }
+
+    /** A 0-to-1 share as whole per cent. */
+    private fun share(value: Float): String = "${(value * 100).roundToInt()}%"
+
+    /** A range as one figure when both ends agree, and as a span when they do not. */
+    private fun IntRange.readable(): String =
+        if (first == last) first.toString() else "$first-$last"
 
 }

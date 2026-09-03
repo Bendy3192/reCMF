@@ -201,6 +201,7 @@ class MainActivity : ComponentActivity() {
                 // card: a WhileSubscribed flow nobody subscribes to never starts,
                 // which is why the payload preview showed no days at all.
                 val aiDays by model.aiDays.collectAsStateWithLifecycle()
+                val aiWorked by model.aiWorked.collectAsStateWithLifecycle()
                 val backupFileName = stringResource(R.string.backup_file_name)
 
                 // Re-read on every composition rather than caching: the user grants this
@@ -262,6 +263,7 @@ class MainActivity : ComponentActivity() {
                     aiAsking = aiAsking,
                     onAskAboutMetric = model::askAboutMetric,
                     aiDays = aiDays,
+                    aiWorked = aiWorked,
                     onAiInsights = model::setAiInsightsEnabled,
                     onAiCoach = model::setAiCoachEnabled,
                     onAiEndpoint = model::setAiEndpoint,

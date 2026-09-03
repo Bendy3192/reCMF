@@ -1,6 +1,12 @@
 package dev.recmf.ai
 
 import dev.recmf.ai.AiContext.Day
+import dev.recmf.health.Readiness
+import dev.recmf.health.ReadinessPart
+import dev.recmf.health.ReadinessSignal
+import dev.recmf.health.SleepPart
+import dev.recmf.health.SleepScore
+import dev.recmf.health.SleepScorePart
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -339,6 +345,219 @@ class AiContextTest {
         val sent = AiContext.user("How am I?", days, about)
 
         assertTrue(sent.indexOf("2026-08-28") < sent.indexOf("Name: Ivan"))
+    }
+
+    // --- What reCMF worked out, which the table cannot say -------------------------
+
+    private val readiness = Readiness(
+        score = 52,
+        parts = listOf(
+            ReadinessPart(ReadinessSignal.RESTING_HEART_RATE, today = 66f, usual = 61f, standing = -0.6f),
+            ReadinessPart(ReadinessSignal.SLEEP_DURATION, today = 402f, usual = 456f, standing = -0.4f),
+            ReadinessPart(ReadinessSignal.SLEEP_QUALITY, today = 0.34f, usual = 0.39f, standing = -0.1f),
+        ),
+    )
+
+    @Test
+    fun `a readiness the app computed is in what the app sends`() {
+        // The screenshot that started this: the coach offers "why is my readiness like
+        // that" above the box, and the answer was that there is no such figure in the
+        // data. There is. It is on the tab next door.
+        val sent = AiContext.user("Why?", week, worked = AiContext.Worked(readiness = readiness))
+
+        assertTrue("52" in sent, "the score itself was not sent")
+        assertTrue("resting pulse: 66 bpm, usual 61" in sent, sent)
+        assertTrue("sleep length: 6h 42m, usual 7h 36m" in sent, sent)
+    }
+
+    @Test
+    fun `fifty is said to be usual, because a model will otherwise call it poor`() {
+        // Out of a hundred, 52 reads as a bad mark. It is this person's own average
+        // morning, and nothing in the number says so.
+        val sent = AiContext.workedOut(AiContext.Worked(readiness = readiness))
+
+        assertTrue("50 is exactly this person's own recent usual" in sent, sent)
+    }
+
+    @Test
+    fun `each signal is given in its own unit`() {
+        // Sleep arrives in minutes, quality as a share, variability in milliseconds. One
+        // of them printed in another's unit is a wrong number stated confidently.
+        val everything = Readiness(
+            score = 60,
+            parts = listOf(
+                ReadinessPart(ReadinessSignal.HEART_RATE_VARIABILITY, 44f, 39f, 0.5f, fromWatch = false),
+                ReadinessPart(ReadinessSignal.SLEEP_QUALITY, 0.34f, 0.39f, -0.1f),
+                ReadinessPart(ReadinessSignal.STRESS, 47f, 41f, -0.5f),
+            ),
+        )
+
+        val sent = AiContext.workedOut(AiContext.Worked(readiness = everything))
+
+        assertTrue("44 ms" in sent, sent)
+        assertTrue("34% of the night" in sent || "34%, usual 39%" in sent, sent)
+        // Bare, because the row already says "stress index" — the unit in both halves
+        // read as two different quantities.
+        assertTrue("stress index: 47, usual 41" in sent, sent)
+    }
+
+    @Test
+    fun `a borrowed reading says whose it is`() {
+        // The table's columns are the watch's own. A readiness built on another
+        // wearable's resting pulse will not match the resting column, and without this
+        // the assistant explains the gap by inventing something about the data.
+        val borrowed = Readiness(
+            score = 40,
+            parts = listOf(
+                ReadinessPart(ReadinessSignal.RESTING_HEART_RATE, 66f, 61f, -0.6f, fromWatch = false),
+            ),
+        )
+
+        val sent = AiContext.workedOut(AiContext.Worked(readiness = borrowed))
+
+        assertTrue("another wearable" in sent, sent)
+        assertTrue("resting pulse" in sent.substringAfter("Read from another wearable"), sent)
+    }
+
+    @Test
+    fun `the sleep score is sent with what full marks means`() {
+        // Readiness is a comparison with usual and this is not, so the two numbers on the
+        // two tabs are on different scales. Sending both without saying that invites the
+        // assistant to read a 71 and a 52 as one story.
+        val sleep = SleepScore(
+            score = 71,
+            parts = listOf(
+                SleepScorePart(SleepPart.DURATION, standing = 0.75f, measured = 402f * 60, against = 480f * 60),
+                SleepScorePart(SleepPart.COMPOSITION, standing = 0.41f, measured = 0.34f, against = 0.39f),
+            ),
+        )
+
+        val sent = AiContext.workedOut(AiContext.Worked(sleep = sleep))
+
+        assertTrue("Sleep score 71 out of 100" in sent, sent)
+        assertTrue("not a comparison with their usual" in sent, sent)
+        assertTrue("length: 6h 42m against a target of 8h 0m" in sent, sent)
+    }
+
+    @Test
+    fun `a night from the other wrist is named as one`() {
+        val theirs = SleepScore(
+            score = 80,
+            parts = listOf(SleepScorePart(SleepPart.DURATION, 0.9f, 440f * 60, 480f * 60)),
+            fromWatch = false,
+        )
+
+        assertTrue("measured by another wearable" in AiContext.workedOut(AiContext.Worked(sleep = theirs)))
+    }
+
+    @Test
+    fun `today's row is named as a day still running`() {
+        // Several times over now, a model has explained a low step count by inventing a
+        // reason. The real one is that the day is four hours old.
+        val sent = AiContext.workedOut(AiContext.Worked(today = "2026-09-03"))
+
+        assertTrue("Today is 2026-09-03" in sent, sent)
+        assertTrue("still running" in sent, sent)
+    }
+
+    @Test
+    fun `the energy figure is the app's own, so two screens cannot disagree`() {
+        val sent = AiContext.workedOut(AiContext.Worked(restingEnergy = 1614..1780))
+
+        assertTrue("1614-1780 kcal" in sent, sent)
+        assertTrue("span" in sent, "an unstated coefficient should still read as a span: $sent")
+
+        val settled = AiContext.workedOut(AiContext.Worked(restingEnergy = 1780..1780))
+        assertTrue("1780 kcal" in settled, settled)
+        assertFalse("span" in settled, settled)
+    }
+
+    @Test
+    fun `nothing worked out means nothing said about it`() {
+        // A phone in its first week has no scores yet, and a heading with nothing under
+        // it is tokens spent to tell the assistant that the app has nothing to add.
+        assertEquals("", AiContext.workedOut(AiContext.Worked()))
+        assertFalse("worked out" in AiContext.user("How am I?", week))
+    }
+
+    @Test
+    fun `the scores sit below the table they were built from`() {
+        val sent = AiContext.user(
+            "How am I?",
+            week,
+            about = AiContext.about(AiContext.Profile(name = "Ivan"), 2026),
+            worked = AiContext.Worked(readiness = readiness),
+        )
+
+        assertTrue(sent.indexOf("2026-08-28") < sent.indexOf("Readiness 52"), sent)
+        assertTrue(sent.indexOf("Readiness 52") < sent.indexOf("Name: Ivan"), sent)
+    }
+
+    @Test
+    fun `the target the score was measured against travels with it`() {
+        // The sleep score's length part is scored against a target the wearer moved. An
+        // assistant assuming the usual eight hours would explain a full mark as a
+        // shortfall.
+        val sent = AiContext.workedOut(AiContext.Worked(sleepTargetMinutes = 450, stepsGoal = 12000))
+
+        assertTrue("7h 30m" in sent, sent)
+        assertTrue("12000" in sent, sent)
+    }
+
+    @Test
+    fun `training is in the picture, because a day's average hides it`() {
+        // An hour at 150 and a day of errands can leave the same daily average. Asked
+        // what to change, an assistant that cannot see the training is guessing at the
+        // largest thing in the week.
+        val sent = AiContext.workedOut(
+            AiContext.Worked(
+                workouts = listOf(AiContext.Session("2026-09-02", 47, 132, 161)),
+            ),
+        )
+
+        assertTrue("2026-09-02: 47m, average 132 bpm, peak 161 bpm" in sent, sent)
+        assertTrue("no kind" in sent, "the watch reports no activity type: $sent")
+    }
+
+    @Test
+    fun `a conversation stops growing without end`() {
+        // Every question resends the whole conversation, because the far side keeps
+        // nothing. Left alone that is a bill that grows with every turn and a request
+        // that eventually stops fitting at all.
+        val turns = (1..50).map { "turn $it ${"x".repeat(500)}" }
+
+        val kept = AiContext.lastWithin(turns, budget = 2_000) { it.length }
+
+        assertTrue(kept.size < turns.size, "nothing was dropped")
+        assertEquals(turns.last(), kept.last(), "the newest turn must always be sent")
+        assertTrue(kept.sumOf { it.length } <= 2_000 + 505, kept.sumOf { it.length }.toString())
+    }
+
+    @Test
+    fun `one turn longer than the whole budget is still asked`() {
+        // Somebody who pastes an essay gets an answer, not silence.
+        val essay = listOf("x".repeat(20_000))
+
+        assertEquals(essay, AiContext.lastWithin(essay, budget = 100) { it.length })
+    }
+
+    @Test
+    fun `a trimmed conversation says so rather than pretending`() {
+        val whole = AiContext.coaching("", "English", week, "", trimmed = true)
+        val short = AiContext.coaching("", "English", week, "", trimmed = false)
+
+        assertTrue("earliest turns are not below" in whole, whole)
+        assertFalse("earliest turns are not below" in short)
+    }
+
+    @Test
+    fun `the metric question asks about the days that are actually there`() {
+        // The sample tables keep a week. Asking what stands out "over the last few weeks"
+        // of a pulse column is asking about evidence nobody has.
+        val asked = AiContext.aboutMetric("Пульс", "66 bpm", "hr_avg")
+
+        assertFalse("weeks" in asked, asked)
+        assertTrue("run of days below" in asked, asked)
     }
 
 }
