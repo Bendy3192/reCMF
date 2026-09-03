@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -140,21 +139,25 @@ fun CoachScreen(
         if (last >= 0) scroll.animateScrollToItem(last)
     }
 
-    // Two things sit under this screen: the keyboard, which imePadding handles, and the
-    // floating dock, which is only there while the keyboard is not.
+    // No padding for the keyboard here, on purpose, after four attempts that added some.
     //
-    // Whether the keyboard is up is measured rather than asked. `isImeVisible` was the
-    // obvious way to ask and the box kept landing a dock's height too high, which is
-    // exactly what a false answer here produces — the clearance stays reserved for a dock
-    // that is behind the keyboard. The height of the inset is the same fact without the
-    // indirection: greater than nothing means there is a keyboard.
+    // The window moves itself. The tell was a screenshot with the watch bar missing from
+    // the top of the screen: that bar is not this screen's to move, so the whole window
+    // had been shifted up to keep the focused box in view. Adding a keyboard's height on
+    // top of a window that has already moved by a keyboard's height is what put the box
+    // a keyboard above the keyboard, and it did that whether the height came from
+    // imePadding or from anywhere else.
+    //
+    // What is left is the floating dock, which the window's own movement knows nothing
+    // about — and which is behind the keyboard while there is one, so the room reserved
+    // for it collapses then. Measured from the inset rather than asked of a state flag:
+    // greater than nothing means there is a keyboard.
     val imeBelow = WindowInsets.ime.getBottom(LocalDensity.current)
     val clearance = if (imeBelow > 0) 0.dp else DOCK_CLEARANCE
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .imePadding()
             .padding(horizontal = 16.dp),
     ) {
         Row(
