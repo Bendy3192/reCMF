@@ -216,6 +216,11 @@ class MainActivity : ComponentActivity() {
                     OnboardingScreen(
                         ai = ai,
                         activeKcalToday = state.today.calories,
+                        backupState = backupState,
+                        // The same picker the settings card uses, and the same "anything,
+                        // not just JSON" filter: a file manager that has forgotten what a
+                        // .json is would otherwise grey out the only file worth picking.
+                        onImportBackup = { loadBackup.launch(arrayOf("*/*")) },
                         onProfile = model::setAiProfile,
                         onAiInsights = model::setAiInsightsEnabled,
                         onAiEndpoint = model::setAiEndpoint,

@@ -1469,34 +1469,45 @@ private fun BackupCard(
                 ) { Text(stringResource(R.string.action_backup_import)) }
             }
 
-            state?.let {
-                Text(
-                    when (it) {
-                        BackupState.Working -> stringResource(R.string.backup_working)
-                        is BackupState.Exported -> stringResource(
-                            R.string.backup_exported,
-                            countOfSettings(it.settings),
-                            countOfRows(it.rows),
-                        )
-                        is BackupState.Imported -> stringResource(
-                            R.string.backup_imported,
-                            countOfSettings(it.settings),
-                            countOfRows(it.rows),
-                        )
-                        BackupState.NotOurs -> stringResource(R.string.backup_not_ours)
-                        is BackupState.Failed ->
-                            stringResource(R.string.backup_failed, it.reason)
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (it is BackupState.Failed || it is BackupState.NotOurs) {
-                        MaterialTheme.colorScheme.error
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
-            }
+            BackupOutcome(state)
         }
     }
+}
+
+/**
+ * How the last export or import went, in one line.
+ *
+ * Shared with the first-run wizard rather than written out twice. The wizard offers the
+ * same restore, so it has to be able to say the same things about it — and two copies of
+ * a sentence like "that file is not a reCMF backup" are two copies that drift.
+ */
+@Composable
+internal fun BackupOutcome(state: BackupState?) {
+    state ?: return
+
+    Text(
+        when (state) {
+            BackupState.Working -> stringResource(R.string.backup_working)
+            is BackupState.Exported -> stringResource(
+                R.string.backup_exported,
+                countOfSettings(state.settings),
+                countOfRows(state.rows),
+            )
+            is BackupState.Imported -> stringResource(
+                R.string.backup_imported,
+                countOfSettings(state.settings),
+                countOfRows(state.rows),
+            )
+            BackupState.NotOurs -> stringResource(R.string.backup_not_ours)
+            is BackupState.Failed -> stringResource(R.string.backup_failed, state.reason)
+        },
+        style = MaterialTheme.typography.bodySmall,
+        color = if (state is BackupState.Failed || state is BackupState.NotOurs) {
+            MaterialTheme.colorScheme.error
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
 }
 
 /**

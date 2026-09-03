@@ -32,6 +32,13 @@ import org.json.JSONObject
  * below — every setting, every alarm, the blocked-app list, the goals, the history — is
  * already where it was.
  *
+ * The **wizard's own "been through this" flag** stays for a different reason again: it is
+ * not about the wearer, it is about this installation. The wizard is where a restore is
+ * offered, so a file that carried the flag would switch the wizard off underneath the
+ * person part way through using it — and on a new phone the things it says about root and
+ * about nothing leaving the device are worth saying again, since it is a different device
+ * they are true of.
+ *
  * Anything added to settings later travels automatically. The store is walked rather than
  * enumerated, because a list of keys written out by hand is a list that silently stops
  * being complete the first time somebody adds a setting and forgets this file.
@@ -67,6 +74,7 @@ object Backup {
         "ai_key_sealed",
         "watch_address",
         "watch_name",
+        "onboarding_done",
     )
 
     /** The kinds of value a preference store can hold. */

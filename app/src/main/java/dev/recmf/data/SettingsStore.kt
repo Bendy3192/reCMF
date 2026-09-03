@@ -700,6 +700,9 @@ class SettingsStore(private val context: Context) {
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
         val KEY_SLEEP_TARGET = intPreferencesKey("sleep_target_minutes")
+        // Named in Backup.NEVER_LEAVES as well: it is this installation's state rather
+        // than the wearer's, and restoring it would close the wizard a restore is offered
+        // from. Renaming this key means renaming it there.
         val KEY_ONBOARDED = booleanPreferencesKey("onboarding_done")
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
 

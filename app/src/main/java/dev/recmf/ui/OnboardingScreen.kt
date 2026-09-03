@@ -16,6 +16,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -42,9 +43,10 @@ import java.time.Year
  * The first run, once.
  *
  * Not a tour. Every screen it shows exists to collect something the app cannot work out for
- * itself or to say something somebody would otherwise discover by being surprised: that
- * this is not CMF's app, that nothing leaves the phone unless the assistant is switched on,
- * and that one setting needs root and will not work without it.
+ * itself, to offer back what a previous phone already knew, or to say something somebody
+ * would otherwise discover by being surprised: that this is not CMF's app, that nothing
+ * leaves the phone unless the assistant is switched on, and that one setting needs root and
+ * will not work without it.
  *
  * Every step can be skipped and every answer can be changed afterwards in the settings.
  * A wizard that has to be completed before an app will work is a toll gate; this one is an
@@ -54,6 +56,8 @@ import java.time.Year
 fun OnboardingScreen(
     ai: AiSettings,
     activeKcalToday: Int,
+    backupState: BackupState?,
+    onImportBackup: () -> Unit,
     onProfile: (AiContext.Profile) -> Unit,
     onAiInsights: (Boolean) -> Unit,
     onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
@@ -87,6 +91,7 @@ fun OnboardingScreen(
 
             when (step) {
                 WELCOME -> item { Welcome() }
+                RESTORE -> item { RestoreStep(backupState, onImportBackup) }
                 PROFILE -> item { ProfileStep(ai.profile, activeKcalToday, onProfile) }
                 ASSISTANT -> item {
                     AssistantStep(ai, onAiInsights, onAiEndpoint, onAiKey)
@@ -130,6 +135,35 @@ private fun Welcome() {
         Paragraph(R.string.onboarding_welcome_what)
         Paragraph(R.string.onboarding_welcome_offline)
         Paragraph(R.string.onboarding_welcome_root)
+    }
+}
+
+/**
+ * The step for somebody who has been here before.
+ *
+ * It comes second, ahead of the profile, because everything the profile asks for is in
+ * the file: a wizard that asks somebody to retype their height and then offers to restore
+ * it afterwards has wasted their time and will overwrite what they typed.
+ *
+ * What a restore cannot bring back is said here rather than discovered later. The watch
+ * pairing key and the assistant's key are sealed in the Android keystore, which is not
+ * backed up by design, so those two are the only things to redo — and somebody who is not
+ * told that reads the empty pairing screen as the restore having failed.
+ */
+@Composable
+private fun RestoreStep(state: BackupState?, onImport: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Paragraph(R.string.onboarding_restore_what)
+        Paragraph(R.string.onboarding_restore_keys)
+
+        OutlinedButton(
+            onClick = onImport,
+            enabled = state != BackupState.Working,
+        ) { Text(stringResource(R.string.action_backup_import)) }
+
+        BackupOutcome(state)
+
+        if (state is BackupState.Imported) Paragraph(R.string.onboarding_restore_after)
     }
 }
 
@@ -244,10 +278,17 @@ private fun AssistantStep(
 
             FilledTonalButton(
                 onClick = {
+                    // An endpoint somebody already chose is kept — including one that
+                    // arrived in a restored backup a step ago. Only an install with
+                    // nothing in it is pointed at the suggestion. The model name is the
+                    // tell: it is the one of the three with no default, so a non-empty
+                    // one means these were set by a person rather than by this file.
+                    val chosen = ai.model.isNotBlank()
+
                     onAiEndpoint(
-                        SUGGESTED_BASE_URL,
+                        if (chosen) ai.baseUrl else SUGGESTED_BASE_URL,
                         model.ifBlank { SUGGESTED_MODEL },
-                        AiEndpoint.Wire.RESPONSES,
+                        if (chosen) ai.wire else AiEndpoint.Wire.RESPONSES,
                     )
                     onAiKey(key.takeIf { it.isNotBlank() })
                 },
@@ -283,12 +324,14 @@ private fun AiContext.Profile.age(): Int {
 }
 
 private const val WELCOME = 0
-private const val PROFILE = 1
-private const val ASSISTANT = 2
-private const val STEPS = 3
+private const val RESTORE = 1
+private const val PROFILE = 2
+private const val ASSISTANT = 3
+private const val STEPS = 4
 
 private val TITLES = listOf(
     R.string.onboarding_welcome,
+    R.string.onboarding_restore,
     R.string.onboarding_profile,
     R.string.onboarding_ai,
 )

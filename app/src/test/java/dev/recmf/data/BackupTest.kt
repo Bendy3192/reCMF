@@ -61,6 +61,25 @@ class BackupTest {
     }
 
     @Test
+    fun `the wizard's flag is about this install, not about the wearer`() {
+        // Restoring it would switch off the wizard from inside the wizard — the restore
+        // is offered on its second step — and leave somebody looking at a home screen
+        // they never asked for. Stripped both ways, so a file written before this rule
+        // existed cannot do it either.
+        val been = listOf(Setting("onboarding_done", SettingType.BOOLEAN, true))
+
+        assertTrue("onboarding_done" !in Backup.write(Backup.Contents(settings = been)))
+
+        val older = """
+            {"format":1,"app":1,"writtenAt":1,
+             "settings":[{"key":"onboarding_done","type":"BOOLEAN","value":true}],
+             "tables":{}}
+        """.trimIndent()
+
+        assertEquals(emptyList<Setting>(), Backup.read(older)!!.settings)
+    }
+
+    @Test
     fun `the watch's address and name stay with the watch`() {
         val paired = listOf(
             Setting("watch_address", SettingType.STRING, "AA:BB:CC:DD:EE:FF"),

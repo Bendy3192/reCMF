@@ -511,6 +511,7 @@
     <string name="forget_explainer">reCMF will stop talking to it and forget the pairing. Getting it back means pairing again, granting the permissions again, and sending the watch a fresh almanac. Nothing already written to Health Connect is lost.</string>
     <string name="action_cancel">Cancel</string>
     <string name="onboarding_welcome">reCMF</string>
+    <string name="onboarding_restore">Been here before?</string>
     <string name="onboarding_profile">About you</string>
     <string name="onboarding_ai">The assistant</string>
     <string name="onboarding_back">Back</string>
@@ -520,6 +521,9 @@
     <string name="onboarding_welcome_what">A third-party app for the CMF Watch Pro 2. Not made by CMF and not connected to them: it speaks to the watch directly, over Bluetooth, using a protocol worked out by reading what the watch says.</string>
     <string name="onboarding_welcome_offline">Everything it reads stays on this phone. Nothing is sent anywhere unless you switch on the assistant on the last step, and it will show you exactly what would leave before it sends anything.</string>
     <string name="onboarding_welcome_root">One thing will not work without root: mirroring the phone\'s alarms to the watch, because Android does not let an ordinary app read them. Everything else works without it, and reCMF never asks for root.</string>
+    <string name="onboarding_restore_what">If you have a backup file from another phone or an earlier install, this is the moment to bring it back: your settings, alarms, goals, the health history reCMF holds and your conversation with the coach. Restoring merges into what is here, so nothing you have already done is lost.</string>
+    <string name="onboarding_restore_keys">Two things a file cannot carry: the watch pairing key and the assistant\'s API key. Both are sealed in the Android keystore, which does not leave the phone by design — so you pair the watch again afterwards and paste the assistant key in once. Everything else comes back.</string>
+    <string name="onboarding_restore_after">Restored. The steps that follow are already filled in from the file — read them over and carry on.</string>
     <string name="onboarding_profile_why">Only for the arithmetic below, and only if you want it. Age, height and weight are what a resting-energy equation needs; nothing here is required and all of it can be changed or emptied later.</string>
     <string name="onboarding_energy_waiting">Fill in age, height and weight to see what a day costs you.</string>
     <string name="onboarding_energy_spent">About %1$s kcal a day</string>
