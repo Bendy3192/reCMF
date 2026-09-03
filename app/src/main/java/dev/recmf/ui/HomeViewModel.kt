@@ -1072,6 +1072,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val ai: StateFlow<AiSettings> = settingsStore.ai
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), AiSettings())
 
+    /**
+     * Records "no thank you" to the assistant as a whole, or takes it back.
+     *
+     * Declining also clears the key, which the switches alone never do. Somebody who has
+     * decided they want no language model near this should not have to trust that a key
+     * sitting in the app is unused — and a key is a thing they can paste again in ten
+     * seconds if they change their mind, which the wizard's own wording says.
+     */
+    fun setAiDeclined(declined: Boolean) {
+        viewModelScope.launch {
+            settingsStore.setAiDeclined(declined)
+            if (declined) settingsStore.setAiKey(null)
+        }
+    }
+
     fun setAiInsightsEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsStore.setAiInsightsEnabled(enabled) }
     }

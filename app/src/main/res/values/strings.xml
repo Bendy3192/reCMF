@@ -233,6 +233,9 @@
 
     <!-- The assistant. Two opt-ins, because they send different things. -->
     <string name="ai">Assistant</string>
+    <string name="ai_decline">I do not want an assistant</string>
+    <string name="ai_declined_explainer">Turned off, and not on offer. Nothing is sent anywhere, no key is kept, and every score and chart in reCMF goes on working — they are worked out on this phone.</string>
+    <string name="ai_undecline">Actually, let me set one up</string>
     <string name="ai_explainer">Off until you turn it on. reCMF has never sent anything about you anywhere, and this is the first thing that would — so it is two switches rather than one, and you can see exactly what leaves before it does.</string>
     <string name="ai_insights">Explain my metrics</string>
     <string name="ai_insights_explainer">Sends figures and nothing that names you: resting pulse, sleep length, the stress index, steps. A column of numbers.</string>
@@ -531,5 +534,9 @@
     <string name="onboarding_energy_not_a_budget">This is an estimate of what is spent, not a target to eat to. reCMF does not propose a deficit and the assistant is told not to either.</string>
     <string name="onboarding_ai_what">Optional, and off. With it on, a tap on any measurement asks a model to say what that figure means against your own recent days.</string>
     <string name="onboarding_ai_sends">What leaves the phone is a small table of daily figures and your question — no name attached, unless you also switch on the coach and fill in the profile. You can read the exact text before every request in the settings.</string>
+    <string name="onboarding_ai_without">Everything else in reCMF works without it and always will: the readiness score, the sleep score, the charts and the goals are all plain arithmetic done on this phone, with no key and no network. Saying no here costs you none of them.</string>
+    <string name="onboarding_ai_no">No assistant</string>
+    <string name="onboarding_ai_yes">Set one up</string>
+    <string name="onboarding_ai_declined">Done — no assistant. Nothing is sent anywhere, no key is kept, and the settings screen will not ask again. If you ever change your mind there is one line on the watch tab that brings it back.</string>
     <string name="onboarding_ai_later">Pointed at Perplexity to begin with. The address, the model and the standing instructions are all editable on the watch tab afterwards.</string>
 </resources>

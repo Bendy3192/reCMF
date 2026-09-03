@@ -18,7 +18,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -62,6 +61,7 @@ fun OnboardingScreen(
     onAiInsights: (Boolean) -> Unit,
     onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
     onAiKey: (String?) -> Unit,
+    onAiDeclined: (Boolean) -> Unit,
     onDone: () -> Unit,
 ) {
     var step by rememberSaveable { mutableIntStateOf(0) }
@@ -94,7 +94,7 @@ fun OnboardingScreen(
                 RESTORE -> item { RestoreStep(backupState, onImportBackup) }
                 PROFILE -> item { ProfileStep(ai.profile, activeKcalToday, onProfile) }
                 ASSISTANT -> item {
-                    AssistantStep(ai, onAiInsights, onAiEndpoint, onAiKey)
+                    AssistantStep(ai, onAiInsights, onAiEndpoint, onAiKey, onAiDeclined)
                 }
             }
         }
@@ -231,13 +231,27 @@ private fun ProfileStep(
     }
 }
 
-/** The one thing here that sends anything anywhere, off until somebody turns it on. */
+/**
+ * The one thing here that sends anything anywhere, and a plain way to refuse it.
+ *
+ * Two answers, not a switch. A switch already in the off position is technically a choice
+ * and reads as a default waiting to be corrected: it leaves the model name, the key box
+ * and somebody else's company name on the screen of a person who wants none of it, and
+ * says nothing about what happens if they walk past. So the question is put once, both
+ * answers are buttons, and "no" is a real one — it turns the switches off, drops any key,
+ * and takes the assistant out of the settings screen afterwards.
+ *
+ * Nobody is trapped by either answer. "No" is reversible from one line in the settings,
+ * and the wording says so, because a choice somebody believes is permanent is a choice
+ * they make fearfully.
+ */
 @Composable
 private fun AssistantStep(
     ai: AiSettings,
     onAiInsights: (Boolean) -> Unit,
     onAiEndpoint: (String, String, AiEndpoint.Wire) -> Unit,
     onAiKey: (String?) -> Unit,
+    onAiDeclined: (Boolean) -> Unit,
 ) {
     var key by rememberSaveable { mutableStateOf(ai.key.orEmpty()) }
     var model by rememberSaveable(ai.model) { mutableStateOf(ai.model) }
@@ -245,18 +259,27 @@ private fun AssistantStep(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Paragraph(R.string.onboarding_ai_what)
         Paragraph(R.string.onboarding_ai_sends)
+        Paragraph(R.string.onboarding_ai_without)
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
-                stringResource(R.string.ai_insights),
-                style = MaterialTheme.typography.bodyLarge,
+            FilledTonalButton(
+                onClick = {
+                    onAiDeclined(true)
+                    key = ""
+                },
                 modifier = Modifier.weight(1f),
-            )
-            Switch(checked = ai.insightsEnabled, onCheckedChange = onAiInsights)
+            ) { Text(stringResource(R.string.onboarding_ai_no)) }
+
+            FilledTonalButton(
+                onClick = { onAiInsights(true) },
+                modifier = Modifier.weight(1f),
+            ) { Text(stringResource(R.string.onboarding_ai_yes)) }
         }
+
+        if (ai.declined) Paragraph(R.string.onboarding_ai_declined)
 
         if (ai.insightsEnabled) {
             OutlinedTextField(

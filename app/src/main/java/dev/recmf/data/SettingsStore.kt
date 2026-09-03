@@ -59,6 +59,22 @@ data class SleepSummary(
 data class AiSettings(
     val insightsEnabled: Boolean = false,
     val coachEnabled: Boolean = false,
+
+    /**
+     * Whether somebody has said no to the whole idea, rather than merely left it off.
+     *
+     * Off and declined are the same thing to every request in this app — nothing is sent
+     * either way — and completely different things to the person looking at the screen.
+     * "Off" is a switch waiting to be flipped, and a settings card full of model names and
+     * key fields reads as an invitation whatever position its switch is in. Somebody who
+     * does not want a language model near their health data said so, and the app should
+     * stop asking.
+     *
+     * So this is not a third state of the same switch. It is the answer to a question that
+     * was put once, kept so it does not have to be put again, and reversible from one line
+     * of text for anybody who changes their mind.
+     */
+    val declined: Boolean = false,
     val baseUrl: String = "",
     val model: String = "",
     val wire: AiEndpoint.Wire = AiEndpoint.Wire.CHAT,
@@ -489,6 +505,7 @@ class SettingsStore(private val context: Context) {
         AiSettings(
             insightsEnabled = prefs[KEY_AI_INSIGHTS] ?: false,
             coachEnabled = prefs[KEY_AI_COACH] ?: false,
+            declined = prefs[KEY_AI_DECLINED] ?: false,
             baseUrl = prefs[KEY_AI_BASE_URL] ?: DEFAULT_AI_BASE_URL,
             model = prefs[KEY_AI_MODEL] ?: "",
             webSearch = prefs[KEY_AI_WEB_SEARCH] ?: true,
@@ -513,12 +530,37 @@ class SettingsStore(private val context: Context) {
         )
     }
 
+    /**
+     * Records the answer, and enforces it.
+     *
+     * Declining turns both switches off in the same write rather than trusting that they
+     * already were: a promise that nothing will be sent is worth more than a flag that
+     * says nobody asked for it.
+     */
+    suspend fun setAiDeclined(declined: Boolean) {
+        context.dataStore.edit {
+            it[KEY_AI_DECLINED] = declined
+            if (declined) {
+                it[KEY_AI_INSIGHTS] = false
+                it[KEY_AI_COACH] = false
+            }
+        }
+    }
+
     suspend fun setAiInsightsEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_AI_INSIGHTS] = enabled }
+        context.dataStore.edit {
+            it[KEY_AI_INSIGHTS] = enabled
+            // A switch turned on is somebody changing their mind, and a "no" left standing
+            // beside a working assistant would be a lie the settings screen tells.
+            if (enabled) it[KEY_AI_DECLINED] = false
+        }
     }
 
     suspend fun setAiCoachEnabled(enabled: Boolean) {
-        context.dataStore.edit { it[KEY_AI_COACH] = enabled }
+        context.dataStore.edit {
+            it[KEY_AI_COACH] = enabled
+            if (enabled) it[KEY_AI_DECLINED] = false
+        }
     }
 
     suspend fun setAiEndpoint(baseUrl: String, model: String, wire: AiEndpoint.Wire) {
@@ -707,6 +749,7 @@ class SettingsStore(private val context: Context) {
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
 
         val KEY_AI_INSIGHTS = booleanPreferencesKey("ai_insights_enabled")
+        val KEY_AI_DECLINED = booleanPreferencesKey("ai_declined")
         val KEY_AI_COACH = booleanPreferencesKey("ai_coach_enabled")
         val KEY_AI_BASE_URL = stringPreferencesKey("ai_base_url")
         val KEY_AI_MODEL = stringPreferencesKey("ai_model")

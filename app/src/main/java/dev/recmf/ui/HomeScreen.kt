@@ -196,6 +196,7 @@ fun HomeScreen(
     onAiModels: (String) -> Unit,
     onAiWebSearch: (Boolean) -> Unit,
     onAiProfile: (AiContext.Profile) -> Unit,
+    onAiDeclined: (Boolean) -> Unit,
     held: List<HealthConnectSync.Held>?,
     onSurveyHealthConnect: () -> Unit,
     onExportBackup: () -> Unit,
@@ -390,6 +391,7 @@ private fun TabContent(
     onAiModels: (String) -> Unit,
     onAiWebSearch: (Boolean) -> Unit,
     onAiProfile: (AiContext.Profile) -> Unit,
+    onAiDeclined: (Boolean) -> Unit,
     held: List<HealthConnectSync.Held>?,
     onSurveyHealthConnect: () -> Unit,
     onExportBackup: () -> Unit,
@@ -617,6 +619,7 @@ private fun TabContent(
                         onModels = onAiModels,
                         onWebSearch = onAiWebSearch,
                         onProfile = onAiProfile,
+                        onDeclined = onAiDeclined,
                     )
                 }
                 item { BackupCard(backupState, onExportBackup, onImportBackup) }
@@ -1545,9 +1548,18 @@ private fun AiCard(
     onModels: (String) -> Unit,
     onWebSearch: (Boolean) -> Unit,
     onProfile: (AiContext.Profile) -> Unit,
+    onDeclined: (Boolean) -> Unit,
 ) {
     var showing by rememberSaveable { mutableStateOf(false) }
     var editingPrompt by rememberSaveable { mutableStateOf(false) }
+
+    // Somebody said no. The card becomes a line saying so and a way back, rather than a
+    // page of model names and a box for a key: leaving the whole apparatus on screen with
+    // its switches off is asking the question again every time they scroll past it.
+    if (settings.declined) {
+        DeclinedAiCard(onDeclined)
+        return
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -1644,6 +1656,44 @@ private fun AiCard(
                         fontFamily = FontFamily.Monospace,
                     )
                 }
+            }
+
+            // Last, and offered only when nothing is on: "remove this" beside a working
+            // assistant would be a button that throws away a key somebody is using.
+            if (!settings.insightsEnabled && !settings.coachEnabled) {
+                HorizontalDivider()
+                TextButton(onClick = { onDeclined(true) }) {
+                    Text(stringResource(R.string.ai_decline))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * What is left where the assistant was, for somebody who said no to it.
+ *
+ * A sentence and a way back. It says the thing that is actually reassuring — that nothing
+ * is sent and no key is held — rather than merely being empty, because an absent card
+ * looks like a feature that failed to load.
+ */
+@Composable
+private fun DeclinedAiCard(onDeclined: (Boolean) -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = UtilityCardShape,
+    ) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            CardTitle(R.drawable.ic_ui_charts, R.string.ai)
+
+            Text(
+                stringResource(R.string.ai_declined_explainer),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            TextButton(onClick = { onDeclined(false) }) {
+                Text(stringResource(R.string.ai_undecline))
             }
         }
     }

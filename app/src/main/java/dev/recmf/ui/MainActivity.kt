@@ -226,6 +226,7 @@ class MainActivity : ComponentActivity() {
                         onAiInsights = model::setAiInsightsEnabled,
                         onAiEndpoint = model::setAiEndpoint,
                         onAiKey = model::setAiKey,
+                        onAiDeclined = model::setAiDeclined,
                         onDone = model::finishOnboarding,
                     )
                     return@ReCmfTheme
@@ -273,6 +274,7 @@ class MainActivity : ComponentActivity() {
                     onAiModels = model::fetchAiModels,
                     onAiWebSearch = model::setAiWebSearch,
                     onAiProfile = model::setAiProfile,
+                    onAiDeclined = model::setAiDeclined,
                     held = held,
                     onSurveyHealthConnect = model::surveyHealthConnect,
                     onExportBackup = { saveBackup.launch(backupFileName) },
