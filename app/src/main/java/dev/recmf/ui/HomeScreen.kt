@@ -118,6 +118,7 @@ import dev.recmf.ai.AiEndpoint
 import dev.recmf.data.AiSettings
 import dev.recmf.health.HealthConnectSync
 import dev.recmf.health.Readiness
+import dev.recmf.health.Sex
 import dev.recmf.health.SleepScore
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.ui.theme.Motion
@@ -1928,6 +1929,9 @@ private fun AiProfileFields(settings: AiSettings, onProfile: (AiContext.Profile)
     }
     var notes by rememberSaveable(saved.notes) { mutableStateOf(saved.notes) }
 
+    // Held by name rather than by the enum, which is not a type rememberSaveable knows.
+    var sex by rememberSaveable(saved.sex) { mutableStateOf(saved.sex?.name.orEmpty()) }
+
     Text(
         stringResource(R.string.ai_profile),
         style = MaterialTheme.typography.titleSmall,
@@ -1953,6 +1957,25 @@ private fun AiProfileFields(settings: AiSettings, onProfile: (AiContext.Profile)
         NumberField(weight, { weight = it }, R.string.ai_profile_weight, Modifier.weight(1f))
     }
 
+    // Three choices, and the third is a real answer rather than a way out of the question.
+    // Every published resting-energy equation needs this one and none of them can be told
+    // it from a name, so unsaid means the figure is shown as the span between both
+    // coefficients — which is what it honestly is.
+    Text(
+        stringResource(R.string.ai_profile_sex),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        SEX_CHOICES.forEach { (value, label) ->
+            FilterChip(
+                selected = sex == value,
+                onClick = { sex = value },
+                label = { Text(stringResource(label)) },
+            )
+        }
+    }
+
     OutlinedTextField(
         value = notes,
         onValueChange = { notes = it },
@@ -1967,6 +1990,7 @@ private fun AiProfileFields(settings: AiSettings, onProfile: (AiContext.Profile)
         birthYear = born.toIntOrNull() ?: 0,
         heightCm = height.toIntOrNull() ?: 0,
         weightKg = weight.toIntOrNull() ?: 0,
+        sex = Sex.entries.firstOrNull { it.name == sex },
         notes = notes,
     )
 
@@ -2141,6 +2165,18 @@ private class TileSpec(
 
 /** What the night is headed in the assistant's table. The sleep card is not a tile. */
 private const val SLEEP_COLUMN = "sleep_min"
+
+/**
+ * The three answers to the coefficient question, in the order they are offered.
+ *
+ * "Not saying" last and stated plainly, because it is the default and has to read as a
+ * choice rather than as an unfilled field.
+ */
+private val SEX_CHOICES: List<Pair<String, Int>> = listOf(
+    Sex.FEMALE.name to R.string.ai_profile_sex_female,
+    Sex.MALE.name to R.string.ai_profile_sex_male,
+    "" to R.string.ai_profile_sex_unsaid,
+)
 
 /** True once any day in the week carries a reading above zero. */
 private fun List<DayValue>.hasReadings(): Boolean = any { (it.value ?: 0f) > 0f }

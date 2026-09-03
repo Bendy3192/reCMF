@@ -15,6 +15,7 @@ import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dev.recmf.ai.AiContext
 import dev.recmf.ai.AiEndpoint
+import dev.recmf.health.Sex
 import dev.recmf.protocol.CmfActivityType
 import dev.recmf.protocol.CmfAlarm
 import dev.recmf.protocol.CmfWeekday
@@ -481,6 +482,12 @@ class SettingsStore(private val context: Context) {
                 name = prefs[KEY_AI_NAME].orEmpty(),
                 birthYear = prefs[KEY_AI_BORN] ?: 0,
                 heightCm = prefs[KEY_AI_HEIGHT] ?: 0,
+                // Stored as a name rather than an ordinal: an ordinal would silently
+                // change meaning if the enum ever gained an entry, and this one is read
+                // back into an equation.
+                sex = prefs[KEY_AI_SEX]?.let { name ->
+                    Sex.entries.firstOrNull { it.name == name }
+                },
                 weightKg = prefs[KEY_AI_WEIGHT] ?: 0,
                 notes = prefs[KEY_AI_NOTES].orEmpty(),
             ),
@@ -529,6 +536,10 @@ class SettingsStore(private val context: Context) {
             it[KEY_AI_BORN] = profile.birthYear
             it[KEY_AI_HEIGHT] = profile.heightCm
             it[KEY_AI_WEIGHT] = profile.weightKg
+
+            // Removed rather than blanked when it goes back to unsaid, so "not given"
+            // stays a state the store can hold rather than an empty string to interpret.
+            profile.sex?.let { sex -> it[KEY_AI_SEX] = sex.name } ?: it.remove(KEY_AI_SEX)
             it[KEY_AI_NOTES] = profile.notes.trim()
         }
     }
@@ -693,6 +704,7 @@ class SettingsStore(private val context: Context) {
         // mean they could not travel in a backup — which is exactly where somebody would
         // want them to be.
         val KEY_AI_NAME = stringPreferencesKey("ai_name")
+        val KEY_AI_SEX = stringPreferencesKey("ai_sex")
         val KEY_AI_BORN = intPreferencesKey("ai_birth_year")
         val KEY_AI_HEIGHT = intPreferencesKey("ai_height_cm")
         val KEY_AI_WEIGHT = intPreferencesKey("ai_weight_kg")

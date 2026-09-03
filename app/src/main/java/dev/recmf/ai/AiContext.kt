@@ -3,6 +3,8 @@
  */
 package dev.recmf.ai
 
+import dev.recmf.health.Sex
+
 /**
  * What gets said to the assistant, and nothing else does.
  *
@@ -113,11 +115,23 @@ object AiContext {
         val birthYear: Int = 0,
         val heightCm: Int = 0,
         val weightKg: Int = 0,
+
+        /**
+         * Which coefficient the resting-energy equation takes, when it was given.
+         *
+         * The one field here that exists for arithmetic rather than for reading: every
+         * published equation needs it, and without it the honest answer is the span
+         * between both coefficients rather than one of them. Null is a first-class answer
+         * and stays one — the range is not a degraded result, it is the true one when
+         * nobody said.
+         */
+        val sex: Sex? = null,
+
         val notes: String = "",
     ) {
         /** Whether there is anything here worth sending. An empty profile is not a profile. */
         val filled: Boolean get() = name.isNotBlank() || birthYear > 0 ||
-            heightCm > 0 || weightKg > 0 || notes.isNotBlank()
+            heightCm > 0 || weightKg > 0 || sex != null || notes.isNotBlank()
     }
 
     /**
@@ -138,6 +152,7 @@ object AiContext {
             profile.birthYear.takeIf { it in 1900..thisYear }?.let { add("Age: ${thisYear - it}") }
             profile.heightCm.takeIf { it > 0 }?.let { add("Height: $it cm") }
             profile.weightKg.takeIf { it > 0 }?.let { add("Weight: $it kg") }
+            profile.sex?.let { add("Sex: ${it.name.lowercase()}") }
         }
 
         return buildString {

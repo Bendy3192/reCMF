@@ -244,6 +244,10 @@
     <string name="ai_profile_born">Year of birth</string>
     <string name="ai_profile_height">Height, cm</string>
     <string name="ai_profile_weight">Weight, kg</string>
+    <string name="ai_profile_sex">For the energy equation</string>
+    <string name="ai_profile_sex_female">Female</string>
+    <string name="ai_profile_sex_male">Male</string>
+    <string name="ai_profile_sex_unsaid">Not saying</string>
     <string name="ai_profile_notes">Anything else</string>
     <string name="ai_profile_notes_hint">Recovering from flu. Train Tue and Thu. No advice about diet.</string>
     <string name="ai_endpoint">Where to ask</string>
