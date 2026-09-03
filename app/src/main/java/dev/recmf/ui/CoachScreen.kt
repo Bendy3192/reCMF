@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -152,8 +154,12 @@ fun CoachScreen(
     // about — and which is behind the keyboard while there is one, so the room reserved
     // for it collapses then. Measured from the inset rather than asked of a state flag:
     // greater than nothing means there is a keyboard.
-    val imeBelow = WindowInsets.ime.getBottom(LocalDensity.current)
+    val density = LocalDensity.current
+    val imeBelow = WindowInsets.ime.getBottom(density)
+    val barsBelow = WindowInsets.navigationBars.getBottom(density)
     val clearance = if (imeBelow > 0) 0.dp else DOCK_CLEARANCE
+
+    val isImeVisible = WindowInsets.isImeVisible
 
     Column(
         modifier = Modifier
@@ -173,6 +179,18 @@ fun CoachScreen(
                 TextButton(onClick = onClear) { Text(stringResource(R.string.coach_clear)) }
             }
         }
+
+        // TEMPORARY, and at the top because that is the part of this screen that stays on
+        // screen. Five attempts at placing the box above the keyboard have each moved it
+        // by about a keyboard, in one direction or the other — which is not something one
+        // expression can do, so the numbers being reasoned about are not the numbers the
+        // layout is getting. This prints them. It comes out again the moment one
+        // screenshot says which of them is lying.
+        Text(
+            "ime=$imeBelow bars=$barsBelow clearance=$clearance visible=$isImeVisible",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
 
         LazyColumn(
             modifier = Modifier.weight(1f),
