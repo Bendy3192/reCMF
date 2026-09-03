@@ -706,6 +706,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
+    fun finishOnboarding() {
+        viewModelScope.launch { settingsStore.setOnboardingDone() }
+    }
+
     fun setSleepTargetMinutes(minutes: Int) {
         viewModelScope.launch { settingsStore.setSleepTargetMinutes(minutes) }
     }

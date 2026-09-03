@@ -510,4 +510,22 @@
     <string name="forget_title">Forget this watch?</string>
     <string name="forget_explainer">reCMF will stop talking to it and forget the pairing. Getting it back means pairing again, granting the permissions again, and sending the watch a fresh almanac. Nothing already written to Health Connect is lost.</string>
     <string name="action_cancel">Cancel</string>
+    <string name="onboarding_welcome">reCMF</string>
+    <string name="onboarding_profile">About you</string>
+    <string name="onboarding_ai">The assistant</string>
+    <string name="onboarding_back">Back</string>
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_finish">Done</string>
+    <string name="onboarding_welcome_what">A third-party app for the CMF Watch Pro 2. Not made by CMF and not connected to them: it speaks to the watch directly, over Bluetooth, using a protocol worked out by reading what the watch says.</string>
+    <string name="onboarding_welcome_offline">Everything it reads stays on this phone. Nothing is sent anywhere unless you switch on the assistant on the last step, and it will show you exactly what would leave before it sends anything.</string>
+    <string name="onboarding_welcome_root">One thing will not work without root: mirroring the phone\'s alarms to the watch, because Android does not let an ordinary app read them. Everything else works without it, and reCMF never asks for root.</string>
+    <string name="onboarding_profile_why">Only for the arithmetic below, and only if you want it. Age, height and weight are what a resting-energy equation needs; nothing here is required and all of it can be changed or emptied later.</string>
+    <string name="onboarding_energy_waiting">Fill in age, height and weight to see what a day costs you.</string>
+    <string name="onboarding_energy_spent">About %1$s kcal a day</string>
+    <string name="onboarding_energy_parts">%1$s at rest, by the Mifflin-St Jeor equation, plus %2$d the watch counted as movement today.</string>
+    <string name="onboarding_energy_not_a_budget">This is an estimate of what is spent, not a target to eat to. reCMF does not propose a deficit and the assistant is told not to either.</string>
+    <string name="onboarding_ai_what">Optional, and off. With it on, a tap on any measurement asks a model to say what that figure means against your own recent days.</string>
+    <string name="onboarding_ai_sends">What leaves the phone is a small table of daily figures and your question — no name attached, unless you also switch on the coach and fill in the profile. You can read the exact text before every request in the settings.</string>
+    <string name="onboarding_ai_later">Pointed at Perplexity to begin with. The address, the model and the standing instructions are all editable on the watch tab afterwards.</string>
 </resources>

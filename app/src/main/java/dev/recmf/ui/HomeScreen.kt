@@ -1568,7 +1568,7 @@ private fun AiCard(
             )
 
             if (settings.coachEnabled) {
-                AiProfileFields(settings, onProfile)
+                AiProfileFields(settings.profile, onProfile)
             }
 
             HorizontalDivider()
@@ -1914,8 +1914,7 @@ private fun AiProbeResult(answer: AiClient.Answer) {
  * year as an age is worse than one that waits.
  */
 @Composable
-private fun AiProfileFields(settings: AiSettings, onProfile: (AiContext.Profile) -> Unit) {
-    val saved = settings.profile
+internal fun AiProfileFields(saved: AiContext.Profile, onProfile: (AiContext.Profile) -> Unit) {
 
     var name by rememberSaveable(saved.name) { mutableStateOf(saved.name) }
     var born by rememberSaveable(saved.birthYear) {

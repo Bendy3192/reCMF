@@ -147,6 +147,15 @@ data class WatchSettings(
      * told every morning that they failed.
      */
     val sleepTargetMinutes: Int = 480,
+
+    /**
+     * Whether the first-run wizard has been through, one way or another.
+     *
+     * Set by finishing it and equally by skipping it: what it records is that the offer was
+     * made, not that anybody accepted. An app that kept asking until it got answers would
+     * be a toll gate rather than an offer.
+     */
+    val onboardingDone: Boolean = false,
 ) {
     val isPaired: Boolean get() = address != null
 }
@@ -235,6 +244,7 @@ class SettingsStore(private val context: Context) {
             almanacFormatSent = prefs[KEY_ALMANAC_FORMAT] ?: 0,
             autoSyncSeconds = prefs[KEY_AUTO_SYNC] ?: 300,
             sleepTargetMinutes = prefs[KEY_SLEEP_TARGET] ?: 480,
+            onboardingDone = prefs[KEY_ONBOARDED] ?: false,
             weatherEnabled = prefs[KEY_WEATHER_ENABLED] ?: false,
             weatherCity = prefs[KEY_WEATHER_CITY],
             weatherAutoPlace = prefs[KEY_WEATHER_AUTO_PLACE] ?: false,
@@ -458,6 +468,10 @@ class SettingsStore(private val context: Context) {
 
     suspend fun setSleepTargetMinutes(minutes: Int) {
         context.dataStore.edit { it[KEY_SLEEP_TARGET] = minutes }
+    }
+
+    suspend fun setOnboardingDone() {
+        context.dataStore.edit { it[KEY_ONBOARDED] = true }
     }
 
     suspend fun setPhoneAlarmsEnabled(enabled: Boolean) {
@@ -686,6 +700,7 @@ class SettingsStore(private val context: Context) {
         val KEY_SCREEN_OFF_ONLY = booleanPreferencesKey("notify_only_when_screen_off")
         val KEY_AUTO_SYNC = intPreferencesKey("auto_sync_seconds")
         val KEY_SLEEP_TARGET = intPreferencesKey("sleep_target_minutes")
+        val KEY_ONBOARDED = booleanPreferencesKey("onboarding_done")
         val KEY_PHONE_ALARMS = booleanPreferencesKey("phone_alarms_enabled")
 
         val KEY_AI_INSIGHTS = booleanPreferencesKey("ai_insights_enabled")

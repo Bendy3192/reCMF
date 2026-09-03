@@ -501,4 +501,22 @@
     <string name="forget_title">Забыть эти часы?</string>
     <string name="forget_explainer">reCMF перестанет с ними общаться и забудет спаривание. Вернуть — значит спарить заново, заново выдать разрешения и отправить часам свежий альманах. Всё, что уже записано в Health Connect, останется.</string>
     <string name="action_cancel">Отмена</string>
+    <string name="onboarding_welcome">reCMF</string>
+    <string name="onboarding_profile">О вас</string>
+    <string name="onboarding_ai">Ассистент</string>
+    <string name="onboarding_back">Назад</string>
+    <string name="onboarding_skip">Пропустить</string>
+    <string name="onboarding_next">Дальше</string>
+    <string name="onboarding_finish">Готово</string>
+    <string name="onboarding_welcome_what">Стороннее приложение для CMF Watch Pro 2. Сделано не CMF и с ними не связано: оно говорит с часами напрямую по Bluetooth, на протоколе, разобранном по тому, что часы отвечают.</string>
+    <string name="onboarding_welcome_offline">Всё, что оно читает, остаётся на этом телефоне. Никуда ничего не уходит, пока вы не включите ассистента на последнем шаге, — и он покажет, что именно уйдёт, до отправки.</string>
+    <string name="onboarding_welcome_root">Одно не заработает без рута: перенос будильников телефона на часы, потому что Android не даёт обычному приложению их читать. Всё остальное работает без него, и рут reCMF не просит никогда.</string>
+    <string name="onboarding_profile_why">Только ради расчёта ниже и только если хотите. Возраст, рост и вес — это то, что нужно уравнению энергии покоя; ничего здесь не обязательно, и всё можно изменить или стереть позже.</string>
+    <string name="onboarding_energy_waiting">Заполните возраст, рост и вес — покажу, во сколько обходится день.</string>
+    <string name="onboarding_energy_spent">Около %1$s ккал в день</string>
+    <string name="onboarding_energy_parts">%1$s в покое по уравнению Миффлина–Сан-Жеора плюс %2$d, которые часы засчитали за движение сегодня.</string>
+    <string name="onboarding_energy_not_a_budget">Это оценка расхода, а не норма, под которую надо есть. reCMF не предлагает дефицит, и ассистенту это тоже запрещено.</string>
+    <string name="onboarding_ai_what">Необязательно и выключено. Если включить, нажатие на любое измерение спросит у модели, что эта цифра значит на фоне ваших же последних дней.</string>
+    <string name="onboarding_ai_sends">С телефона уходит небольшая таблица дневных цифр и ваш вопрос — без имени, если только вы отдельно не включите тренера и не заполните профиль. Точный текст каждого запроса можно прочитать в настройках.</string>
+    <string name="onboarding_ai_later">Для начала нацелено на Perplexity. Адрес, модель и постоянные инструкции потом редактируются на вкладке часов.</string>
 </resources>

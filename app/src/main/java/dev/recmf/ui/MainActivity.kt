@@ -208,6 +208,23 @@ class MainActivity : ComponentActivity() {
                 val hasNotificationAccess = model.hasNotificationAccess()
                 val isBatteryExempt = model.isExemptFromBatteryOptimisation()
 
+                // Once, before anything else, and only until it has been through. It is
+                // shown ahead of the pairing screen on purpose: what it says about this
+                // not being CMF's app and about nothing leaving the phone is worth saying
+                // before somebody hands the app a watch, not after.
+                if (!state.settings.onboardingDone) {
+                    OnboardingScreen(
+                        ai = ai,
+                        activeKcalToday = state.today.calories,
+                        onProfile = model::setAiProfile,
+                        onAiInsights = model::setAiInsightsEnabled,
+                        onAiEndpoint = model::setAiEndpoint,
+                        onAiKey = model::setAiKey,
+                        onDone = model::finishOnboarding,
+                    )
+                    return@ReCmfTheme
+                }
+
                 HomeScreen(
                     state = state,
                     discovered = discovered,
