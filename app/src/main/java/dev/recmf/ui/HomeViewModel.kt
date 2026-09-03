@@ -160,8 +160,8 @@ data class AiInsight(
     val text: String,
     val sources: List<String>,
     val atSeconds: Long,
-    /** The newest day it was shown. An answer about older data than there is now is stale. */
-    val through: String,
+    /** What it was about: the figure explained, and the last day it could see. */
+    val basis: String,
 )
 
 /** One app in the notification list, as the settings screen shows it. */
@@ -1059,7 +1059,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     text = row.text,
                     sources = row.sources.lines().filter { it.isNotBlank() },
                     atSeconds = row.atSeconds,
-                    through = row.through,
+                    basis = row.basis,
                 )
             }
         }
@@ -1093,14 +1093,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             if (!settings.insightsEnabled || !settings.usable) return@launch
 
             val days = aiDays.first()
-            val through = days.lastOrNull()?.date.orEmpty()
             val now = Instant.now().epochSecond
 
+            // What the answer would be about: the figure on the card, and the last day the
+            // table can see. An answer is stale when that changes and not before.
+            val basis = "$todayValue|${days.lastOrNull()?.date.orEmpty()}"
+
             val had = aiInsights.value[metric]
-            val stillGood = had != null &&
-                had.through == through &&
-                now - had.atSeconds < INSIGHT_GOOD_FOR_SECONDS
-            if (!force && stillGood) return@launch
+
+            // Two conditions, and both have to give way. Nothing has changed means nothing
+            // to say differently — which is the whole of it for a night, since last night
+            // does not move at lunchtime. And a figure that does move all day, like a step
+            // count, would otherwise buy a paid answer on every glance, so it still waits
+            // out the interval.
+            val settled = had != null &&
+                (had.basis == basis || now - had.atSeconds < INSIGHT_GOOD_FOR_SECONDS)
+            if (!force && settled) return@launch
 
             _aiAsking.value = _aiAsking.value + metric
             try {
@@ -1123,7 +1131,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                             text = answer.text,
                             sources = answer.sources.joinToString("\n"),
                             atSeconds = now,
-                            through = through,
+                            basis = basis,
                         ),
                     )
                 }
@@ -1453,12 +1461,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         const val BASELINE_DAYS = 30L
 
         /**
-         * How long an answer about a metric stays good, all else being equal.
+         * The soonest a changed figure may buy another answer.
          *
-         * Six hours rather than the three that first suggested themselves, because the
-         * figures underneath move slower than that: a resting pulse is worked out once a
-         * night and a stress index a handful of times a day. Anything shorter would be
-         * paying for the same answer twice.
+         * A floor rather than an expiry: an answer goes stale when what it was about
+         * changes, and this only stops the figures that change constantly from turning
+         * every glance into a request. A step count moves every minute; six hours is long
+         * enough that opening the tile through the day costs one answer rather than ten,
+         * and short enough that the morning's reading is not still being explained in the
+         * evening.
+         *
+         * Nothing expires on this alone. A night that has not changed is never re-asked,
+         * however long ago it was explained.
          */
         const val INSIGHT_GOOD_FOR_SECONDS = 6L * 60 * 60
 

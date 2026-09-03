@@ -22,7 +22,7 @@ import androidx.sqlite.execSQL
         AiInsightEntity::class,
         CoachMessageEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = true,
 )
 abstract class RecmfDatabase : RoomDatabase() {
@@ -174,6 +174,30 @@ abstract class RecmfDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Rekeys the cached explanations on what they were about rather than when they
+         * were written.
+         *
+         * Dropped rather than migrated. This table is a cache of paid answers, and the
+         * column that decides whether one is still good has changed meaning entirely —
+         * carrying the old values across would keep answers whose freshness cannot be
+         * judged. The cost of losing it is one request per metric somebody opens.
+         */
+        private val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(connection: SQLiteConnection) {
+                connection.execSQL("DROP TABLE IF EXISTS `ai_insights`")
+                connection.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `ai_insights` (" +
+                        "`metric` TEXT NOT NULL, " +
+                        "`text` TEXT NOT NULL, " +
+                        "`sources` TEXT NOT NULL, " +
+                        "`atSeconds` INTEGER NOT NULL, " +
+                        "`basis` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`metric`))",
+                )
+            }
+        }
+
         fun get(context: Context): RecmfDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
@@ -187,6 +211,7 @@ abstract class RecmfDatabase : RoomDatabase() {
                     MIGRATION_4_5,
                     MIGRATION_5_6,
                     MIGRATION_6_7,
+                    MIGRATION_7_8,
                 )
                 .build()
                 .also { instance = it }

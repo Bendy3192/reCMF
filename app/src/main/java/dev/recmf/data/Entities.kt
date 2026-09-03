@@ -153,7 +153,21 @@ data class AiInsightEntity(
     /** URLs, one per line, or empty. Most models cannot cite and that is not an error. */
     val sources: String,
     val atSeconds: Long,
-    val through: String,
+
+    /**
+     * What the answer was about, as a fingerprint: the figure it explained and the last day
+     * it could see.
+     *
+     * This is what decides whether an answer has gone off, and it replaced a plain timer
+     * because a timer asks the wrong question. Last night does not change at lunchtime, so
+     * a six-hour clock bought a second paid answer about the same night — and worse, one
+     * worded differently, so somebody who had not slept since looked again and found the
+     * app had changed its mind about a night that had not changed at all.
+     *
+     * A figure that does move — steps, distance — changes this on its own, and the
+     * minimum interval is what stops every glance at those from being a request.
+     */
+    val basis: String,
 )
 
 /**
