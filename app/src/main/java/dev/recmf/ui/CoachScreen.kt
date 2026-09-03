@@ -17,10 +17,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
-import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -141,29 +142,28 @@ fun CoachScreen(
         if (last >= 0) scroll.animateScrollToItem(last)
     }
 
-    // No padding for the keyboard here, on purpose, after four attempts that added some.
+    // The keyboard's inset, less the navigation bar the scaffold has already accounted
+    // for. Without that subtraction the bar is paid for twice and the box floats a
+    // finger's width above the keys.
     //
-    // The window moves itself. The tell was a screenshot with the watch bar missing from
-    // the top of the screen: that bar is not this screen's to move, so the whole window
-    // had been shifted up to keep the focused box in view. Adding a keyboard's height on
-    // top of a window that has already moved by a keyboard's height is what put the box
-    // a keyboard above the keyboard, and it did that whether the height came from
-    // imePadding or from anywhere else.
-    //
-    // What is left is the floating dock, which the window's own movement knows nothing
-    // about — and which is behind the keyboard while there is one, so the room reserved
-    // for it collapses then. Measured from the inset rather than asked of a state flag:
-    // greater than nothing means there is a keyboard.
-    val density = LocalDensity.current
-    val imeBelow = WindowInsets.ime.getBottom(density)
-    val barsBelow = WindowInsets.navigationBars.getBottom(density)
-    val clearance = if (imeBelow > 0) 0.dp else DOCK_CLEARANCE
+    // The activity declares adjustResize, which is what makes this a matter of arithmetic
+    // at all: left to its own devices this phone panned the entire window on focus, by
+    // less than the keyboard's height, and no amount of padding could win against a
+    // window that was moving underneath it.
+    val insets = WindowInsets.ime.exclude(WindowInsets.navigationBars)
 
-    val isImeVisible = WindowInsets.isImeVisible
+    // The dock floats over the content and is behind the keyboard while there is one, so
+    // the room reserved for it collapses then.
+    val clearance = if (WindowInsets.ime.getBottom(LocalDensity.current) > 0) {
+        0.dp
+    } else {
+        DOCK_CLEARANCE
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .windowInsetsPadding(insets)
             .padding(horizontal = 16.dp),
     ) {
         Row(
@@ -234,17 +234,6 @@ fun CoachScreen(
         }
 
         if (ready) {
-            // TEMPORARY. It was at the top of the screen and the top of the screen is
-            // exactly what leaves when the keyboard opens — the whole window slides up,
-            // watch bar and all, and takes the numbers with it. Directly above the chips
-            // is the lowest thing that stayed visible in that state, so that is where the
-            // reading has to be taken.
-            Text(
-                "ime=$imeBelow bars=$barsBelow clear=$clearance vis=$isImeVisible",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-
             // Only while the box is empty. They are for not knowing what to ask, and
             // somebody halfway through typing has stopped not knowing.
             if (draft.isBlank() && suggestions.isNotEmpty()) {

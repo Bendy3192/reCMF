@@ -131,10 +131,26 @@
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.ReCMF">
 
+        <!--
+            adjustResize, declared rather than left to the platform's choice.
+
+            Without it this phone panned the whole window on focus — watch bar and all —
+            by less than the keyboard's height, so the box to type in stayed half covered
+            while everything above it slid off the top. That pan then fought whatever
+            padding the app applied: with an inset's worth of padding on top of the pan the
+            box ended up near the top of the screen, and without it, under the keyboard.
+            Six attempts, and none of them could win, because the window was moving
+            underneath all of them.
+
+            This turns the panning off and leaves the keyboard to the insets, which were
+            correct all along: 921 pixels of it, reported to the app, ignored by nothing
+            except the pan.
+        -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.ReCMF">
+            android:theme="@style/Theme.ReCMF"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
