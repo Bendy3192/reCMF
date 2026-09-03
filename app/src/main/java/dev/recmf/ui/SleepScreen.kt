@@ -285,6 +285,18 @@ fun SleepScoreCard(score: SleepScore?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
+            // Only when the night itself is somebody else's, which happens on a night
+            // spent wearing something other than the watch. The card above is drawn from
+            // the watch's last night, so on such a morning the two are describing
+            // different nights and the screen has to say so.
+            if (!score.fromWatch) {
+                Text(
+                    stringResource(R.string.sleep_score_night_elsewhere),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
             // Said only where it applies. On a phone with one wearable there is no waking
             // stage to explain, and a sentence about a device that is not there would be
             // an invitation to go looking for a setting that does not exist.

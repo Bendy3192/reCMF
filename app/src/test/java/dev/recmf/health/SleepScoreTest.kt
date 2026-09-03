@@ -176,8 +176,9 @@ class SleepScoreTest {
     }
 
     @Test
-    fun `the device that recorded stages is the device that was worn`() {
-        // A watch in a drawer does not report deep and REM. It reports nothing.
+    fun `a night the watch did not really record gives way to one that was`() {
+        // A watch in a drawer does not report deep and REM. It reports nothing, or a bare
+        // length, and that is the one case where the other device's night is the night.
         val drawer = Night(asleepSeconds = 2 * hour, restfulSeconds = 0, staged = false)
         val worn = Night(
             asleepSeconds = 8 * hour,
@@ -190,6 +191,28 @@ class SleepScoreTest {
 
         assertEquals(8 * hour, scored.asleepSeconds)
         assertEquals(20 * 60, scored.awakeSeconds)
+    }
+
+    @Test
+    fun `with both devices worn the watch's night is the one scored`() {
+        // Both were on a wrist, so both produced stages, and the first rule here handed
+        // the night to the other device — which put one night in the screen's picture and
+        // a different one in the score below it, seven thirty-six above and seven
+        // fourteen underneath, with nothing to say they came from different wrists.
+        val ours = Night(asleepSeconds = 456 * 60, restfulSeconds = 219 * 60, staged = true)
+        val theirs = Night(
+            asleepSeconds = 434 * 60,
+            restfulSeconds = 170 * 60,
+            awakeSeconds = 17 * 60,
+            staged = true,
+            fromWatch = false,
+        )
+
+        val scored = preferMeasured(own = ours, elsewhere = theirs)!!
+
+        assertEquals(456 * 60, scored.asleepSeconds, "the picture and the score are one night")
+        assertEquals(17 * 60, scored.awakeSeconds, "and the waking time is still borrowed")
+        assertTrue(scored.fromWatch)
     }
 
     @Test
@@ -248,6 +271,14 @@ class SleepScoreTest {
         val worn = Night(8 * hour, 3 * hour, awakeSeconds = 0, fromWatch = false)
 
         assertEquals(false, preferMeasured(own, worn)!!.fromWatch)
+    }
+
+    @Test
+    fun `the score carries where its night came from`() {
+        val theirs = Night(8 * hour, 3 * hour, awakeSeconds = 0, fromWatch = false)
+
+        assertEquals(false, sleepScore(theirs)!!.fromWatch)
+        assertEquals(true, sleepScore(night())!!.fromWatch)
     }
 
     @Test

@@ -169,13 +169,22 @@ data class Night(
  * two records is a real case and picking wrongly is worse than picking either — it means
  * scoring a wrist that was in a drawer.
  *
- * The rule is that the device which produced stages is the device that was on the wrist.
- * A watch not being worn does not report deep and REM; it reports nothing, or a length. So
- * a staged night from elsewhere wins outright, and one without stages contributes only the
- * thing this watch could never measure anyway: how much of the night was spent awake.
+ * The watch's own night wins whenever it recorded one, and takes from the other only what
+ * it could never measure itself: how much of the night was spent awake.
+ *
+ * The first rule here was that whichever device produced stages was the one on the wrist,
+ * which is true of a watch in a drawer — it reports nothing, or a length — and quietly
+ * wrong when both were worn. Then the other device's night won, and the screen showed one
+ * night in its picture and scored a different one underneath: seven hours thirty-six above,
+ * seven fourteen below, with nothing to say they came from different wrists. Both numbers
+ * were right and the screen was not.
+ *
+ * So the watch is preferred where it has anything to prefer. Where it has nothing at all —
+ * a night spent wearing only the other device — the other device's night is the night, and
+ * the caller is told so.
  *
  * The resting pulse is always kept from [own], whichever night wins. It is not part of the
- * night at all — it is the morning's figure out of reCMF's own table — and swapping it for
+ * night at all — it is the morning's figure, chosen by its own rule — and swapping it for
  * something another app computed differently would silently change what the restoration
  * mark means.
  */
@@ -183,10 +192,10 @@ fun preferMeasured(own: Night?, elsewhere: Night?): Night? {
     if (elsewhere == null) return own
     if (own == null) return elsewhere
 
-    return if (elsewhere.staged) {
-        elsewhere.copy(restingHeartRate = own.restingHeartRate)
-    } else {
+    return if (own.staged) {
         own.copy(awakeSeconds = elsewhere.awakeSeconds)
+    } else {
+        elsewhere.copy(restingHeartRate = own.restingHeartRate)
     }
 }
 
@@ -206,6 +215,16 @@ data class SleepScore(
     /** 0 to 100. */
     val score: Int,
     val parts: List<SleepScorePart>,
+
+    /**
+     * Whether the night scored is the watch's own.
+     *
+     * False on a night spent wearing something else, when the watch recorded nothing and
+     * the other device's night is the only one there is. Worth saying on the screen: the
+     * picture above the score is drawn from the watch's last night, which on such a
+     * morning is a different night entirely.
+     */
+    val fromWatch: Boolean = true,
 )
 
 /**
@@ -294,6 +313,7 @@ fun sleepScore(
     return SleepScore(
         score = (100 * standing).roundToInt().coerceIn(0, 100),
         parts = parts,
+        fromWatch = night.fromWatch,
     )
 }
 

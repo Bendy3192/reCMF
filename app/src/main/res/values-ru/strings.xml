@@ -334,6 +334,7 @@
     <string name="sleep_score_of_target">%1$s из %2$s</string>
     <string name="sleep_score_explainer">Длительность сравнивается с вашей целью, остальное — с вашими же последними ночами. То, что измерить было нечем, не считается средним — оно просто не участвует.</string>
     <string name="sleep_score_elsewhere">Сколько ночи прошло в бодрствовании, приходит с другого устройства на этом телефоне. У часов CMF нет стадии бодрствования — они сообщают только глубокий, поверхностный и быстрый сон.</string>
+    <string name="sleep_score_night_elsewhere">Эту ночь записало другое устройство на этом телефоне — часы своей не сообщили. Картинка выше — последняя ночь самих часов, а это другая ночь.</string>
     <string name="sleep_score_excellent">очень хорошая ночь</string>
     <string name="sleep_score_good">хорошая ночь</string>
     <string name="sleep_score_fair">обычная ночь</string>

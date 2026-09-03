@@ -145,12 +145,20 @@
             This turns the panning off and leaves the keyboard to the insets, which were
             correct all along: 921 pixels of it, reported to the app, ignored by nothing
             except the pan.
+
+            stateAlwaysHidden is the other half, and it is here because declaring the
+            resize without it left the state unspecified — which means the system decides,
+            and what it decided was to restore whatever the keyboard was doing last. A
+            metric card is a modal sheet, and a modal sheet in Material3 is its own window,
+            so closing one hands focus back to this one and the keyboard came up over a
+            screen with nothing to type into. This says no: the keyboard appears when
+            somebody taps a box, and not because a window regained focus.
         -->
         <activity
             android:name=".ui.MainActivity"
             android:exported="true"
             android:theme="@style/Theme.ReCMF"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize|stateAlwaysHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

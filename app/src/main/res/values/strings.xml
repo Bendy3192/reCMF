@@ -338,6 +338,7 @@
     <string name="sleep_score_of_target">%1$s of %2$s</string>
     <string name="sleep_score_explainer">How long you slept is scored against your target; the rest against your own recent nights. A part nothing could measure is left out rather than counted as average.</string>
     <string name="sleep_score_elsewhere">How much of the night was spent awake comes from another wearable on this phone. The CMF watch has no waking stage — it reports deep, light and REM and nothing else.</string>
+    <string name="sleep_score_night_elsewhere">This night was recorded by another wearable on this phone — the watch reported none. The picture above is the watch\'s own last night, which is a different night.</string>
     <string name="sleep_score_excellent">a very good night</string>
     <string name="sleep_score_good">a good night</string>
     <string name="sleep_score_fair">an ordinary night</string>
