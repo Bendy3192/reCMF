@@ -224,6 +224,33 @@ class SleepScoreTest {
     }
 
     @Test
+    fun `a baseline is only nights the same device measured`() {
+        // Two wearables disagree about how long somebody slept — they start the clock
+        // differently and call the edges differently. A run of one device's nights makes
+        // the other's ordinary night look short, which is a device difference wearing the
+        // clothes of a bad night.
+        val nights = mapOf(
+            1 to Night(8 * hour, 3 * hour, fromWatch = false),
+            2 to Night(8 * hour, 3 * hour, fromWatch = false),
+            3 to Night(7 * hour, 3 * hour, fromWatch = true),
+        )
+
+        val forTheWatch = comparable(nights, nights.getValue(3))
+        val forTheOther = comparable(nights, nights.getValue(1))
+
+        assertEquals(setOf(3), forTheWatch.keys)
+        assertEquals(setOf(1, 2), forTheOther.keys)
+    }
+
+    @Test
+    fun `a night from elsewhere stays marked as such through the choosing`() {
+        val own = Night(2 * hour, 0, staged = false, fromWatch = true)
+        val worn = Night(8 * hour, 3 * hour, awakeSeconds = 0, fromWatch = false)
+
+        assertEquals(false, preferMeasured(own, worn)!!.fromWatch)
+    }
+
+    @Test
     fun `a score is never outside nought to a hundred`() {
         val extreme = sleepScore(
             night(asleep = 14 * hour, restful = 13 * hour, awake = 0, resting = 30f),

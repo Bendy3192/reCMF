@@ -52,6 +52,7 @@ import dev.recmf.health.Night
 import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.health.SleepScore
+import dev.recmf.health.comparable
 import dev.recmf.health.preferMeasured
 import dev.recmf.health.readiness as scoreReadiness
 import dev.recmf.health.sleepScore as scoreSleep
@@ -662,7 +663,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         if (last == null) {
             null
         } else {
-            val restfulHistory = nights
+            val scored = nights.getValue(last)
+
+            val restfulHistory = comparable(nights, scored)
                 .filterKeys { it < last }
                 .toSortedMap()
                 .values
@@ -671,7 +674,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
             val restingHistory = restingByDay.filterKeys { it < last }.values.toList()
 
-            nights.getValue(last)
+            scored
                 .copy(restingHeartRate = restingByDay[last])
                 .let {
                     scoreSleep(
@@ -706,6 +709,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             Instant.ofEpochSecond(night.wakeTimestamp).atZone(zone).toLocalDate() to Night(
                 asleepSeconds = night.asleepSeconds,
                 restfulSeconds = night.deepSeconds + night.remSeconds,
+                fromWatch = true,
             )
         }
 
@@ -727,11 +731,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         val nights = nightsByDay(own, elsewhere, zone)
 
+        // Last night decides which nights count as a baseline, so a phone that swapped
+        // wearables partway through the fortnight compares like with like either way.
+        val tonight = nights.keys.maxOrNull()?.let(nights::getValue)
+
         fun <T> daily(rows: List<T>, at: (T) -> Long, value: (T) -> Float?): Map<LocalDate, Float> =
             rows.groupBy { Instant.ofEpochSecond(at(it)).atZone(zone).toLocalDate() }
                 .mapValues { (_, day) -> day.mapNotNull(value) }
                 .filterValues { it.isNotEmpty() }
                 .mapValues { (_, values) -> values.average().toFloat() }
+
+        val sleepNights = tonight?.let { comparable(nights, it) }.orEmpty()
 
         val byDay = mapOf(
             // Already a figure a day when it arrives, so it needs none of the averaging
@@ -741,12 +751,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 daily(resting, { it.timestamp }, { it.bpm.toFloat() }),
             ReadinessSignal.STRESS to
                 daily(stress, { it.timestamp }, { it.level.toFloat() }),
-            ReadinessSignal.SLEEP_DURATION to
-                nights.mapValues { (_, night) -> night.asleepSeconds.toFloat() / 60f },
-            // Only from a night something broke into stages. A session that is a start and
-            // an end has no restful share to report, and reading its zero as "none of it
-            // restored anything" would be the worst night this person ever had.
-            ReadinessSignal.SLEEP_QUALITY to nights
+            // Only nights the same device measured as last night's. Two wearables
+            // disagree about how long somebody slept, and a run of one device's nights is
+            // not a baseline for the other's.
+            ReadinessSignal.SLEEP_DURATION to sleepNights
+                .mapValues { (_, night) -> night.asleepSeconds.toFloat() / 60f },
+            // Also only from a night something broke into stages. A session that is a
+            // start and an end has no restful share to report, and reading its zero as
+            // "none of it restored anything" would be the worst night this person ever had.
+            ReadinessSignal.SLEEP_QUALITY to sleepNights
                 .filterValues { it.staged && it.asleepSeconds > 0 }
                 .mapValues { (_, night) -> night.restfulSeconds.toFloat() / night.asleepSeconds },
         )

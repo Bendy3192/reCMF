@@ -146,6 +146,19 @@ data class Night(
      * and [preferMeasured] would hand it to the score in place of a properly staged one.
      */
     val staged: Boolean = true,
+
+    /**
+     * Whether this is the CMF watch's own account of the night, or another device's.
+     *
+     * Carried so a night is never compared against a baseline of nights measured by
+     * something else. Two wearables disagree systematically about how long somebody slept —
+     * they start the clock differently and call the edges differently — so a run of
+     * Fitbit nights averaging eight hours makes a seven-hour night from the CMF watch look
+     * like a short one when it may be nothing of the kind. That is a device difference
+     * wearing the clothes of a bad night, and it is exactly the sort of precise-looking
+     * number this app refuses elsewhere.
+     */
+    val fromWatch: Boolean = true,
 )
 
 /**
@@ -312,6 +325,20 @@ private fun against(
 
     return (favourable / FURTHEST + 1f) / 2f
 }
+
+/**
+ * The nights that may be used as a baseline for [tonight], keyed as they came in.
+ *
+ * Only nights measured by the same device. A baseline exists to say what usual looks like
+ * for this person on this wrist, and half a fortnight of one device's nights mixed with
+ * half of another's says what usual looks like for neither.
+ *
+ * Fewer than a handful left is not a problem to work around: the caller drops the signal,
+ * the remaining ones share out its weight, and the score says less rather than something
+ * that is not so.
+ */
+fun <K> comparable(nights: Map<K, Night>, tonight: Night): Map<K, Night> =
+    nights.filterValues { it.fromWatch == tonight.fromWatch }
 
 /** Population standard deviation: these are all the nights there are. */
 private fun List<Float>.spread(mean: Float): Float =
