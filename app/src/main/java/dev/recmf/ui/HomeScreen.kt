@@ -1357,9 +1357,13 @@ private fun ReadinessCard(readiness: Readiness?) {
                 if (borrowed.isEmpty()) {
                     stringResource(R.string.readiness_no_hrv)
                 } else {
+                    // Mapped and then joined, rather than joined with a transform.
+                    // joinToString takes its transform as a nullable function type, which
+                    // cannot be inlined, so the lambda is not a composition and cannot
+                    // look up a string. `map` can.
                     stringResource(
                         R.string.readiness_elsewhere,
-                        borrowed.joinToString(", ") { stringResource(it.signal.labelRes()) },
+                        borrowed.map { stringResource(it.signal.labelRes()) }.joinToString(", "),
                     )
                 },
                 style = MaterialTheme.typography.bodySmall,
