@@ -1,6 +1,7 @@
 package dev.recmf.health
 
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -152,6 +153,52 @@ class ReadinessTest {
         // the answer for anybody who does not have it.
         assertEquals(50, readiness(day(), steadyWeek)!!.score)
         assertEquals(4, readiness(day(), steadyWeek)!!.parts.size)
+    }
+
+    @Test
+    fun `another device takes a signal over only once it has history of its own`() {
+        // Otherwise the source flips as coverage comes and goes, and a baseline compared
+        // against a source that changed partway through is no baseline at all.
+        val ours = mapOf(1 to 60f, 2 to 61f, 3 to 59f, 4 to 60f, 5 to 62f)
+        val thin = mapOf(4 to 70f, 5 to 71f)
+        val full = mapOf(1 to 70f, 2 to 71f, 3 to 69f, 4 to 70f, 5 to 71f)
+
+        assertTrue(onlyOneSource(ours, thin, today = 5, leastDays = 4).fromWatch)
+        assertFalse(onlyOneSource(ours, full, today = 5, leastDays = 4).fromWatch)
+    }
+
+    @Test
+    fun `a device with history but nothing for today does not take over`() {
+        val ours = mapOf(1 to 60f, 2 to 61f, 3 to 59f, 4 to 60f, 5 to 62f)
+        val stale = mapOf(1 to 70f, 2 to 71f, 3 to 69f, 4 to 70f)
+
+        assertTrue(onlyOneSource(ours, stale, today = 5, leastDays = 4).fromWatch)
+    }
+
+    @Test
+    fun `the chosen source is used whole, never mixed day by day`() {
+        // The same night read two ways is two and a half hours of deep sleep in one app
+        // and one and a quarter in another. Resting pulse has no stages to give that
+        // difference away, which makes mixing there quieter and no more correct.
+        val ours = mapOf(1 to 60f, 2 to 61f, 3 to 59f, 4 to 60f, 5 to 62f)
+        val theirs = mapOf(1 to 70f, 2 to 71f, 3 to 69f, 4 to 70f, 5 to 71f)
+
+        val picked = onlyOneSource(ours, theirs, today = 5, leastDays = 4)
+
+        assertEquals(theirs, picked.readings, "one source, not a merge")
+    }
+
+    @Test
+    fun `a signal from elsewhere is marked as such and scored the same`() {
+        val today = mapOf(ReadinessSignal.RESTING_HEART_RATE to 70f)
+        val history = mapOf(ReadinessSignal.RESTING_HEART_RATE to listOf(60f, 61f, 59f, 60f))
+
+        val borrowed = readiness(today, history, setOf(ReadinessSignal.RESTING_HEART_RATE))!!
+        val own = readiness(today, history)!!
+
+        assertEquals(own.score, borrowed.score, "provenance must not change the arithmetic")
+        assertFalse(borrowed.parts.single().fromWatch)
+        assertTrue(own.parts.single().fromWatch)
     }
 
 }

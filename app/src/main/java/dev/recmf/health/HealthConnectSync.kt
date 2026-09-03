@@ -206,6 +206,37 @@ class HealthConnectSync(private val context: Context) {
     }
 
     /**
+     * Resting pulse from every app on this phone except reCMF.
+     *
+     * Added because it is the figure that decided the disagreement. Another wearable's
+     * readiness score read fifteen out of a hundred on a morning this one called ordinary,
+     * and its own breakdown named exactly one cause: resting pulse well above usual, with
+     * variability normal and sleep good. That is a signal reCMF already weighs — it simply
+     * had none of its own with enough history behind it, so it left it out and scored the
+     * morning on sleep alone.
+     *
+     * @return one figure per day, averaged where a day has several. Empty when nothing is
+     *   permitted, present or readable.
+     */
+    suspend fun restingHeartRateElsewhere(sinceDays: Long, zone: ZoneId): Map<LocalDate, Float> {
+        val client = this.client ?: return emptyMap()
+
+        val reading = HealthPermission.getReadPermission(RestingHeartRateRecord::class)
+        if (!grantedPermissions().contains(reading)) return emptyMap()
+
+        val from = Instant.now().minus(sinceDays, ChronoUnit.DAYS)
+
+        return runCatching {
+            client.readRecords(
+                ReadRecordsRequest(RestingHeartRateRecord::class, TimeRangeFilter.after(from)),
+            ).records
+                .filterNot { it.metadata.dataOrigin.packageName == ourPackage }
+                .groupBy { it.time.atZone(zone).toLocalDate() }
+                .mapValues { (_, day) -> day.map { it.beatsPerMinute.toFloat() }.average().toFloat() }
+        }.getOrElse { emptyMap() }
+    }
+
+    /**
      * Nights recorded by something other than this app.
      *
      * The CMF watch labels every stretch deep, light, REM or unrecognised — there is no

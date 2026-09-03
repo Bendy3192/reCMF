@@ -53,6 +53,7 @@ import dev.recmf.health.Readiness
 import dev.recmf.health.ReadinessSignal
 import dev.recmf.health.SleepScore
 import dev.recmf.health.comparable
+import dev.recmf.health.onlyOneSource
 import dev.recmf.health.preferMeasured
 import dev.recmf.health.readiness as scoreReadiness
 import dev.recmf.health.sleepScore as scoreSleep
@@ -610,6 +611,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _nightsElsewhere = MutableStateFlow<Map<LocalDate, Night>>(emptyMap())
 
     /**
+     * Resting pulse as another device has it, by day.
+     *
+     * The figure another wearable's own score named as the single cause of a low morning,
+     * on a day this one called ordinary for want of any resting pulse with history behind
+     * it.
+     */
+    private val _restingElsewhere = MutableStateFlow<Map<LocalDate, Float>>(emptyMap())
+
+    /**
      * Reads what the other devices on this phone have, and reads it again after each sync.
      *
      * Watching the exchange clock rather than calling this from several places: every path
@@ -627,6 +637,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 val zone = ZoneId.systemDefault()
                 _hrv.value = healthConnect.heartRateVariability(BASELINE_DAYS, zone)
                 _nightsElsewhere.value = healthConnect.nightsElsewhere(BASELINE_DAYS, zone)
+                _restingElsewhere.value =
+                    healthConnect.restingHeartRateElsewhere(BASELINE_DAYS, zone)
             }
         }
     }
@@ -646,19 +658,26 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val sleepScore: StateFlow<SleepScore?> = combine(
         dao.sleepSince(startOfBaseline()),
         dao.restingHeartRateSince(startOfBaseline()),
-        _nightsElsewhere,
+        combine(_nightsElsewhere, _restingElsewhere, ::Pair),
         settingsStore.settings,
-    ) { own, resting, elsewhere, settings ->
+    ) { own, resting, (elsewhere, restingElsewhere), settings ->
         val zone = ZoneId.systemDefault()
         fun day(seconds: Long): LocalDate = Instant.ofEpochSecond(seconds).atZone(zone).toLocalDate()
 
         val nights = nightsByDay(own, elsewhere, zone)
 
-        val restingByDay = resting
+        val ourResting = resting
             .groupBy { day(it.timestamp) }
             .mapValues { (_, day) -> day.map { it.bpm.toFloat() }.average().toFloat() }
 
         val last = nights.keys.maxOrNull()
+
+        // The same one-source rule readiness uses, decided against the night being scored
+        // rather than against today: a score written for last night should be judged by
+        // whatever measured that morning.
+        val restingByDay = last
+            ?.let { onlyOneSource(ourResting, restingElsewhere, it, LEAST_DAYS).readings }
+            .orEmpty()
 
         if (last == null) {
             null
@@ -723,9 +742,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         dao.restingHeartRateSince(startOfBaseline()),
         dao.stressSince(startOfBaseline()),
         dao.sleepSince(startOfBaseline()),
-        _nightsElsewhere,
+        combine(_nightsElsewhere, _restingElsewhere, ::Pair),
         _hrv,
-    ) { resting, stress, own, elsewhere, hrv ->
+    ) { resting, stress, own, (elsewhere, restingElsewhere), hrv ->
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now()
 
@@ -743,12 +762,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         val sleepNights = tonight?.let { comparable(nights, it) }.orEmpty()
 
+        // One device's resting pulse, used whole. Which one is decided by coverage rather
+        // than by preference, and only once per computation: a source that changed
+        // partway through the window would destroy the comparison it was chosen for.
+        val pulse = onlyOneSource(
+            own = daily(resting, { it.timestamp }, { it.bpm.toFloat() }),
+            elsewhere = restingElsewhere,
+            today = today,
+            leastDays = LEAST_DAYS,
+        )
+
         val byDay = mapOf(
             // Already a figure a day when it arrives, so it needs none of the averaging
             // the watch's own trickle does.
             ReadinessSignal.HEART_RATE_VARIABILITY to hrv,
-            ReadinessSignal.RESTING_HEART_RATE to
-                daily(resting, { it.timestamp }, { it.bpm.toFloat() }),
+            ReadinessSignal.RESTING_HEART_RATE to pulse.readings,
             ReadinessSignal.STRESS to
                 daily(stress, { it.timestamp }, { it.level.toFloat() }),
             // Only nights the same device measured as last night's. Two wearables
@@ -771,6 +799,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             history = byDay.mapValues { (_, days) ->
                 days.filterKeys { it < today }.toSortedMap().values.toList()
             },
+            // Variability is always another device's — this watch cannot produce it at all.
+            elsewhere = buildSet {
+                add(ReadinessSignal.HEART_RATE_VARIABILITY)
+                if (!pulse.fromWatch) add(ReadinessSignal.RESTING_HEART_RATE)
+            },
+            leastDays = LEAST_DAYS,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS), null)
 
@@ -1456,6 +1490,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         /** A week, which is also everything the staging table keeps. */
         const val DAYS_IN_STRIP = 7
+
+        /**
+         * How many past days a signal needs before it counts, and before another device
+         * may take a signal over.
+         *
+         * Named here rather than left to the scoring's own default because two places now
+         * depend on the same number: a signal with less than this behind it is left out,
+         * and a second device with less than this behind it does not get to replace the
+         * watch. Those have to agree, or a source could be adopted and then dropped in the
+         * same breath.
+         */
+        const val LEAST_DAYS = 4
 
         /** How many days back readiness reads. The nights table keeps thirty. */
         const val BASELINE_DAYS = 30L

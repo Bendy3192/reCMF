@@ -124,7 +124,42 @@ data class ReadinessPart(
     val usual: Float,
     /** -1 well below your usual, 0 exactly usual, +1 well above. Already direction-aware. */
     val standing: Float,
+    /** False when the reading came from another device rather than from the watch. */
+    val fromWatch: Boolean = true,
 )
+
+/** A run of daily readings, and which device produced all of them. */
+data class Sourced<K>(val readings: Map<K, Float>, val fromWatch: Boolean)
+
+/**
+ * Picks one device's account of a daily figure and uses it whole.
+ *
+ * Whole, rather than taking whichever device happened to have a reading on each day. A
+ * baseline is a comparison against your own recent days, and days measured by two
+ * different devices are not comparable: the same night in this app and in another read as
+ * two and a half hours of deep sleep and one and a quarter, which is a classifier
+ * difference the size of a bad night. Resting pulse has no stages to give that difference
+ * away, which makes mixing there quieter and no more correct.
+ *
+ * The other device wins when it has today's reading and enough history of its own to be
+ * judged against — the second condition being what stops the choice flipping between
+ * devices as coverage comes and goes, since a source that changes mid-window destroys the
+ * very comparison it was chosen for.
+ *
+ * @param today the key the score is being computed for.
+ * @param leastDays how much history the other device needs before it may take over.
+ */
+fun <K : Comparable<K>> onlyOneSource(
+    own: Map<K, Float>,
+    elsewhere: Map<K, Float>,
+    today: K,
+    leastDays: Int,
+): Sourced<K> {
+    val theirHistory = elsewhere.keys.count { it < today }
+    val theirs = elsewhere.containsKey(today) && theirHistory >= leastDays
+
+    return if (theirs) Sourced(elsewhere, fromWatch = false) else Sourced(own, fromWatch = true)
+}
 
 /** The day's standing, and the parts it was built from. */
 data class Readiness(
@@ -140,6 +175,8 @@ data class Readiness(
  *   left out of the score entirely.
  * @param history the days before today, per signal, in any order. A signal with fewer than
  *   [leastDays] behind it has no baseline worth comparing against and is left out.
+ * @param elsewhere which signals arrived from a device other than the watch, so the screen
+ *   can say so. It changes nothing about the arithmetic.
  * @param leastDays how many past days a signal needs before it may contribute. Four is
  *   enough to have an average that is not simply yesterday, and low enough that a new
  *   wearer sees something inside a week.
@@ -149,6 +186,7 @@ data class Readiness(
 fun readiness(
     today: Map<ReadinessSignal, Float>,
     history: Map<ReadinessSignal, List<Float>>,
+    elsewhere: Set<ReadinessSignal> = emptySet(),
     leastDays: Int = 4,
 ): Readiness? {
     val parts = ReadinessSignal.entries.mapNotNull { signal ->
@@ -162,7 +200,13 @@ fun readiness(
         val away = ((now - usual) / spread).coerceIn(-FURTHEST, FURTHEST)
         val favourable = if (signal in LOWER_IS_BETTER) -away else away
 
-        ReadinessPart(signal, now, usual, standing = favourable / FURTHEST)
+        ReadinessPart(
+            signal = signal,
+            today = now,
+            usual = usual,
+            standing = favourable / FURTHEST,
+            fromWatch = signal !in elsewhere,
+        )
     }
 
     if (parts.isEmpty()) return null
