@@ -73,4 +73,47 @@ class WatchNotificationTest {
 
         assertArrayEquals(plain.toPayload(), plain.copy(isCall = true).toPayload())
     }
+    /** The title out of a payload, by the length the payload declares. */
+    private fun titleOf(payload: ByteArray): String {
+        val buf = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
+        buf.position(WatchNotification.HEADER_SIZE - 1)
+        val length = buf.get().toInt()
+        return String(ByteArray(length).also { buf.get(it) }, StandardCharsets.UTF_8)
+    }
+
+    @Test
+    fun `a title that fits arrives whole`() {
+        // The one this was reported for. Thirteen characters, twenty-two bytes, and under
+        // the old ceiling it reached the wrist as "Погода: Тве" — which reads as the app
+        // misspelling a city rather than as a limit.
+        val whole = "Погода: Тверь"
+
+        assertEquals(whole, titleOf(notification(title = whole).toPayload()))
+    }
+
+    @Test
+    fun `a title that does not fit says so`() {
+        val long = "Объявление о плановом отключении горячей воды в вашем доме"
+
+        val sent = titleOf(notification(title = long).toPayload())
+
+        assertTrue(sent.endsWith("…"), "a cut title should be marked: $sent")
+        assertTrue(long.startsWith(sent.dropLast(1)), "'$sent' is not a prefix of the original")
+        assertTrue(
+            sent.toByteArray(StandardCharsets.UTF_8).size <= WatchNotification.MAX_TITLE_BYTES,
+            "the mark has to fit inside the budget, not on top of it",
+        )
+    }
+
+    @Test
+    fun `a title that fits exactly is not marked`() {
+        // The ellipsis costs three bytes of the budget it is measured against, so the
+        // boundary is the place to get this wrong.
+        val exact = "a".repeat(WatchNotification.MAX_TITLE_BYTES)
+
+        val sent = titleOf(notification(title = exact).toPayload())
+
+        assertEquals(exact, sent)
+    }
+
 }

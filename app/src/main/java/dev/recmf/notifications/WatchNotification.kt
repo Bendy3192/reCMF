@@ -94,8 +94,8 @@ data class WatchNotification(
      * Big-endian, and both strings are truncated to what the watch accepts.
      */
     fun toPayload(): ByteArray {
-        val titleBytes = title.truncateToUtf8Bytes(MAX_TITLE_BYTES)
-        val bodyBytes = body.truncateToUtf8Bytes(MAX_BODY_BYTES)
+        val titleBytes = title.forWatch(MAX_TITLE_BYTES)
+        val bodyBytes = body.forWatch(MAX_BODY_BYTES)
 
         return ByteBuffer.allocate(HEADER_SIZE + titleBytes.size + bodyBytes.size)
             .order(ByteOrder.BIG_ENDIAN)
@@ -108,11 +108,43 @@ data class WatchNotification(
             .array()
     }
 
+    /**
+     * Cut to fit, and visibly so.
+     *
+     * A cut that leaves no mark reads as a typo rather than as a limit: a weather
+     * notification arrived on the wrist titled "Погода: Тве", which looks like the app
+     * misspelled the city. The ellipsis costs three of the bytes it is measured against,
+     * which is the right trade — a title that says it was cut is worth more than three
+     * more characters of one that does not.
+     */
+    private fun String.forWatch(maxBytes: Int): ByteArray {
+        val whole = toByteArray(Charsets.UTF_8)
+        if (whole.size <= maxBytes) return whole
+
+        return truncateToUtf8Bytes(maxBytes - ELLIPSIS.size) + ELLIPSIS
+    }
+
     companion object {
         /** icon, one unidentified byte, timestamp, title length. */
         const val HEADER_SIZE = 7
-        const val MAX_TITLE_BYTES = 20
+
+        /**
+         * How much title the watch is sent.
+         *
+         * Twenty was the ported figure and it is ten Cyrillic characters — "Погода: Тве"
+         * out of "Погода: Тверь", and less than half of most people's names. Nothing in
+         * the layout justifies it: the length travels in a byte, so the field can describe
+         * up to 255, and the body beside it is already 128 and arrives intact, which
+         * settles whether frames of this size reach the watch.
+         *
+         * Sixty-four is thirty-two Cyrillic characters and still far short of what the
+         * field can express. If a watch somewhere refuses it, this constant is the whole
+         * of the revert.
+         */
+        const val MAX_TITLE_BYTES = 64
         const val MAX_BODY_BYTES = 128
 
+        /** Three bytes of UTF-8, and the only mark a cut string carries. */
+        private val ELLIPSIS = "…".toByteArray(Charsets.UTF_8)
     }
 }
