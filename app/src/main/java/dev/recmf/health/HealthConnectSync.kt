@@ -160,7 +160,9 @@ class HealthConnectSync(private val context: Context) {
                         // page size means "at least this", and saying so is the difference
                         // between a diagnostic and a number that looks exact and is not.
                         capped = records.size >= PAGE,
-                        writtenBy = writers.map { Writer(it.key, it.value.toEpochMilli()) },
+                        writtenBy = writers.map {
+                            Held.Writer(it.key, it.value.toEpochMilli())
+                        },
                     )
                 }
             }.getOrElse { Held(label, Held.State.REFUSED) }
